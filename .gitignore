@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.wrangler/
+.dev.vars
+*.local
+.DS_Store
+
+# Claude Design handoff bundle: specs are committed, binary assets are not
+design/**/*.png
+design/**/*.jpg
+design/**/*.webp
