@@ -430,8 +430,9 @@ Nothing here approaches a paid tier. The one CPU-limit risk was the KDF, and §0
 
 ## 12. Open decisions — I need your call
 
-1. **JPEG masters (recommended) vs WebP.** Decide before task `A-02`; it is expensive afterwards.
-2. **Offline completions in v1, or v1.1?** I've scoped v1.1. If you check tasks on the move with no signal, say so and I'll pull it forward.
-3. **Push reminders in MVP?** The spec lists Web Push in the stack table but never specifies a reminder feature. I've put it in Phase 7. iOS requires the PWA be installed and permission granted by user gesture.
-4. **Custom domain, or `*.workers.dev`?** Affects nothing but the cookie `Domain` and your muscle memory.
-5. Your requirements list ends mid-sentence: *"The agent must get the context when …"*. I've assumed you mean **the agent should pull context on demand rather than carry it always**, and designed the doc split and `/task` command around that. Confirm or correct.
+1. ~~**R2 vs D1 BLOBs.**~~ **RESOLVED: R2.** A payment method is on file; the account stays on **Workers Free**, so expected spend is $0.00/month. This is the one place the spec's "no card" constraint is knowingly relaxed. Task `A-02` still builds the `ImageStore` interface — see `docs/cloudflare-setup.md` §5 — because it makes the upload path unit-testable without hitting R2, not because the decision is in doubt.
+2. **JPEG masters (recommended) vs WebP.** Decide before task `A-02`; it is expensive afterwards.
+3. **Offline completions in v1, or v1.1?** I've scoped v1.1. If you check tasks on the move with no signal, say so and I'll pull it forward.
+4. **Push reminders in MVP?** The spec lists Web Push in the stack table but never specifies a reminder feature. I've put it in Phase 7. iOS requires the PWA be installed and permission granted by user gesture.
+5. **Custom domain, or `*.workers.dev`?** Affects nothing but the cookie `Domain` and your muscle memory.
+6. Your requirements list ends mid-sentence: *"The agent must get the context when …"*. I've assumed you mean **the agent should pull context on demand rather than carry it always**, and designed the doc split and `/task` command around that. Confirm or correct.
