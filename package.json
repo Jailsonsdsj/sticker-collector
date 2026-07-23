@@ -13,7 +13,8 @@
     "typecheck": "tsc -b && tsc -p packages/api/test/tsconfig.json",
     "lint": "biome ci .",
     "types": "wrangler types packages/api/src/worker-configuration.d.ts",
-    "db:generate": "pnpm --filter @sticker-collector/api exec drizzle-kit generate"
+    "db:generate": "pnpm --filter @sticker-collector/api exec drizzle-kit generate",
+    "seed": "bash scripts/seed.sh"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.5",

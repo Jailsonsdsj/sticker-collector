@@ -156,11 +156,11 @@ Keep this table updated — it is the first thing a new session reads, and it co
 
 | Phase | Done | Total | Status |
 |---|---|---|---|
-| 0 Foundation | 3 | 10 | in progress (F-03 done) |
+| 0 Foundation | 4 | 10 | in progress (F-04 done) |
 | 1 Design system | 0 | 6 | not started |
 | 2 Earning loop | 0 | 13 | not started |
 | 3 Spending loop | 0 | 11 | not started |
 | 4 Export | 0 | 2 | not started |
 | 5 Reports | 0 | 4 | not started |
 | 6 Hardening | 0 | 6 | not started |
-| **MVP total** | **3** | **52** | |
+| **MVP total** | **4** | **52** | |
