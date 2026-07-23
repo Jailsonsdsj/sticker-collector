@@ -203,7 +203,9 @@ sticker-collector/
 }
 ```
 
-> Field names in the `assets` block have moved between wrangler majors. First task of the build: have the agent run `npx wrangler --version` and validate this config against the installed schema before committing it.
+> **Pin wrangler to latest, not to a remembered version.** Field names in the `assets` block have moved between wrangler releases, so this skeleton must be validated against the installed schema — but validate against a *current* install. Run `pnpm add -D wrangler@latest -w`, confirm with `npx wrangler --version`, and only then check the config. An agent asked to "match the installed version" will happily work around limitations that were fixed a year ago.
+>
+> **`run_worker_first` must stay an array.** The boolean `true` unconditionally invokes the Worker on every request, which turns free static-asset requests into counted Worker requests and — on the free tier — returns 429 instead of falling back to asset serving when limits are hit. The whole app goes dark rather than degrading. The array form `["/api/*"]` keeps assets on the free path and keeps bot traffic probing for `.env` away from your Worker entirely. If the array form fails to validate, the wrangler version is too old; upgrade it rather than downgrading the config.
 
 ---
 
@@ -242,7 +244,9 @@ CREATE TRIGGER sticker_frozen BEFORE UPDATE ON sticker
 BEGIN SELECT RAISE(ABORT, 'sticker rows are immutable'); END;
 ```
 
-Add `CHECK (odds_common + odds_rare + odds_epic + odds_legendary = 100)` and `CHECK (quantity >= 1)` while you're there.
+Add `CHECK (odds_common + odds_rare + odds_epic + odds_legendary = 100)` and `CHECK (quantity >= 1)` while you're there — **and make every column they reference `NOT NULL`.** SQLite rejects a CHECK only when it evaluates to `FALSE`; `NULL = 100` evaluates to `NULL`, which passes. Without `NOT NULL`, both constraints are decorative.
+
+**Triggers live in their own migration.** `0001_init.sql` is generated and owned by drizzle-kit; the triggers go in a hand-written `0002_triggers.sql` that drizzle never touches. Appending them to the generated file means any future `db:generate` silently wipes every invariant, in a diff that looks like routine schema work.
 
 ### 4.2 D1 has no interactive transactions
 

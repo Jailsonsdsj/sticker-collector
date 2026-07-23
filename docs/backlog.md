@@ -24,7 +24,8 @@ Nothing here is visible to a user. All of it is what stops the next 40 tasks fro
 | **F-01** | pnpm workspace, TS project references, Biome, Vitest, `.gitignore` (incl. `.dev.vars`, `design/`), root scripts (`dev`/`build`/`test`/`typecheck`/`lint`) | M | sonnet | `architecture.md` §3 | `pnpm typecheck && pnpm test && pnpm lint` all pass on an empty repo |
 | **F-02** | Single Worker: Hono app, `ASSETS` fallthrough, `/api/health`, minimal Vite React app. **Validate `wrangler.jsonc` against the installed wrangler schema first.** | M | sonnet | `architecture.md` §0.1, §3 | `wrangler dev` serves the React app at `/` and JSON at `/api/health` |
 | **F-02b** | Dependency baseline: pin Node (`.nvmrc` + `engines` + CI), pnpm, vitest + pool-workers, zod, biome, TypeScript (check Drizzle's supported range). Commit generated `worker-configuration.d.ts`. | M | sonnet | — | All four checks green on current majors; CI and local resolve the same Node and pnpm |
-| **F-03** | Drizzle schema for all 9 tables + `0001_init.sql` with the four triggers, CHECK constraints, and indexes | L | **opus** | `prd/09-data-model.md`, `architecture.md` §4 | Migration applies locally; a test proves each trigger rejects its violation |
+| **F-03a** | Drizzle tooling (`drizzle.config.ts`, `db:generate`) + schema for all **10** tables (8 from the data model + `mutation`, `auth_attempt`) + `0001_init.sql` with the **5** trigger statements, CHECK constraints and indexes hand-appended | L | **opus** | `prd/09-data-model.md`, `architecture.md` §4 | Migration applies locally **and** `scripts/verify-triggers.sh` shows every forbidden statement rejected — one per trigger, plus both CHECK constraints |
+| **F-03b** | Wire `packages/api` onto `@cloudflare/vitest-pool-workers` (first use); fixtures; automated test per trigger and CHECK, converted from `verify-triggers.sh` | L | **opus** | F-03a output, `architecture.md` §4.1 | Every test attempts the forbidden write through the D1 binding and asserts rejection. No test asserts merely that app code lacks an update path |
 | **F-04** | Seed script: one user, sample epic, 3 routines, 2 one-offs, one sealed 12-sticker album | S | haiku | `db/schema.ts` | `pnpm seed` produces a usable local DB |
 | **F-05** | Auth: `/api/auth/salt`, `/api/auth/login`, client-side PBKDF2, HS256 JWT + `Set-Cookie`, `requireAuth` middleware, D1 rate limiter | L | **opus** | `prd/07-services.md`, `architecture.md` §0.2, §4.4 | Wrong passphrase → 401; 11th attempt → 429; valid token reaches a protected route; **server never receives the passphrase** |
 | **F-06** | Idempotency middleware + the `spend()` conditional-insert helper + `balance()` | M | **opus** | `architecture.md` §4.2–4.4 | Same `Idempotency-Key` twice → one ledger row, identical response. Overspend → 402, zero rows written |
@@ -78,11 +79,11 @@ Ship this whole phase before touching albums. At the end of it you can use the a
 |---|---|---|---|---|---|
 | **A-01** | `shared/economy.ts`: total album cost (coins + hours), expected value of a random pull, odds validation, **empty-tier redistribution**, duplicate refund | L | **opus** | `prd/04-albums.md` §Economy, `prd/05-stickers.md` §Random | Tests: odds sum to 100, monotonically decreasing, zero-odds tier permitted, redistribution is proportional, dupe sale is always a net loss under any user values |
 | **A-02** | Image pipeline: canvas aspect-fill crop + drag-to-reposition, exact 591×827 / 1772×2480, JPEG q0.92, sha256 key, upload, `GET /api/images/:key` via cookie auth | L | **opus** | `prd/04-albums.md` §Geometry, `architecture.md` §5 | Re-uploading identical bytes creates no second R2 object; image loads in a plain `<img>` tag |
-| **A-03** | API: create + seal album — sticker set, tier assignment, slot shuffle, all economics frozen. One `batch()`. | L | **opus** | `prd/04-albums.md` §Creating, §Sealing | Post-seal update attempt is rejected **by the trigger**, not by application code |
+| **A-03** | API: create + seal album — sticker set, tier assignment, slot shuffle, all economics frozen. One `batch()`. **Sticker rows are insert-only** (the `sticker_frozen` trigger blocks all updates), so the full set must arrive in one POST; the wizard holds draft state client-side. | L | **opus** | `prd/04-albums.md` §Creating, §Sealing | Post-seal update attempt is rejected **by the trigger**, not by application code |
 | **A-04** | API: unlock album / buy sticker directly / random pull / sell duplicate — all via `spend()` | L | **opus** | `prd/01-coins.md`, `prd/05-stickers.md`, `architecture.md` §4.3 | Buying inside a locked album → 403. Pull when no unowned sticker is reachable → 409. Insufficient balance → 402 with zero writes |
 | **A-05** | API: album list with computed completion %, status filter, sort | M | sonnet | `prd/04-albums.md` | Completion % computed, never stored. `completed_at` set exactly once, on first hit of 100% |
 | **A-06** | Web: album grid — locked B&W, unlocked colour, progress bar, "almost there" surfacing, affordability cue | M | sonnet | `prd/04-albums.md`, `design-system.md` | Grayscale is a CSS filter; no second image is ever stored |
-| **A-07** | Web: album creation wizard (from scratch) — import, crop, tier assign, prices, odds with 60/25/12/3 default, **live economy preview**, seal confirmation | L | sonnet | `prd/04-albums.md` §Creating, A-01 output | Preview shows total cost in coins *and* hours, and EV beside the random price. Neither blocks sealing |
+| **A-07** | Web: album creation wizard (from scratch) — import, crop, tier assign, prices, odds with 60/25/12/3 default, **live economy preview**, seal confirmation. **Persist draft state to IndexedDB** — albums are sealed on create, so an unsent wizard holds the whole arrangement in browser state. | L | sonnet | `prd/04-albums.md` §Creating, A-01 output | Preview shows total cost in coins *and* hours, and EV beside the random price. Neither blocks sealing |
 | **A-08** | Web: album detail — sticker grid, rarity frames on locked slots, duplicate quantity badge, missing-only toggle | M | sonnet | `prd/05-stickers.md` | Legendary slot identifiable while still locked |
 | **A-09** | Web: the reveal — B&W floods to colour, held longer for higher tiers; inline "sell for X" on a duplicate | M | sonnet | `prd/05-stickers.md` §Enhancements | Duplicate ends in a choice, not a dead end |
 | **A-10** | Web: create-from-existing (inherits images by key, no re-upload, no ownership carried) | M | sonnet | `prd/04-albums.md` §Creating from existing | New album arrives locked; every sticker locked; source album untouched; **zero bytes uploaded** |
@@ -155,11 +156,11 @@ Keep this table updated — it is the first thing a new session reads, and it co
 
 | Phase | Done | Total | Status |
 |---|---|---|---|
-| 0 Foundation | 2 | 9 | not started |
+| 0 Foundation | 3 | 10 | in progress (F-03 done) |
 | 1 Design system | 0 | 6 | not started |
 | 2 Earning loop | 0 | 13 | not started |
 | 3 Spending loop | 0 | 11 | not started |
 | 4 Export | 0 | 2 | not started |
 | 5 Reports | 0 | 4 | not started |
 | 6 Hardening | 0 | 6 | not started |
-| **MVP total** | **2** | **51** | |
+| **MVP total** | **3** | **52** | |
