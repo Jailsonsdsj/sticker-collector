@@ -5,6 +5,10 @@ dist/
 *.local
 .DS_Store
 
+# TypeScript incremental build cache — a committed cache lies to `tsc -b` on a
+# fresh clone (it skips a build whose output — dist/ — isn't checked in → TS6305).
+*.tsbuildinfo
+
 # Claude Design handoff bundle: specs are committed, binary assets are not
 design/**/*.png
 design/**/*.jpg

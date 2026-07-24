@@ -10,7 +10,7 @@
     "dev": "wrangler dev",
     "build": "pnpm -r --filter=./packages/web run build",
     "test": "vitest run",
-    "typecheck": "tsc -b && tsc -p packages/api/test/tsconfig.json",
+    "typecheck": "tsc -b && tsc -b packages/api/test/tsconfig.json",
     "lint": "biome ci .",
     "types": "wrangler types packages/api/src/worker-configuration.d.ts",
     "db:generate": "pnpm --filter @sticker-collector/api exec drizzle-kit generate",
