@@ -203,7 +203,9 @@ sticker-collector/
 }
 ```
 
-> Field names in the `assets` block have moved between wrangler majors. First task of the build: have the agent run `npx wrangler --version` and validate this config against the installed schema before committing it.
+> **Pin wrangler to latest, not to a remembered version.** Field names in the `assets` block have moved between wrangler releases, so this skeleton must be validated against the installed schema — but validate against a *current* install. Run `pnpm add -D wrangler@latest -w`, confirm with `npx wrangler --version`, and only then check the config. An agent asked to "match the installed version" will happily work around limitations that were fixed a year ago.
+>
+> **`run_worker_first` must stay an array.** The boolean `true` unconditionally invokes the Worker on every request, which turns free static-asset requests into counted Worker requests and — on the free tier — returns 429 instead of falling back to asset serving when limits are hit. The whole app goes dark rather than degrading. The array form `["/api/*"]` keeps assets on the free path and keeps bot traffic probing for `.env` away from your Worker entirely. If the array form fails to validate, the wrangler version is too old; upgrade it rather than downgrading the config.
 
 ---
 
@@ -242,7 +244,9 @@ CREATE TRIGGER sticker_frozen BEFORE UPDATE ON sticker
 BEGIN SELECT RAISE(ABORT, 'sticker rows are immutable'); END;
 ```
 
-Add `CHECK (odds_common + odds_rare + odds_epic + odds_legendary = 100)` and `CHECK (quantity >= 1)` while you're there.
+Add `CHECK (odds_common + odds_rare + odds_epic + odds_legendary = 100)` and `CHECK (quantity >= 1)` while you're there — **and make every column they reference `NOT NULL`.** SQLite rejects a CHECK only when it evaluates to `FALSE`; `NULL = 100` evaluates to `NULL`, which passes. Without `NOT NULL`, both constraints are decorative.
+
+**Triggers live in their own migration.** `0001_init.sql` is generated and owned by drizzle-kit; the triggers go in a hand-written `0002_triggers.sql` that drizzle never touches. Appending them to the generated file means any future `db:generate` silently wipes every invariant, in a diff that looks like routine schema work.
 
 ### 4.2 D1 has no interactive transactions
 
@@ -367,8 +371,10 @@ pnpm typecheck            # tsc -b, all packages
 pnpm test                 # vitest: shared + api (workers pool)
 pnpm --filter web build
 npx wrangler deploy --dry-run
-npx wrangler d1 migrations list sticker-collector --remote   # shows pending
+npx wrangler d1 migrations apply sticker-collector --local    # every migration, from scratch
 ```
+
+**PR CI must not need production credentials.** No `--remote` calls, no `CLOUDFLARE_API_TOKEN`. Applying migrations to a local D1 from scratch proves more than listing remote ones does — it catches syntax errors, a wiped `0002_triggers.sql`, and schema drift, and the trigger tests then run against that database. Keep the Cloudflare secrets scoped to `deploy.yml`, which runs on `main` after review. A workflow that reaches into production on every PR can't be run offline, can't be debugged without secrets, and tells you less than `git diff` on `migrations/`.
 
 **`deploy.yml`** — on push to `main`:
 
@@ -381,7 +387,22 @@ curl -f https://<host>/api/health
 
 Migrations run **before** deploy, which means every migration must be backward-compatible with the currently-live Worker for the few seconds between the two steps. For a single-user app this is nearly free — just never do a destructive rename in one step. Expand, deploy, contract.
 
-Use `cloudflare/wrangler-action@v3`. Turn on branch protection requiring `ci` to pass, even though you're solo — the agent will be opening the PRs, and this is the gate that catches it.
+**Use `npx wrangler`, not `cloudflare/wrangler-action`.** The action installs its own wrangler, so pinning it means the version lives in two places and one of them eventually goes stale. `npx wrangler` resolves from the lockfile — same version locally, in CI, and in deploy. Set `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` as `env` on the individual steps that need them rather than job-wide.
+
+Turn on branch protection requiring `ci` to pass, even though you're solo — the agent will be opening the PRs, and this is the gate that catches it.
+
+**The first deploy is run by hand, then proven by the workflow.** Order matters, because the Worker must exist before it can hold a secret:
+
+```bash
+npx wrangler d1 migrations apply sticker-collector --remote
+npx wrangler deploy
+npx wrangler secret put TOKEN_SIGNING_KEY
+curl -f https://<host>/api/health
+```
+
+Then merge a trivial change so `deploy.yml` runs on its own and proves itself on a commit whose blast radius is nothing.
+
+**Never run `verify-triggers.sh` against production.** It seeds ledger rows, the ledger is append-only by trigger, and the wallet is `SUM(ledger)` — the fixtures would corrupt the balance permanently and the invariant under test would block cleanup. Use the preview database.
 
 **Migration discipline:** Drizzle generates the SQL, you read the diff, wrangler applies it. Never let an agent hand-write a migration that a `drizzle-kit generate` could have produced, and never let it edit a migration that has already been applied.
 

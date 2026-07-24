@@ -44,6 +44,12 @@ Do not read the whole `docs/prd/` directory. Load the one section the task names
 
 **Free-tier CPU limit is 10 ms per Worker invocation.** No heavy crypto or image processing server-side. The passphrase KDF runs in the browser.
 
+**TypeScript stays on 5.x.** TS 7 is a from-scratch native compiler and Drizzle's query-builder inference has not been validated against it. Do not bump the major without checking Drizzle's declared support first and saying so explicitly.
+
+**Never pin a dependency version from memory.** Resolve `@latest` at install time and let the lockfile pin it. If a config or API "doesn't validate on this version", check whether the installed version is current *before* working around it — a stale pin produces limitations that no longer exist. Report any version more than one minor behind rather than coding around it.
+
+**`assets.run_worker_first` is `["/api/*"]`, never `true`.** The boolean form bills every static asset as a Worker request and returns 429 instead of serving assets when free-tier limits are hit.
+
 **Every mutating endpoint accepts `Idempotency-Key`.** Middleware handles it; don't reimplement per route.
 
 ## Conventions
