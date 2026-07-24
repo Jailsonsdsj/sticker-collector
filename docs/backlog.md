@@ -156,7 +156,7 @@ Keep this table updated — it is the first thing a new session reads, and it co
 
 | Phase | Done | Total | Status |
 |---|---|---|---|
-| 0 Foundation | 9 | 10 | in progress (F-07 done; F-08 left) |
+| 0 Foundation | 9 | 10 | in progress (F-08 workflow written; first deploy pending runbook) |
 | 1 Design system | 0 | 6 | not started |
 | 2 Earning loop | 0 | 13 | not started |
 | 3 Spending loop | 0 | 11 | not started |

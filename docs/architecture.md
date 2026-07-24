@@ -387,7 +387,22 @@ curl -f https://<host>/api/health
 
 Migrations run **before** deploy, which means every migration must be backward-compatible with the currently-live Worker for the few seconds between the two steps. For a single-user app this is nearly free — just never do a destructive rename in one step. Expand, deploy, contract.
 
-Use `cloudflare/wrangler-action@v3`. Turn on branch protection requiring `ci` to pass, even though you're solo — the agent will be opening the PRs, and this is the gate that catches it.
+**Use `npx wrangler`, not `cloudflare/wrangler-action`.** The action installs its own wrangler, so pinning it means the version lives in two places and one of them eventually goes stale. `npx wrangler` resolves from the lockfile — same version locally, in CI, and in deploy. Set `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` as `env` on the individual steps that need them rather than job-wide.
+
+Turn on branch protection requiring `ci` to pass, even though you're solo — the agent will be opening the PRs, and this is the gate that catches it.
+
+**The first deploy is run by hand, then proven by the workflow.** Order matters, because the Worker must exist before it can hold a secret:
+
+```bash
+npx wrangler d1 migrations apply sticker-collector --remote
+npx wrangler deploy
+npx wrangler secret put TOKEN_SIGNING_KEY
+curl -f https://<host>/api/health
+```
+
+Then merge a trivial change so `deploy.yml` runs on its own and proves itself on a commit whose blast radius is nothing.
+
+**Never run `verify-triggers.sh` against production.** It seeds ledger rows, the ledger is append-only by trigger, and the wallet is `SUM(ledger)` — the fixtures would corrupt the balance permanently and the invariant under test would block cleanup. Use the preview database.
 
 **Migration discipline:** Drizzle generates the SQL, you read the diff, wrangler applies it. Never let an agent hand-write a migration that a `drizzle-kit generate` could have produced, and never let it edit a migration that has already been applied.
 
