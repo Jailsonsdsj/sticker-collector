@@ -16,8 +16,12 @@ export default defineConfig(async () => {
           compatibilityDate: "2026-07-01",
           compatibilityFlags: ["nodejs_compat"],
           d1Databases: ["DB"],
-          // handed to the setup file, which applies them before any test runs.
-          bindings: { TEST_MIGRATIONS: migrations },
+          // TEST_MIGRATIONS is applied by the setup file before any test runs;
+          // TOKEN_SIGNING_KEY stands in for the production Worker secret.
+          bindings: {
+            TEST_MIGRATIONS: migrations,
+            TOKEN_SIGNING_KEY: "test-signing-key-not-secret",
+          },
         },
       }),
     ],

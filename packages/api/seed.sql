@@ -3,9 +3,13 @@
 -- image_key / cover_key are placeholders; real content-addressed R2 upload is A-02.
 -- weekday mask bit semantics are defined by shared/recurrence.ts (T-01); any 0-127 is valid here.
 
--- one user. auth values are placeholders — real ones come from the F-05 KDF flow.
+-- one user, loginable with the DEV passphrase "sticker-dev" (local only).
+-- auth_key_hash = base64(sha256(deriveAuthKey("sticker-dev", kdf_salt, 600000))) —
+-- the same PBKDF2-SHA256 flow the browser runs (packages/shared/src/kdf.ts).
+-- The salt is fixed so this credential is reproducible; regenerate all three values
+-- together if you change the passphrase.
 INSERT INTO user (id, auth_key_hash, kdf_salt, kdf_iterations, timezone, created_at) VALUES
-  ('user_local', 'seed-placeholder-hash', 'seed-placeholder-salt', 600000, 'Europe/Lisbon', '2026-07-01T00:00:00Z');
+  ('user_local', 'pMs8n+YdPFcBtu0axJ1+HyzMOcBAo0NI5poUB5TbY6k=', 'U3RpY2tlckRldlNhbHQwMQ==', 600000, 'Europe/Lisbon', '2026-07-01T00:00:00Z');
 
 -- one sealed album, locked (unlocked_at NULL). Odds sum to 100; prices rise by tier.
 INSERT INTO album (

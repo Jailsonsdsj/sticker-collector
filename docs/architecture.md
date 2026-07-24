@@ -371,8 +371,10 @@ pnpm typecheck            # tsc -b, all packages
 pnpm test                 # vitest: shared + api (workers pool)
 pnpm --filter web build
 npx wrangler deploy --dry-run
-npx wrangler d1 migrations list sticker-collector --remote   # shows pending
+npx wrangler d1 migrations apply sticker-collector --local    # every migration, from scratch
 ```
+
+**PR CI must not need production credentials.** No `--remote` calls, no `CLOUDFLARE_API_TOKEN`. Applying migrations to a local D1 from scratch proves more than listing remote ones does — it catches syntax errors, a wiped `0002_triggers.sql`, and schema drift, and the trigger tests then run against that database. Keep the Cloudflare secrets scoped to `deploy.yml`, which runs on `main` after review. A workflow that reaches into production on every PR can't be run offline, can't be debugged without secrets, and tells you less than `git diff` on `migrations/`.
 
 **`deploy.yml`** — on push to `main`:
 

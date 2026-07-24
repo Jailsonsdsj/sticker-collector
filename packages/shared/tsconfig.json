@@ -2,7 +2,12 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "dist",
-    "rootDir": "src"
+    "rootDir": "src",
+    // shared is dependency-free and targets the browser + Workers runtime; WebWorker
+    // provides crypto.subtle / TextEncoder / atob / BufferSource. `types: []` drops
+    // ambient @types/node so its globals can't collide with the WebWorker lib.
+    "lib": ["ES2022", "WebWorker"],
+    "types": []
   },
   "include": ["src"]
 }

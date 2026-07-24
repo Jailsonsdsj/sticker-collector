@@ -29,7 +29,7 @@ Nothing here is visible to a user. All of it is what stops the next 40 tasks fro
 | **F-04** | Seed script: one user, sample epic, 3 routines, 2 one-offs, one sealed 12-sticker album | S | haiku | `db/schema.ts` | `pnpm seed` produces a usable local DB |
 | **F-05** | Auth: `/api/auth/salt`, `/api/auth/login`, client-side PBKDF2, HS256 JWT + `Set-Cookie`, `requireAuth` middleware, D1 rate limiter | L | **opus** | `prd/07-services.md`, `architecture.md` §0.2, §4.4 | Wrong passphrase → 401; 11th attempt → 429; valid token reaches a protected route; **server never receives the passphrase** |
 | **F-06** | Idempotency middleware + the `spend()` conditional-insert helper + `balance()` | M | **opus** | `architecture.md` §4.2–4.4 | Same `Idempotency-Key` twice → one ledger row, identical response. Overspend → 402, zero rows written |
-| **F-07** | `ci.yml` — **must pin `node-version` from `.nvmrc` and the pnpm version from `packageManager`** (deferred from F-02b, which ran before any workflow existed) | S | haiku | `architecture.md` §8, `.nvmrc` | Green on a PR, and CI resolves the same Node and pnpm majors as local |
+| **F-07** | `ci.yml` — pin `node-version` from `.nvmrc` and pnpm from `packageManager` (deferred from F-02b). **No production credentials:** apply migrations locally, never `--remote` | S | haiku | `architecture.md` §8, `.nvmrc` | Green on a PR; CI resolves the same Node and pnpm majors as local; workflow runs with zero Cloudflare secrets present |
 | **F-08** | `deploy.yml` + first real deploy (uses the IDs from `docs/cloudflare-setup.md`). **Pin `node-version` here too.** | M | sonnet | `architecture.md` §7, §8, `.nvmrc` | Production URL returns healthy `/api/health` |
 
 > After F-08 you have a deployed, authenticated, empty app with an unbreakable ledger. That is the correct moment to start building features.
@@ -156,11 +156,11 @@ Keep this table updated — it is the first thing a new session reads, and it co
 
 | Phase | Done | Total | Status |
 |---|---|---|---|
-| 0 Foundation | 4 | 10 | in progress (F-04 done) |
+| 0 Foundation | 9 | 10 | in progress (F-07 done; F-08 left) |
 | 1 Design system | 0 | 6 | not started |
 | 2 Earning loop | 0 | 13 | not started |
 | 3 Spending loop | 0 | 11 | not started |
 | 4 Export | 0 | 2 | not started |
 | 5 Reports | 0 | 4 | not started |
 | 6 Hardening | 0 | 6 | not started |
-| **MVP total** | **4** | **52** | |
+| **MVP total** | **9** | **52** | |

@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+
+# Cancel superseded runs on the same PR branch.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # pnpm before setup-node so node's pnpm store cache can resolve. No `version`:
+      # the pinned pnpm comes from package.json's `packageManager` field (single source).
+      - uses: pnpm/action-setup@v4
+
+      # Node comes from .nvmrc — the same version developers run locally.
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+
+      # Prove every migration (incl. 0002_triggers.sql) applies cleanly from scratch
+      # via wrangler's own path — fully local, no Cloudflare credentials. Remote
+      # migration/deploy lives in deploy.yml, which is the only place secrets are used.
+      - run: npx wrangler d1 migrations apply sticker-collector --local
+
+      - run: pnpm build
+
+      # Bundles + validates the Worker and wrangler.jsonc without deploying. Needs the
+      # web build above for the assets binding; needs no authentication.
+      - run: npx wrangler deploy --dry-run
