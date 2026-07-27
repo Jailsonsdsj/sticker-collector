@@ -36,6 +36,10 @@ Do not read the whole `docs/prd/` directory. Load the one section the task names
 
 **`missed` and `archived` are derived, not stored.** An `occurrence` row exists only when completed or explicitly archived. Everything else is computed at read time from the weekday mask + the user's timezone. Never write future occurrences.
 
+**Weekday masks are Monday-first: bit 0 = Monday, Mon–Fri = 31.** This is stored as an integer in D1, so every consumer — SQL, report aggregations, the weekly grid — must agree. Do not read the mask with a Sunday-first (`getDay()`) assumption anywhere. A rotated histogram in reports is the silent failure this prevents.
+
+**Occurrence status: only `done` and `archived` are authoritative when stored.** `pending` and `missed` are always recomputed from today's date and the schedule; a stored row of those states must never outvote the calendar. Do not "optimise" by trusting a stored `missed`/`pending`.
+
 **Coin snapshots are frozen at completion.** Editing a task's reward affects future occurrences only. History is never rewritten.
 
 **Grayscale is a CSS filter.** One colour master per image. Never store or generate a second grayscale asset.

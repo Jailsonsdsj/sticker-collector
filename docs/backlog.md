@@ -57,7 +57,7 @@ Ship this whole phase before touching albums. At the end of it you can use the a
 
 | ID | Task | Size | Model | Load | Done when |
 |---|---|---|---|---|---|
-| **T-01** | `shared/recurrence.ts`: weekday mask → occurrences in a window; status derivation; timezone-aware "today". **Pure functions, no DB.** | L | **opus** | `prd/02-tasks.md`, `architecture.md` §0.3 | Tests cover: Mon–Fri routine, Sat-only, start/end bounds, DST boundary, missed at day 1 and 7, archived at day 8, dated one-off never archives, **cannot complete before scheduled date** |
+| **T-01** | `shared/recurrence.ts`: weekday mask → occurrences in a window; status derivation; timezone-aware "today". **Pure functions, no DB.** | L | **opus** | `prd/02-tasks.md`, `architecture.md` §0.3 | ✅ All cases covered (37 tests). **Bit 0 of `weekdays` is Monday** (ISO, matching the weekly grid). Days are civil-date strings, never `Date` arithmetic — that is what makes DST a non-event |
 | **T-02** | `shared/schema.ts`: Zod for every task/epic/occurrence payload | S | sonnet | `prd/02-tasks.md`, `prd/03-epics.md` | Types importable by both api and web |
 | **T-03** | API: tasks CRUD + soft delete + bulk duplicate/delete | M | sonnet | `prd/02-tasks.md`, `db/schema.ts` | Deleting a routine stops generation; past occurrences survive |
 | **T-04** | API: `GET /api/occurrences?from&to` — lazy materialisation, LEFT JOIN stored rows | M | **opus** | T-01 output, `architecture.md` §0.3 | Querying next month writes **zero** rows to the database |
@@ -158,9 +158,9 @@ Keep this table updated — it is the first thing a new session reads, and it co
 |---|---|---|---|
 | 0 Foundation | 10 | 10 | ✅ complete — deployed & healthy at sticker-collector.jailson-junior36.workers.dev |
 | 1 Design system | 6 | 6 | ✅ complete — read `docs/design-system.md`, not `docs/design/`. Live at `/dev/ui` |
-| 2 Earning loop | 0 | 13 | not started |
+| 2 Earning loop | 1 | 13 | 🔄 T-01 done — `shared/recurrence.ts`. T-02 next |
 | 3 Spending loop | 0 | 11 | not started |
 | 4 Export | 0 | 2 | not started |
 | 5 Reports | 0 | 4 | not started |
 | 6 Hardening | 0 | 6 | not started |
-| **MVP total** | **16** | **52** | |
+| **MVP total** | **17** | **52** | |
