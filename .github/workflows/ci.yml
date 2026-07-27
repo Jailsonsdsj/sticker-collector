@@ -31,6 +31,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - run: pnpm lint
+
+      # Self-test first: a guard whose grep has been broken exits 0 forever and
+      # keeps CI green while drift accumulates. If the guard is dead, that is the
+      # error you want to read — not a false pass from the scan below.
+      - run: bash scripts/check-tokens.sh --self-test
+      - run: pnpm lint:tokens
+
       - run: pnpm typecheck
       - run: pnpm test
 
