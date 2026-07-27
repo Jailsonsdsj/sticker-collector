@@ -4,16 +4,19 @@ import { Checkboxes } from "./galleries/Checkboxes";
 import { Chips } from "./galleries/Chips";
 import { Feedback } from "./galleries/Feedback";
 import { Fields } from "./galleries/Fields";
+import { Layout } from "./galleries/Layout";
 import { Overlays } from "./galleries/Overlays";
 import { Progress } from "./galleries/Progress";
+import { SectionIndex } from "./SectionIndex";
 import { TokenSheet } from "./TokenSheet";
 
 /**
- * The kitchen sink. Every primitive in every variant × state, on one page that
- * ships with the app and works on a real phone — not Storybook.
+ * The kitchen sink. Every token and every component in every variant × state,
+ * on one page that ships with the app and works on a real phone — not
+ * Storybook, which is six dependencies and a story file per component.
  *
- * D-02 covers batch 1, D-03 batch 2; D-05 turns this into the route that
- * `docs/design-system.md` indexes.
+ * The written counterpart is `docs/design-system.md`. That inventory, not this
+ * page and not the design bundle, is what later tasks read.
  */
 export function DevUI() {
   return (
@@ -24,6 +27,7 @@ export function DevUI() {
       >
         ← back to the app
       </a>
+      <SectionIndex />
       <TokenSheet />
       <Buttons />
       <Fields />
@@ -33,6 +37,7 @@ export function DevUI() {
       <Overlays />
       <Feedback />
       <Progress />
+      <Layout />
     </main>
   );
 }

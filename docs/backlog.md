@@ -46,7 +46,7 @@ See `04-DESIGN-SYSTEM-HANDOFF.md` for how the bundle gets here. **Do this before
 | **D-02** | Primitives, batch 1: `Button`, `Input`, `Textarea`, `Chip`, `Checkbox`, `Badge` | M | sonnet | `docs/design/`, `tokens.css` | ✅ Every variant × state renders on `/dev/ui` |
 | **D-03** | Primitives, batch 2: `Sheet`, `Dialog`, `Toast`, `ProgressBar`, `Tabs`, `EmptyState`, `Skeleton` | M | sonnet | `docs/design/`, `components/ui/` | ✅ ditto |
 | **D-04** | App shell: tab bar, header, routing skeleton, iOS safe-area insets, responsive breakpoints (3/4/6 sticker cols, 2/3/4 album cols) | M | sonnet | `docs/design/`, `prd/04-albums.md` §Geometry | ✅ Every tab navigable and empty; correct column counts at iPhone/iPad/desktop widths |
-| **D-05** | `/dev/ui` kitchen-sink route + write `docs/design-system.md` inventory table. Replaces the D-01 proof sheet at `src/dev/TokenSheet.tsx`. | S | haiku | `components/ui/` | Inventory lists every component with props, states, tokens. **This file replaces the bundle for all later tasks.** |
+| **D-05** | `/dev/ui` kitchen-sink route + write `docs/design-system.md` inventory table | S | haiku | `components/ui/` | ✅ Inventory lists every component with props, states, tokens. **This file replaces the bundle for all later tasks.** |
 | **D-06** | CI guard: wire `scripts/check-tokens.sh` (written in D-01) into `ci.yml` | S | haiku | `ci.yml`, `scripts/check-tokens.sh` | A deliberately-added `#ff0000` fails CI |
 
 ---
@@ -157,10 +157,10 @@ Keep this table updated — it is the first thing a new session reads, and it co
 | Phase | Done | Total | Status |
 |---|---|---|---|
 | 0 Foundation | 10 | 10 | ✅ complete — deployed & healthy at sticker-collector.jailson-junior36.workers.dev |
-| 1 Design system | 4 | 6 | 🔄 D-01–D-04 done — tokens, 13 primitives, app shell + routing. D-05 next |
+| 1 Design system | 5 | 6 | 🔄 D-01–D-05 done — read `docs/design-system.md`, not `docs/design/`. D-06 next |
 | 2 Earning loop | 0 | 13 | not started |
 | 3 Spending loop | 0 | 11 | not started |
 | 4 Export | 0 | 2 | not started |
 | 5 Reports | 0 | 4 | not started |
 | 6 Hardening | 0 | 6 | not started |
-| **MVP total** | **14** | **52** | |
+| **MVP total** | **15** | **52** | |

@@ -1,8 +1,16 @@
 import type { ReactNode } from "react";
 
+/** The id the section index links to. Derived, so the two can never drift. */
+export function sectionId(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
 export function Section({ n, title, children }: { n: string; title: string; children: ReactNode }) {
   return (
-    <section className="mb-10">
+    <section id={sectionId(title)} className="mb-10 scroll-mt-16">
       <h2 className="mb-4 flex items-baseline gap-3">
         <span className="rounded-xs bg-cyan px-3 py-1 font-display text-md text-ink-inverse italic tracking-wide uppercase">
           {n}
