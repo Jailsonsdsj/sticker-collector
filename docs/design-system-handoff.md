@@ -61,6 +61,14 @@ Building the primitives surfaced eight colours the bundle uses but D-01 missed �
 
 The remaining untokenised hexes in the bundle are one-off gradient stops inside screens — album covers, wizard panels, the sticker modal. They belong to D-04 and the feature tasks, not to the token sheet.
 
+#### Amended during D-03
+
+Three of batch 2 — `Toast`, `EmptyState`, `Skeleton` — **do not exist anywhere in the bundle.** No toast, no empty state, no loading placeholder, and nothing for the undo window T-11 needs. They were derived from the system's own language and are marked DERIVED in their source. They are the components most worth a second look, because they were invented rather than transcribed.
+
+Overlay motion was also unspecified, so `--animate-scrim-in`, `--animate-sheet-in`, `--animate-dialog-in`, `--animate-toast-in` and `--animate-skeleton` were added to `tokens.css` with matching `--duration-*` values, alongside `--color-scrim-modal` and `--gradient-dialog-danger` lifted from the delete confirm.
+
+**`Sheet` and `Dialog` sit on a native `<dialog>`.** `showModal()` provides the focus trap, Escape-to-close, top-layer stacking and background `inert` — all of which the prototype improvises with a z-index ladder (40/45/46/48/100) and none of which it actually implements. Nothing in this codebase should need a z-index to sit above a modal.
+
 ### D-02 / D-03 — Primitives, in two batches
 
 Batch 1: `Button`, `Input`, `Textarea`, `Chip`, `Checkbox`, `Badge`.

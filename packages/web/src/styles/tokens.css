@@ -111,6 +111,7 @@
   --color-cell-off: rgba(255, 255, 255, 0.22);
   --color-check-off: rgba(255, 255, 255, 0.3);
   --color-scrim: rgba(0, 0, 0, 0.62);
+  --color-scrim-modal: rgba(6, 4, 12, 0.9);
   --color-ring-today: rgba(45, 226, 255, 0.45);
 
   /* ── Colour · the five neons + gold ──────────────────────────────────── */
@@ -251,6 +252,15 @@
   --animate-celebration-cover: celebration-cover 0.8s cubic-bezier(0.3, 1.4, 0.5, 1) both;
   --animate-celebration-banner: celebration-banner 0.6s both;
   --animate-confetti-fall: confetti-fall 2.6s linear forwards;
+
+  /* DERIVED: the prototype specifies no entry motion for overlays and has no
+     skeleton at all. These follow the system's language — surfaces rise, the
+     toast pops on the same overshoot the coin ticker uses. */
+  --animate-scrim-in: scrim-in 0.2s ease-out both;
+  --animate-sheet-in: sheet-in 0.28s ease-out both;
+  --animate-dialog-in: dialog-in 0.22s ease-out both;
+  --animate-toast-in: toast-in 0.3s cubic-bezier(0.3, 1.4, 0.5, 1) both;
+  --animate-skeleton: skeleton-pulse 1.6s ease-in-out infinite;
 
   @keyframes coin-float {
     0% {
@@ -403,6 +413,56 @@
       transform: translateY(560px) rotate(720deg);
     }
   }
+
+  @keyframes scrim-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes sheet-in {
+    from {
+      transform: translateY(100%);
+    }
+    to {
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes dialog-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px) scale(0.94);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  @keyframes toast-in {
+    from {
+      opacity: 0;
+      transform: translateY(16px) scale(0.92);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  @keyframes skeleton-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.45;
+    }
+  }
 }
 
 /* ============================================================================
@@ -446,6 +506,7 @@
   --gradient-cover: linear-gradient(150deg, #2b1b45, #123047);
   --gradient-wallet: linear-gradient(135deg, #1c1430, #241732);
   --gradient-panel-raised: linear-gradient(160deg, #141020, #1d1730);
+  --gradient-dialog-danger: linear-gradient(160deg, #1c1020, #120c18);
 
   /* ── Rarity frames — the bezel behind a sticker's art ────────────────── */
   --gradient-frame-common: linear-gradient(150deg, #8a94a6, #4c5566);
@@ -488,6 +549,9 @@
   --duration-progress-slow: 500ms;
   --duration-fade: 300ms;
   --duration-celebration: 2600ms;
+  --duration-sheet: 280ms;
+  --duration-dialog: 220ms;
+  --duration-toast: 300ms;
 
   /* ── Motion · the pack shake, held longer as rarity rises ─────────────
      DERIVED: the prototype specifies only the endpoints — 560ms for every
