@@ -43,7 +43,7 @@ See `04-DESIGN-SYSTEM-HANDOFF.md` for how the bundle gets here. **Do this before
 | ID | Task | Size | Model | Load | Done when |
 |---|---|---|---|---|---|
 | **D-01** | Import handoff bundle → `styles/tokens.css` + Tailwind `@theme`. Colour, type scale, spacing, radii, shadows, motion. Nothing else. | M | sonnet | `docs/design/` bundle | ✅ Tokens render on a test page; zero literal hex values outside `tokens.css` |
-| **D-02** | Primitives, batch 1: `Button`, `Input`, `Textarea`, `Chip`, `Checkbox`, `Badge` | M | sonnet | `docs/design/`, `tokens.css` | Every variant × state renders on `/dev/ui` |
+| **D-02** | Primitives, batch 1: `Button`, `Input`, `Textarea`, `Chip`, `Checkbox`, `Badge` | M | sonnet | `docs/design/`, `tokens.css` | ✅ Every variant × state renders on `/dev/ui` |
 | **D-03** | Primitives, batch 2: `Sheet`, `Dialog`, `Toast`, `ProgressBar`, `Tabs`, `EmptyState`, `Skeleton` | M | sonnet | `docs/design/`, `components/ui/` | ditto |
 | **D-04** | App shell: tab bar, header, routing skeleton, iOS safe-area insets, responsive breakpoints (3/4/6 sticker cols, 2/3/4 album cols) | M | sonnet | `docs/design/`, `prd/04-albums.md` §Geometry | Every tab navigable and empty; correct column counts at iPhone/iPad/desktop widths |
 | **D-05** | `/dev/ui` kitchen-sink route + write `docs/design-system.md` inventory table. Replaces the D-01 proof sheet at `src/dev/TokenSheet.tsx`. | S | haiku | `components/ui/` | Inventory lists every component with props, states, tokens. **This file replaces the bundle for all later tasks.** |
@@ -157,10 +157,10 @@ Keep this table updated — it is the first thing a new session reads, and it co
 | Phase | Done | Total | Status |
 |---|---|---|---|
 | 0 Foundation | 10 | 10 | ✅ complete — deployed & healthy at sticker-collector.jailson-junior36.workers.dev |
-| 1 Design system | 1 | 6 | 🔄 D-01 done — tokens in `packages/web/src/styles/tokens.css`. D-02 next |
+| 1 Design system | 2 | 6 | 🔄 D-01/D-02 done — tokens + batch-1 primitives, live at `/dev/ui`. D-03 next |
 | 2 Earning loop | 0 | 13 | not started |
 | 3 Spending loop | 0 | 11 | not started |
 | 4 Export | 0 | 2 | not started |
 | 5 Reports | 0 | 4 | not started |
 | 6 Hardening | 0 | 6 | not started |
-| **MVP total** | **11** | **52** | |
+| **MVP total** | **12** | **52** | |

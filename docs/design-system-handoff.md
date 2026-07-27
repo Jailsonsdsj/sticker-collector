@@ -51,7 +51,15 @@ These are settled. Later tasks inherit them rather than re-deciding.
 
 **`@theme static`, not `@theme`.** Tailwind tree-shakes theme variables it cannot see being used, and it cannot see `var()` inside inline styles or raw CSS. Without `static`, every `--shadow-lip-*`, `--radius-4xl` and `@keyframes` silently vanished from the build. `tokens.css` is a published contract, so it publishes whole.
 
+**Token names never double their namespace.** Tailwind derives a utility from the token name, so `--color-border-check-off` would have to be written `border-border-check-off`. Border-role colours are therefore named for what they outline (`--color-check-off`, `--color-cell-idle`, `--color-cell-off`), not prefixed with `border-`. Getting this wrong is silent: the class simply doesn't exist and the element renders unstyled.
+
 **Spacing, type and radii are snapped to scales.** The prototype is a mock-up and uses ad-hoc literals (gaps of 3–40 px, radii of 2–22 px, seventeen distinct font sizes). Spacing is on a 4 px grid; type and radii collapse to monotonic ladders. Every such call is marked DERIVED in `tokens.css` with its reasoning. Values lifted verbatim carry no marker.
+
+#### Amended during D-02
+
+Building the primitives surfaced eight colours the bundle uses but D-01 missed — `#b6acce` alone appears 24 times. Added to `tokens.css`: `--color-ink-secondary` (inactive chips, segmented-control off state, body copy), `--color-ink-ghost` (unscheduled weekly cell), `--color-ink-overlay` and `--color-scrim` (text on artwork), `--color-surface-5`, `--color-check-off`, `--color-cell-off`, `--color-cell-idle`, `--color-ring-today`.
+
+The remaining untokenised hexes in the bundle are one-off gradient stops inside screens — album covers, wizard panels, the sticker modal. They belong to D-04 and the feature tasks, not to the token sheet.
 
 ### D-02 / D-03 — Primitives, in two batches
 

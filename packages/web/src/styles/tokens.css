@@ -90,9 +90,12 @@
   --color-panel-raised: #1d1730;
   --color-panel-header: #100c1a;
   --color-ink: #f2eefc;
+  --color-ink-secondary: #b6acce;
   --color-ink-muted: #8579a0;
   --color-ink-dim: #6f6488;
   --color-ink-faint: #5a5468;
+  --color-ink-ghost: #3a3550;
+  --color-ink-overlay: #d0d0e0;
   --color-ink-inverse: #0c0a13;
 
   /* ── Colour · surfaces and borders (white veils over the ink ground) ─── */
@@ -100,9 +103,15 @@
   --color-surface-2: rgba(255, 255, 255, 0.06);
   --color-surface-3: rgba(255, 255, 255, 0.08);
   --color-surface-4: rgba(255, 255, 255, 0.12);
+  --color-surface-5: rgba(255, 255, 255, 0.14);
   --color-border: rgba(255, 255, 255, 0.08);
   --color-border-strong: rgba(255, 255, 255, 0.18);
   --color-border-hairline: rgba(255, 255, 255, 0.045);
+  --color-cell-idle: rgba(255, 255, 255, 0.05);
+  --color-cell-off: rgba(255, 255, 255, 0.22);
+  --color-check-off: rgba(255, 255, 255, 0.3);
+  --color-scrim: rgba(0, 0, 0, 0.62);
+  --color-ring-today: rgba(45, 226, 255, 0.45);
 
   /* ── Colour · the five neons + gold ──────────────────────────────────── */
   --color-coin: #ffcc33;
