@@ -82,6 +82,16 @@ Tab bar, header, routing skeleton, iOS safe-area insets, and the responsive brea
 
 Do this before any screen exists, so every screen is born inside the correct frame.
 
+#### Amended during D-04
+
+**There is no persistent header in the design.** Each screen shouts its own name in the display face, and Home shows the wallet card instead of a title. `AppHeader` is therefore a per-screen component with `leading` / `trailing` slots, not global chrome.
+
+**Tab activity is prefix-matched, not exact.** The bundle keeps the Albums tab lit on the album *detail* screen (`s.screen === 'albums' || s.screen === 'inside'`). Only Tasks is `end`-matched, since every path is a descendant of `/`.
+
+**The spec's column counts live in one file.** `components/layout/grids.tsx` exports `StickerGrid` (3/4/6) and `AlbumGrid` (2/3/4) rather than leaving the class strings to be retyped on six screens. Breakpoints are Tailwind's defaults — `md` 768px, `lg` 1024px.
+
+**`viewport-fit=cover` is load-bearing.** Without it in `index.html`, every `env(safe-area-inset-*)` resolves to 0 on iOS and the shell's insets do nothing — silently, and only on a real device.
+
 ### D-05 — The index (the important one)
 
 Two outputs:

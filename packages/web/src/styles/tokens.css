@@ -112,6 +112,8 @@
   --color-check-off: rgba(255, 255, 255, 0.3);
   --color-scrim: rgba(0, 0, 0, 0.62);
   --color-scrim-modal: rgba(6, 4, 12, 0.9);
+  /* The tab bar's ground — near-opaque void, so content scrolls under it. */
+  --color-chrome: rgba(12, 10, 19, 0.97);
   --color-ring-today: rgba(45, 226, 255, 0.45);
 
   /* ── Colour · the five neons + gold ──────────────────────────────────── */
@@ -486,6 +488,11 @@
   --font-weight-body: 500;
   --font-weight-body-strong: 600;
   --font-weight-numeric: 700;
+
+  /* ── App chrome ──────────────────────────────────────────────────────────
+     The tab bar's height, needed twice: to size the bar and to pad the scroll
+     area beneath it. Combines with env(safe-area-inset-bottom) on iOS. */
+  --size-tabbar: 76px;
 
   /* ── Gradients ───────────────────────────────────────────────────────── */
   --gradient-holo: linear-gradient(120deg, #ff2d95, #c65cff, #2de2ff, #ffcc33, #ff2d95);

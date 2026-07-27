@@ -18,6 +18,12 @@ import { TokenSheet } from "./TokenSheet";
 export function DevUI() {
   return (
     <main className="mx-auto max-w-5xl p-6">
+      <a
+        href="/"
+        className="mb-6 inline-block font-numeric text-2xs text-cyan tracking-kicker uppercase no-underline hover:underline"
+      >
+        ← back to the app
+      </a>
       <TokenSheet />
       <Buttons />
       <Fields />

@@ -1,0 +1,30 @@
+import { createBrowserRouter } from "react-router";
+import { AppShell } from "../components/layout";
+import { DevUI } from "../dev/DevUI";
+import { Albums } from "./Albums";
+import { Epics } from "./Epics";
+import { NotFound } from "./NotFound";
+import { Reports } from "./Reports";
+import { Tasks } from "./Tasks";
+import { Week } from "./Week";
+
+/**
+ * One file per screen, all of them inside AppShell — so no screen can be built
+ * outside the correct frame. /dev/ui deliberately sits outside it: the kitchen
+ * sink is a document, not a tab.
+ */
+export const router = createBrowserRouter([
+  {
+    path: "/",
+    element: <AppShell />,
+    children: [
+      { index: true, element: <Tasks /> },
+      { path: "week", element: <Week /> },
+      { path: "albums", element: <Albums /> },
+      { path: "epics", element: <Epics /> },
+      { path: "reports", element: <Reports /> },
+      { path: "*", element: <NotFound /> },
+    ],
+  },
+  { path: "/dev/ui", element: <DevUI /> },
+]);
