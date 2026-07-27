@@ -1,0 +1,491 @@
+/* ============================================================================
+   Sticker Collector — design tokens
+   ----------------------------------------------------------------------------
+   GENERATED FROM THE HANDOFF BUNDLE. DO NOT HAND-EDIT.
+
+   Source:  docs/design/project/Sticker Collector Design System.dc.html
+            ("Nostalgic 90s Trading Card System")
+   Task:    D-01
+
+   Every value below is lifted from that prototype. Where the prototype used
+   ad-hoc literals (it is HTML/CSS mock-up, not production code) the values are
+   snapped to a scale; each such decision is marked DERIVED with its reasoning.
+
+   If a token is wrong, fix it in Claude Design and re-run D-01 — do not patch
+   this file by hand.
+
+   NOTE: the bundle also ships a "classical-…" folder under _ds/ — a light
+   editorial theme the design tool attaches by default. It is NOT this
+   product's design system and is deliberately not imported here.
+   ========================================================================= */
+
+/* `static` publishes every variable, not just the ones a generated utility
+   happens to reference. This file is a contract for D-02 onwards — components
+   read tokens through var() and inline styles, which Tailwind cannot see. */
+@theme static {
+  /* ── Type families ───────────────────────────────────────────────────────
+     Anton for the shouting · Space Grotesk for the reading · Chivo Mono for
+     the counting. Self-hosted via @fontsource (see app.css) so the PWA shell
+     works offline — the prototype's fonts.googleapis.com link is not used. */
+  --font-display: "Anton", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "Space Grotesk Variable", "Space Grotesk", system-ui, sans-serif;
+  --font-numeric: "Chivo Mono Variable", "Chivo Mono", ui-monospace, monospace;
+
+  /* ── Type scale ──────────────────────────────────────────────────────────
+     DERIVED: the prototype's sizes (8–92px) collapsed to a monotonic ladder.
+     Dense by design — this is a mobile UI with a lot of chrome. */
+  --text-3xs: 9px;
+  --text-2xs: 10px;
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-md: 13px;
+  --text-base: 14px;
+  --text-lg: 15px;
+  --text-xl: 20px;
+  --text-2xl: 26px;
+  --text-3xl: 30px;
+  --text-4xl: 34px;
+  --text-5xl: 40px;
+  --text-6xl: 52px;
+  --text-7xl: 92px;
+
+  /* ── Line height ─────────────────────────────────────────────────────── */
+  --leading-display: 0.88;
+  --leading-display-sm: 0.92;
+  --leading-tight: 1.2;
+  --leading-snug: 1.35;
+  --leading-normal: 1.45;
+  --leading-relaxed: 1.5;
+
+  /* ── Letter spacing ──────────────────────────────────────────────────── */
+  --tracking-tighter: -0.01em;
+  --tracking-display: 0.02em;
+  --tracking-section: 0.04em;
+  --tracking-wide: 0.08em;
+  --tracking-kicker: 0.12em;
+  --tracking-mono: 0.14em;
+  --tracking-brand: 0.34em;
+
+  /* ── Spacing ─────────────────────────────────────────────────────────────
+     DERIVED: the prototype's gaps of 3–40px snapped to a 4px grid. Its odd
+     values (9, 11, 13px) are mock-up noise, not intent. */
+  --spacing: 4px;
+
+  /* ── Radii ───────────────────────────────────────────────────────────────
+     DERIVED from the 2–22px cluster. 44/56px in the prototype are the phone
+     bezel in the mock-up frame, not app chrome, and are excluded. */
+  --radius-xs: 5px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+  --radius-2xl: 14px;
+  --radius-3xl: 16px;
+  --radius-4xl: 22px;
+  --radius-full: 999px;
+
+  /* ── Colour · ground and ink ─────────────────────────────────────────── */
+  --color-void: #0c0a13;
+  --color-panel: #141020;
+  --color-panel-raised: #1d1730;
+  --color-panel-header: #100c1a;
+  --color-ink: #f2eefc;
+  --color-ink-muted: #8579a0;
+  --color-ink-dim: #6f6488;
+  --color-ink-faint: #5a5468;
+  --color-ink-inverse: #0c0a13;
+
+  /* ── Colour · surfaces and borders (white veils over the ink ground) ─── */
+  --color-surface-1: rgba(255, 255, 255, 0.03);
+  --color-surface-2: rgba(255, 255, 255, 0.06);
+  --color-surface-3: rgba(255, 255, 255, 0.08);
+  --color-surface-4: rgba(255, 255, 255, 0.12);
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-border-strong: rgba(255, 255, 255, 0.18);
+  --color-border-hairline: rgba(255, 255, 255, 0.045);
+
+  /* ── Colour · the five neons + gold ──────────────────────────────────── */
+  --color-coin: #ffcc33;
+  --color-coin-light: #ffe89a;
+  --color-coin-deep: #c98a12;
+  --color-coin-ink: #7a5300;
+  --color-coin-lip: #b4870f;
+
+  --color-magenta: #ff2d95;
+  --color-magenta-light: #ff6db0;
+  --color-magenta-lip: #a3145f;
+
+  --color-cyan: #2de2ff;
+  --color-cyan-light: #7defff;
+
+  --color-lime: #b6ff3d;
+  --color-lime-lip: #6fa61f;
+  --color-lime-lip-warm: #7a8f2a;
+
+  --color-violet: #c65cff;
+  --color-violet-light: #e08bff;
+  --color-violet-lip: #7d1fd6;
+
+  /* ── Colour · semantic roles ─────────────────────────────────────────── */
+  --color-earn: var(--color-lime);
+  --color-spend: var(--color-magenta);
+  --color-danger: var(--color-magenta);
+  --color-affordable: var(--color-lime);
+  --color-link: var(--color-cyan);
+  --color-streak: var(--color-lime);
+  --color-today: var(--color-cyan);
+  --color-missed: var(--color-magenta-light);
+  --color-backlog: var(--color-ink-muted);
+
+  /* ── Colour · priority (row tint + label tint, from _prio()) ─────────── */
+  --color-prio-high-row: rgba(255, 45, 149, 0.1);
+  --color-prio-high-row-border: rgba(255, 45, 149, 0.28);
+  --color-prio-high-tag: rgba(255, 45, 149, 0.16);
+  --color-prio-high-tag-border: rgba(255, 45, 149, 0.4);
+  --color-prio-high-fg: #ff6db0;
+
+  --color-prio-med-row: rgba(255, 204, 51, 0.07);
+  --color-prio-med-row-border: rgba(255, 204, 51, 0.2);
+  --color-prio-med-tag: rgba(255, 204, 51, 0.14);
+  --color-prio-med-tag-border: rgba(255, 204, 51, 0.34);
+  --color-prio-med-fg: #ffcc33;
+
+  --color-prio-low-row: rgba(45, 226, 255, 0.05);
+  --color-prio-low-row-border: rgba(45, 226, 255, 0.16);
+  --color-prio-low-tag: rgba(45, 226, 255, 0.12);
+  --color-prio-low-tag-border: rgba(45, 226, 255, 0.3);
+  --color-prio-low-fg: #7defff;
+
+  /* ── Colour · epic accent (the 3px left border on a task row) ─────────
+     Per-epic, user-assigned. These are the palette an epic picks from;
+     --color-epic-none is the fallback for a task with no epic. */
+  --color-epic-1: #c65cff;
+  --color-epic-2: #b6ff3d;
+  --color-epic-3: #2de2ff;
+  --color-epic-4: #ff2d95;
+  --color-epic-5: #ffcc33;
+  --color-epic-none: #5a5468;
+
+  /* ── Colour · rarity tiers ───────────────────────────────────────────
+     dot = the tier's identity colour (legible on an EMPTY slot, per spec);
+     ring = the burst/flash colour on reveal. Frame gradients live in :root. */
+  --color-rarity-common: #8a94a6;
+  --color-rarity-common-deep: #4c5566;
+  --color-rarity-common-ring: #b6c0d0;
+
+  --color-rarity-rare: #3fb6ff;
+  --color-rarity-rare-deep: #1666c9;
+  --color-rarity-rare-ring: #7dd0ff;
+
+  --color-rarity-epic: #c65cff;
+  --color-rarity-epic-deep: #7d1fd6;
+  --color-rarity-epic-ring: #d89bff;
+
+  --color-rarity-legendary: #ffcc33;
+  --color-rarity-legendary-deep: #7a5300;
+  --color-rarity-legendary-ring: #ffe89a;
+
+  /* ── Colour · reports heatmap (5 steps, empty → full) ────────────────── */
+  --color-heat-0: rgba(255, 255, 255, 0.05);
+  --color-heat-1: rgba(182, 255, 61, 0.28);
+  --color-heat-2: rgba(182, 255, 61, 0.52);
+  --color-heat-3: rgba(182, 255, 61, 0.76);
+  --color-heat-4: #b6ff3d;
+
+  /* ── Elevation · ambient ─────────────────────────────────────────────── */
+  --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 12px 30px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 30px 90px rgba(0, 0, 0, 0.65);
+
+  /* ── Elevation · the arcade "lip" ────────────────────────────────────
+     A hard offset with no blur — the cabinet-button edge. Pressed state
+     halves the offset (--shadow-lip-pressed-*) and translates 2px down. */
+  --shadow-lip-coin: 0 4px 0 #b4870f;
+  --shadow-lip-coin-pressed: 0 2px 0 #b4870f;
+  --shadow-lip-lime: 0 4px 0 #6fa61f;
+  --shadow-lip-lime-pressed: 0 2px 0 #6fa61f;
+  --shadow-lip-magenta: 0 4px 0 #a3145f;
+  --shadow-lip-magenta-pressed: 0 2px 0 #a3145f;
+  --shadow-lip-violet: 0 4px 0 #7d1fd6;
+  --shadow-lip-violet-pressed: 0 2px 0 #7d1fd6;
+  --shadow-lip-cta: 0 4px 0 #7a8f2a;
+  --shadow-lip-cta-pressed: 0 2px 0 #7a8f2a;
+
+  /* ── Elevation · glows ───────────────────────────────────────────────── */
+  --shadow-coin: 0 6px 18px rgba(255, 204, 51, 0.35), inset 0 0 0 3px rgba(255, 255, 255, 0.35);
+  --shadow-coin-sm: 0 0 10px rgba(255, 204, 51, 0.4);
+  --shadow-holo: 0 8px 30px rgba(198, 92, 255, 0.3);
+  --shadow-holo-peak: 0 8px 46px rgba(255, 204, 51, 0.7), 0 0 30px rgba(255, 45, 149, 0.5);
+  --shadow-cta-glow: 0 4px 0 #7a8f2a, 0 0 18px rgba(182, 255, 61, 0.4);
+  --shadow-celebration: 0 16px 50px rgba(255, 45, 149, 0.5), 0 0 40px rgba(255, 204, 51, 0.4);
+
+  /* ── Aspect ratios ───────────────────────────────────────────────────
+     Fixed everywhere. A cover is exactly 3× a sticker at the same ratio. */
+  --aspect-card: 5 / 7;
+
+  /* ── Motion · easing ─────────────────────────────────────────────────── */
+  --ease-out-soft: ease-out;
+  --ease-in-out-soft: ease-in-out;
+  --ease-overshoot: cubic-bezier(0.3, 1.4, 0.5, 1);
+
+  /* ── Motion · animations ─────────────────────────────────────────────── */
+  --animate-coin-float: coin-float 1.15s ease-out forwards;
+  --animate-reveal-flood: reveal-flood 1.1s ease forwards;
+  --animate-burst-ring: burst-ring 0.7s ease-out forwards;
+  --animate-flash-bloom: flash-bloom 0.5s ease-out forwards;
+  --animate-pack-shake: pack-shake 0.55s ease-in-out;
+  --animate-pack-shake-legendary: pack-shake 0.5s ease-in-out infinite;
+  --animate-legend-glow: legend-glow 1.6s ease infinite;
+  --animate-banner-pop: banner-pop 0.6s 0.4s both;
+  --animate-rays: rays 9s linear infinite;
+  --animate-celebration-rays: rays 14s linear infinite;
+  --animate-celebration-cover: celebration-cover 0.8s cubic-bezier(0.3, 1.4, 0.5, 1) both;
+  --animate-celebration-banner: celebration-banner 0.6s both;
+  --animate-confetti-fall: confetti-fall 2.6s linear forwards;
+
+  @keyframes coin-float {
+    0% {
+      opacity: 0;
+      transform: translateY(6px) scale(0.8);
+    }
+    18% {
+      opacity: 1;
+      transform: translateY(-4px) scale(1.08);
+    }
+    100% {
+      opacity: 0;
+      transform: translateY(-46px) scale(1);
+    }
+  }
+
+  @keyframes reveal-flood {
+    0% {
+      filter: grayscale(1) brightness(0.7) contrast(1.1);
+    }
+    60% {
+      filter: grayscale(0) brightness(1.35) contrast(1.15);
+    }
+    100% {
+      filter: grayscale(0) brightness(1) contrast(1);
+    }
+  }
+
+  @keyframes burst-ring {
+    0% {
+      opacity: 0.9;
+      transform: scale(0.3);
+    }
+    100% {
+      opacity: 0;
+      transform: scale(2.4);
+    }
+  }
+
+  @keyframes flash-bloom {
+    0% {
+      opacity: 0;
+    }
+    35% {
+      opacity: 0.95;
+    }
+    100% {
+      opacity: 0;
+    }
+  }
+
+  @keyframes pack-shake {
+    0%,
+    100% {
+      transform: translateX(0) rotate(0) scale(1);
+    }
+    15% {
+      transform: translateX(-5px) rotate(-2.5deg);
+    }
+    30% {
+      transform: translateX(5px) rotate(2.5deg);
+    }
+    45% {
+      transform: translateX(-4px) rotate(-2deg);
+    }
+    60% {
+      transform: translateX(4px) rotate(2deg);
+    }
+    75% {
+      transform: translateX(-3px) rotate(-1.5deg) scale(1.04);
+    }
+    90% {
+      transform: translateX(2px) rotate(1deg) scale(1.06);
+    }
+  }
+
+  @keyframes legend-glow {
+    0%,
+    100% {
+      box-shadow: 0 8px 30px rgba(198, 92, 255, 0.3);
+    }
+    50% {
+      box-shadow:
+        0 8px 46px rgba(255, 204, 51, 0.7),
+        0 0 30px rgba(255, 45, 149, 0.5);
+    }
+  }
+
+  @keyframes banner-pop {
+    0% {
+      opacity: 0;
+      transform: scale(0.4) translateY(10px);
+    }
+    55% {
+      opacity: 1;
+      transform: scale(1.14);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes rays {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes celebration-cover {
+    0% {
+      opacity: 0;
+      transform: scale(0.5) rotate(-8deg);
+    }
+    60% {
+      opacity: 1;
+      transform: scale(1.08) rotate(2deg);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1) rotate(0);
+    }
+  }
+
+  @keyframes celebration-banner {
+    0% {
+      opacity: 0;
+      transform: translateY(24px) scale(0.8);
+    }
+    60% {
+      opacity: 1;
+      transform: translateY(0) scale(1.06);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes confetti-fall {
+    0% {
+      opacity: 0;
+      transform: translateY(-30px) rotate(0);
+    }
+    10% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+      transform: translateY(560px) rotate(720deg);
+    }
+  }
+}
+
+/* ============================================================================
+   Tokens with no Tailwind namespace. Consume with var().
+   ========================================================================= */
+:root {
+  /* ── Spacing ladder, for raw CSS (Tailwind utilities use --spacing) ───── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* ── Display type is set in synthesised oblique — Anton ships no italic
+     cut, and the prototype leans on the browser's slant throughout. ────── */
+  --font-style-display: italic;
+  --font-weight-body: 500;
+  --font-weight-body-strong: 600;
+  --font-weight-numeric: 700;
+
+  /* ── Gradients ───────────────────────────────────────────────────────── */
+  --gradient-holo: linear-gradient(120deg, #ff2d95, #c65cff, #2de2ff, #ffcc33, #ff2d95);
+  --gradient-holo-text: linear-gradient(
+    92deg,
+    #ff2d95,
+    #c65cff,
+    #2de2ff,
+    #b6ff3d,
+    #ffcc33,
+    #ff2d95
+  );
+  --gradient-coin: radial-gradient(circle at 35% 30%, #ffe89a, #ffcc33 45%, #c98a12);
+  --gradient-progress: linear-gradient(92deg, #2de2ff, #b6ff3d);
+  --gradient-cta: linear-gradient(92deg, #ffcc33, #b6ff3d);
+  --gradient-cta-hot: linear-gradient(92deg, #ffcc33, #ff2d95);
+  --gradient-cool: linear-gradient(92deg, #2de2ff, #c65cff);
+  --gradient-cover: linear-gradient(150deg, #2b1b45, #123047);
+  --gradient-wallet: linear-gradient(135deg, #1c1430, #241732);
+  --gradient-panel-raised: linear-gradient(160deg, #141020, #1d1730);
+
+  /* ── Rarity frames — the bezel behind a sticker's art ────────────────── */
+  --gradient-frame-common: linear-gradient(150deg, #8a94a6, #4c5566);
+  --gradient-frame-rare: linear-gradient(150deg, #3fb6ff, #1666c9);
+  --gradient-frame-epic: linear-gradient(150deg, #e08bff, #7d1fd6);
+  --gradient-frame-legendary: var(--gradient-holo);
+
+  /* ── Rarity frame thickness — the bezel widens with rarity ───────────── */
+  --frame-pad-common: 4px;
+  --frame-pad-rare: 5px;
+  --frame-pad-epic: 6px;
+  --frame-pad-legendary: 7px;
+
+  /* ── An empty / not-yet-owned slot ───────────────────────────────────── */
+  --gradient-locked-hatch: repeating-linear-gradient(
+    45deg,
+    #1a1a22,
+    #1a1a22 9px,
+    #212129 9px,
+    #212129 18px
+  );
+
+  /* ── Grayscale is a CSS filter over the one colour master. There is never
+     a second asset — this is what makes the reveal a transition. ───────── */
+  --filter-locked: grayscale(1) brightness(0.55);
+  --filter-locked-deep: grayscale(1) brightness(0.7) contrast(1.1);
+  --filter-unlocked: grayscale(0);
+
+  /* ── Ambient page wash behind the app shell ──────────────────────────── */
+  --gradient-page-wash:
+    radial-gradient(1200px 700px at 20% -5%, rgba(198, 92, 255, 0.16), transparent 60%),
+    radial-gradient(1000px 620px at 95% 10%, rgba(45, 226, 255, 0.12), transparent 55%);
+
+  /* ── Motion · durations ──────────────────────────────────────────────── */
+  --duration-coin-float: 1150ms;
+  --duration-reveal-flood: 1100ms;
+  --duration-burst: 700ms;
+  --duration-flash: 500ms;
+  --duration-progress: 400ms;
+  --duration-progress-slow: 500ms;
+  --duration-fade: 300ms;
+  --duration-celebration: 2600ms;
+
+  /* ── Motion · the pack shake, held longer as rarity rises ─────────────
+     DERIVED: the prototype specifies only the endpoints — 560ms for every
+     non-legendary tier, 1000ms for legendary. The two middle steps are
+     interpolated. Retune here; nothing else hardcodes them. */
+  --duration-shake-common: 560ms;
+  --duration-shake-rare: 680ms;
+  --duration-shake-epic: 820ms;
+  --duration-shake-legendary: 1000ms;
+}

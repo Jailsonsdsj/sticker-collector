@@ -2,6 +2,8 @@
 
 Target repo path: `docs/design-system-handoff.md`
 
+Design System path: `docs/design`
+
 This covers your second phase. Do it **after** Phase 0 of the backlog (you need a repo for the bundle to land in) and **before** Phase 2 (so no feature screen ever hardcodes a colour).
 
 ---
@@ -36,6 +38,20 @@ Extract **only** colour, type scale, spacing, radii, shadows, and motion duratio
 No components in this task. Tokens are the contract everything else is written against, and they're the thing you least want an agent improvising later.
 
 `tokens.css` is generated, not hand-edited. If a token is wrong, fix it in Claude Design and re-run.
+
+#### Decisions taken during D-01
+
+These are settled. Later tasks inherit them rather than re-deciding.
+
+**The bundle ships two contradictory design systems. Only one is ours.** `docs/design/project/_ds/classical-…/` is a light editorial theme (near-white ground, Cormorant Garamond over Lora, one muted gold accent) that the design tool attaches by default. `docs/design/project/Sticker Collector Design System.dc.html` is the real thing: ink-dark `#0c0a13` ground, Anton / Space Grotesk / Chivo Mono, neon magenta-cyan-lime-violet, arcade buttons with a hard drop-shadow lip. **Tokenise the `.dc.html`; ignore `_ds/`.** Its `_adherence.oxlintrc.json` whitelists only the Classical tokens and fonts, so it cannot be reused as D-06's guard — `scripts/check-tokens.sh` is the guard.
+
+**Fonts are self-hosted, not CDN.** Anton, Space Grotesk and Chivo Mono come from `@fontsource` packages imported in `styles/app.css`, not the prototype's `fonts.googleapis.com` link. A third-party font request would break the offline shell H-02 promises and add a blocking round-trip to every cold start. Anton ships no italic cut — the display style is the browser's synthesised oblique, as in the prototype, exposed as `--font-style-display`.
+
+**The reveal holds longer as rarity rises, on a four-step scale.** The prototype specifies only the endpoints — 560 ms for every non-legendary tier, 1000 ms for legendary. The two middle steps are interpolated: `--duration-shake-common/rare/epic/legendary` = 560 / 680 / 820 / 1000 ms. Marked DERIVED in `tokens.css`; retune there and nothing else changes.
+
+**`@theme static`, not `@theme`.** Tailwind tree-shakes theme variables it cannot see being used, and it cannot see `var()` inside inline styles or raw CSS. Without `static`, every `--shadow-lip-*`, `--radius-4xl` and `@keyframes` silently vanished from the build. `tokens.css` is a published contract, so it publishes whole.
+
+**Spacing, type and radii are snapped to scales.** The prototype is a mock-up and uses ad-hoc literals (gaps of 3–40 px, radii of 2–22 px, seventeen distinct font sizes). Spacing is on a 4 px grid; type and radii collapse to monotonic ladders. Every such call is marked DERIVED in `tokens.css` with its reasoning. Values lifted verbatim carry no marker.
 
 ### D-02 / D-03 — Primitives, in two batches
 
@@ -83,6 +99,17 @@ Things worth confirming exist in your design system before D-02, because they're
 - **The coin ticker** needs a token for its animation duration, and the reveal needs four (one per tier, held longer as rarity rises).
 - **5:7 aspect ratio** is fixed everywhere. Sticker and cover are the same shape; the cover is exactly 3×. Any component that displays either should enforce the ratio in CSS, not trust the image.
 - **The weekly grid** — seven columns of checkboxes on a phone. Worth designing explicitly; it's the one screen where the spec's tap-count promise ("five taps, not five forms") can be quietly broken by layout.
+
+**Checked during D-01, against the `.dc.html`:**
+
+| Item | Status |
+|---|---|
+| Grayscale as a filter | ✅ `--filter-locked` / `--filter-unlocked`, one master, `reveal-flood` transitions between them |
+| Four rarity frames | ✅ `--gradient-frame-*` + `--frame-pad-*` (4→7 px, widening with rarity) and `--color-rarity-*` identity dots. The frame is the bezel *behind* the art, so an empty slot still reads its tier |
+| Priority tint × epic accent | ✅ separate token sets — `--color-prio-*-row` for the row, `--color-epic-1…5` for the 3 px left border |
+| Coin ticker + four reveal durations | ✅ `--duration-coin-float`; the four-step shake scale is above |
+| 5:7 ratio | ✅ `--aspect-card`, giving Tailwind's `aspect-card` |
+| Weekly grid | ✅ designed in full — `grid-template-columns: 80px repeat(7, 1fr)`, 28 px cells, today's column tinted cyan, unscheduled days rendered as faint dots. T-12 has a handoff to build against; the layout itself lands in T-12, not here |
 
 ---
 
