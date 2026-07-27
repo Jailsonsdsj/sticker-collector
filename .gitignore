@@ -13,3 +13,7 @@ dist/
 design/**/*.png
 design/**/*.jpg
 design/**/*.webp
+docs/design
+docs/design/**/*.png
+docs/design/**/*.jpg
+docs/design/**/*.webp

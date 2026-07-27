@@ -12,6 +12,7 @@
     "test": "vitest run",
     "typecheck": "tsc -b && tsc -b packages/api/test/tsconfig.json",
     "lint": "biome ci .",
+    "lint:tokens": "bash scripts/check-tokens.sh",
     "types": "wrangler types packages/api/src/worker-configuration.d.ts",
     "db:generate": "pnpm --filter @sticker-collector/api exec drizzle-kit generate",
     "seed": "bash scripts/seed.sh"

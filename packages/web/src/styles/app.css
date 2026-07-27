@@ -1,0 +1,26 @@
+/* The stylesheet entry. Tailwind first, then self-hosted faces, then tokens.
+   Everything downstream styles itself from tokens.css and nothing else. */
+@import "tailwindcss";
+
+@import "@fontsource/anton/400.css";
+@import "@fontsource-variable/space-grotesk/wght.css";
+@import "@fontsource-variable/chivo-mono/wght.css";
+
+@import "./tokens.css";
+
+html {
+  background: var(--color-void);
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--gradient-page-wash), var(--color-void);
+  background-attachment: fixed;
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  font-weight: var(--font-weight-body);
+  line-height: var(--leading-normal);
+  -webkit-font-smoothing: antialiased;
+}

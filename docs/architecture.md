@@ -70,6 +70,7 @@ row.status = done                       → done
 | Migrations | **`wrangler d1 migrations`** (plain SQL files) | Drizzle generates them; wrangler applies them. Reviewable diffs |
 | Object storage | **Cloudflare R2**, content-addressed keys | Per spec; dedupe comes free (§5) |
 | Frontend | **React 19 + TypeScript + Vite** | Design handoff bundles target React; Vite's build is what `assets.directory` points at |
+| Routing | **`react-router`** (added in D-04) | Five tabs, plus album detail (A-08) and the wizard (A-07) as nested routes. The Zustand line below only holds because the URL holds the rest — that needs a real router, not 40 lines of `pushState`. `not_found_handling: single-page-application` in `wrangler.jsonc` is what makes deep links work in production |
 | Styling | **Tailwind v4** with `@theme` tokens from the design system | CSS-first tokens map 1:1 to a design-system export |
 | Server state | **TanStack Query** | Cache + optimistic mutations + retry, which is exactly the undo/offline story |
 | Client state | **Zustand** (one small store) | Only for UI state the URL can't hold |

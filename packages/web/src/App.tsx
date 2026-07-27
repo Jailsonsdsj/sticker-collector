@@ -1,3 +1,6 @@
+import { RouterProvider } from "react-router";
+import { router } from "./routes/router";
+
 export function App() {
-  return <h1>Sticker Collector</h1>;
+  return <RouterProvider router={router} />;
 }

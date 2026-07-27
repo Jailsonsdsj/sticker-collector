@@ -54,7 +54,7 @@ Do not read the whole `docs/prd/` directory. Load the one section the task names
 
 ## Conventions
 
-- Colours, spacing, and type come from `styles/tokens.css` only. Literal hex or px values fail CI.
+- Colours, spacing, and type come from `styles/tokens.css` only. Literal hex colours and literal `font-size` px values fail CI. (Border widths are not yet tokenised — see backlog `D-07`; until then a literal `border-[1.5px]` is tolerated but discouraged.)
 - Validation is Zod in `packages/shared`, imported by both the Worker and the browser. One schema, two consumers.
 - Route files under 200 lines, one resource each. Components under 150.
 - Prefer editing a named function over rewriting a file.

@@ -2,6 +2,8 @@
 
 Target repo path: `docs/design-system-handoff.md`
 
+Design System path: `docs/design`
+
 This covers your second phase. Do it **after** Phase 0 of the backlog (you need a repo for the bundle to land in) and **before** Phase 2 (so no feature screen ever hardcodes a colour).
 
 ---
@@ -37,6 +39,36 @@ No components in this task. Tokens are the contract everything else is written a
 
 `tokens.css` is generated, not hand-edited. If a token is wrong, fix it in Claude Design and re-run.
 
+#### Decisions taken during D-01
+
+These are settled. Later tasks inherit them rather than re-deciding.
+
+**The bundle ships two contradictory design systems. Only one is ours.** `docs/design/project/_ds/classical-…/` is a light editorial theme (near-white ground, Cormorant Garamond over Lora, one muted gold accent) that the design tool attaches by default. `docs/design/project/Sticker Collector Design System.dc.html` is the real thing: ink-dark `#0c0a13` ground, Anton / Space Grotesk / Chivo Mono, neon magenta-cyan-lime-violet, arcade buttons with a hard drop-shadow lip. **Tokenise the `.dc.html`; ignore `_ds/`.** Its `_adherence.oxlintrc.json` whitelists only the Classical tokens and fonts, so it cannot be reused as D-06's guard — `scripts/check-tokens.sh` is the guard.
+
+**Fonts are self-hosted, not CDN.** Anton, Space Grotesk and Chivo Mono come from `@fontsource` packages imported in `styles/app.css`, not the prototype's `fonts.googleapis.com` link. A third-party font request would break the offline shell H-02 promises and add a blocking round-trip to every cold start. Anton ships no italic cut — the display style is the browser's synthesised oblique, as in the prototype, exposed as `--font-style-display`.
+
+**The reveal holds longer as rarity rises, on a four-step scale.** The prototype specifies only the endpoints — 560 ms for every non-legendary tier, 1000 ms for legendary. The two middle steps are interpolated: `--duration-shake-common/rare/epic/legendary` = 560 / 680 / 820 / 1000 ms. Marked DERIVED in `tokens.css`; retune there and nothing else changes.
+
+**`@theme static`, not `@theme`.** Tailwind tree-shakes theme variables it cannot see being used, and it cannot see `var()` inside inline styles or raw CSS. Without `static`, every `--shadow-lip-*`, `--radius-4xl` and `@keyframes` silently vanished from the build. `tokens.css` is a published contract, so it publishes whole.
+
+**Token names never double their namespace.** Tailwind derives a utility from the token name, so `--color-border-check-off` would have to be written `border-border-check-off`. Border-role colours are therefore named for what they outline (`--color-check-off`, `--color-cell-idle`, `--color-cell-off`), not prefixed with `border-`. Getting this wrong is silent: the class simply doesn't exist and the element renders unstyled.
+
+**Spacing, type and radii are snapped to scales.** The prototype is a mock-up and uses ad-hoc literals (gaps of 3–40 px, radii of 2–22 px, seventeen distinct font sizes). Spacing is on a 4 px grid; type and radii collapse to monotonic ladders. Every such call is marked DERIVED in `tokens.css` with its reasoning. Values lifted verbatim carry no marker.
+
+#### Amended during D-02
+
+Building the primitives surfaced eight colours the bundle uses but D-01 missed — `#b6acce` alone appears 24 times. Added to `tokens.css`: `--color-ink-secondary` (inactive chips, segmented-control off state, body copy), `--color-ink-ghost` (unscheduled weekly cell), `--color-ink-overlay` and `--color-scrim` (text on artwork), `--color-surface-5`, `--color-check-off`, `--color-cell-off`, `--color-cell-idle`, `--color-ring-today`.
+
+The remaining untokenised hexes in the bundle are one-off gradient stops inside screens — album covers, wizard panels, the sticker modal. They belong to D-04 and the feature tasks, not to the token sheet.
+
+#### Amended during D-03
+
+Three of batch 2 — `Toast`, `EmptyState`, `Skeleton` — **do not exist anywhere in the bundle.** No toast, no empty state, no loading placeholder, and nothing for the undo window T-11 needs. They were derived from the system's own language and are marked DERIVED in their source. They are the components most worth a second look, because they were invented rather than transcribed.
+
+Overlay motion was also unspecified, so `--animate-scrim-in`, `--animate-sheet-in`, `--animate-dialog-in`, `--animate-toast-in` and `--animate-skeleton` were added to `tokens.css` with matching `--duration-*` values, alongside `--color-scrim-modal` and `--gradient-dialog-danger` lifted from the delete confirm.
+
+**`Sheet` and `Dialog` sit on a native `<dialog>`.** `showModal()` provides the focus trap, Escape-to-close, top-layer stacking and background `inert` — all of which the prototype improvises with a z-index ladder (40/45/46/48/100) and none of which it actually implements. Nothing in this codebase should need a z-index to sit above a modal.
+
 ### D-02 / D-03 — Primitives, in two batches
 
 Batch 1: `Button`, `Input`, `Textarea`, `Chip`, `Checkbox`, `Badge`.
@@ -49,6 +81,16 @@ Two batches rather than one because a thirteen-component diff is not reviewable 
 Tab bar, header, routing skeleton, iOS safe-area insets, and the responsive breakpoints the spec fixes: **3/4/6 sticker columns** and **2/3/4 album columns** at iPhone / iPad / desktop.
 
 Do this before any screen exists, so every screen is born inside the correct frame.
+
+#### Amended during D-04
+
+**There is no persistent header in the design.** Each screen shouts its own name in the display face, and Home shows the wallet card instead of a title. `AppHeader` is therefore a per-screen component with `leading` / `trailing` slots, not global chrome.
+
+**Tab activity is prefix-matched, not exact.** The bundle keeps the Albums tab lit on the album *detail* screen (`s.screen === 'albums' || s.screen === 'inside'`). Only Tasks is `end`-matched, since every path is a descendant of `/`.
+
+**The spec's column counts live in one file.** `components/layout/grids.tsx` exports `StickerGrid` (3/4/6) and `AlbumGrid` (2/3/4) rather than leaving the class strings to be retyped on six screens. Breakpoints are Tailwind's defaults — `md` 768px, `lg` 1024px.
+
+**`viewport-fit=cover` is load-bearing.** Without it in `index.html`, every `env(safe-area-inset-*)` resolves to 0 on iOS and the shell's insets do nothing — silently, and only on a real device.
 
 ### D-05 — The index (the important one)
 
@@ -83,6 +125,17 @@ Things worth confirming exist in your design system before D-02, because they're
 - **The coin ticker** needs a token for its animation duration, and the reveal needs four (one per tier, held longer as rarity rises).
 - **5:7 aspect ratio** is fixed everywhere. Sticker and cover are the same shape; the cover is exactly 3×. Any component that displays either should enforce the ratio in CSS, not trust the image.
 - **The weekly grid** — seven columns of checkboxes on a phone. Worth designing explicitly; it's the one screen where the spec's tap-count promise ("five taps, not five forms") can be quietly broken by layout.
+
+**Checked during D-01, against the `.dc.html`:**
+
+| Item | Status |
+|---|---|
+| Grayscale as a filter | ✅ `--filter-locked` / `--filter-unlocked`, one master, `reveal-flood` transitions between them |
+| Four rarity frames | ✅ `--gradient-frame-*` + `--frame-pad-*` (4→7 px, widening with rarity) and `--color-rarity-*` identity dots. The frame is the bezel *behind* the art, so an empty slot still reads its tier |
+| Priority tint × epic accent | ✅ separate token sets — `--color-prio-*-row` for the row, `--color-epic-1…5` for the 3 px left border |
+| Coin ticker + four reveal durations | ✅ `--duration-coin-float`; the four-step shake scale is above |
+| 5:7 ratio | ✅ `--aspect-card`, giving Tailwind's `aspect-card` |
+| Weekly grid | ✅ designed in full — `grid-template-columns: 80px repeat(7, 1fr)`, 28 px cells, today's column tinted cyan, unscheduled days rendered as faint dots. T-12 has a handoff to build against; the layout itself lands in T-12, not here |
 
 ---
 
