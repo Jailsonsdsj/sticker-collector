@@ -4,3 +4,4 @@ export * from "./auth";
 export * from "./bytes";
 export * from "./kdf";
 export * from "./recurrence";
+export * from "./schema";

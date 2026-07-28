@@ -3,6 +3,7 @@ import { AppShell } from "../components/layout";
 import { DevUI } from "../dev/DevUI";
 import { Albums } from "./Albums";
 import { Epics } from "./Epics";
+import { Login } from "./Login";
 import { NotFound } from "./NotFound";
 import { Reports } from "./Reports";
 import { Tasks } from "./Tasks";
@@ -26,5 +27,6 @@ export const router = createBrowserRouter([
       { path: "*", element: <NotFound /> },
     ],
   },
+  { path: "/login", element: <Login /> },
   { path: "/dev/ui", element: <DevUI /> },
 ]);

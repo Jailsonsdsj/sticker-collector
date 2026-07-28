@@ -66,13 +66,13 @@ row.status = done                       → done
 | Hosting + API | **One Cloudflare Worker + Static Assets** | §0.1 |
 | API framework | **Hono** | ~14 kB, first-class Workers support, typed context, tiny surface for the agent to learn |
 | Database | **Cloudflare D1** | Per spec |
-| DB access | **Drizzle ORM** + `drizzle-kit` | Typed queries; schema is TS, so types flow to the client for free. Big token saver — the agent infers instead of re-reading SQL |
+| DB access | **Drizzle ORM** + `drizzle-kit` | Typed queries; schema is TS, so types flow to the client for free. Big token saver — the agent infers instead of re-reading SQL. **Adopted for queries in T-03**; `routes/auth.ts` and `lib/rate-limit.ts` predate it and stay on raw D1 statements, and `spend()` stays raw permanently — its balance guard lives inside the SQL `WHERE` (§4.3) and must remain legible. Use `db(c.env)` from `db/client.ts` |
 | Migrations | **`wrangler d1 migrations`** (plain SQL files) | Drizzle generates them; wrangler applies them. Reviewable diffs |
 | Object storage | **Cloudflare R2**, content-addressed keys | Per spec; dedupe comes free (§5) |
 | Frontend | **React 19 + TypeScript + Vite** | Design handoff bundles target React; Vite's build is what `assets.directory` points at |
 | Routing | **`react-router`** (added in D-04) | Five tabs, plus album detail (A-08) and the wizard (A-07) as nested routes. The Zustand line below only holds because the URL holds the rest — that needs a real router, not 40 lines of `pushState`. `not_found_handling: single-page-application` in `wrangler.jsonc` is what makes deep links work in production |
 | Styling | **Tailwind v4** with `@theme` tokens from the design system | CSS-first tokens map 1:1 to a design-system export |
-| Server state | **TanStack Query** | Cache + optimistic mutations + retry, which is exactly the undo/offline story |
+| Server state | **TanStack Query** (added in T-08) | Cache + optimistic mutations + retry, which is exactly the undo/offline story |
 | Client state | **Zustand** (one small store) | Only for UI state the URL can't hold |
 | Forms | **react-hook-form + Zod** | Same Zod schemas as the API. One source of truth for validation |
 | PWA | **`vite-plugin-pwa`** (Workbox) | Manifest + service worker + update flow |

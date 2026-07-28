@@ -4,6 +4,7 @@ import { Checkboxes } from "./galleries/Checkboxes";
 import { Chips } from "./galleries/Chips";
 import { Feedback } from "./galleries/Feedback";
 import { Fields } from "./galleries/Fields";
+import { Home } from "./galleries/Home";
 import { Layout } from "./galleries/Layout";
 import { Overlays } from "./galleries/Overlays";
 import { Progress } from "./galleries/Progress";
@@ -38,6 +39,7 @@ export function DevUI() {
       <Feedback />
       <Progress />
       <Layout />
+      <Home />
     </main>
   );
 }

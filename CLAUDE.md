@@ -38,6 +38,8 @@ Do not read the whole `docs/prd/` directory. Load the one section the task names
 
 **Weekday masks are Monday-first: bit 0 = Monday, Mon–Fri = 31.** This is stored as an integer in D1, so every consumer — SQL, report aggregations, the weekly grid — must agree. Do not read the mask with a Sunday-first (`getDay()`) assumption anywhere. A rotated histogram in reports is the silent failure this prevents.
 
+**Completion validation runs on fresh occurrences only.** A fresh completion is validated against the schedule (a Tuesday routine cannot be completed on Monday; an undated one-off completes on today only). Once a row exists it is legitimate by construction and the scheduling guard is skipped — this is what lets a completed item re-open after "today" moves and what survives a routine's mask changing after a day closed. The guard skip must never apply to a *fresh* completion of an unscheduled day; keep a test asserting that still 400s.
+
 **Occurrence status: only `done` and `archived` are authoritative when stored.** `pending` and `missed` are always recomputed from today's date and the schedule; a stored row of those states must never outvote the calendar. Do not "optimise" by trusting a stored `missed`/`pending`.
 
 **Coin snapshots are frozen at completion.** Editing a task's reward affects future occurrences only. History is never rewritten.
@@ -58,7 +60,7 @@ Do not read the whole `docs/prd/` directory. Load the one section the task names
 
 ## Conventions
 
-- Colours, spacing, and type come from `styles/tokens.css` only. Literal hex colours and literal `font-size` px values fail CI. (Border widths are not yet tokenised — see backlog `D-07`; until then a literal `border-[1.5px]` is tolerated but discouraged.)
+- Colours, spacing, and type come from `styles/tokens.css` only. Literal hex colours and literal `font-size` px values fail CI. (Border widths are not yet tokenised — see backlog `TD-03` under Post-MVP; until then a literal `border-[1.5px]` is tolerated but discouraged.)
 - Validation is Zod in `packages/shared`, imported by both the Worker and the browser. One schema, two consumers.
 - Route files under 200 lines, one resource each. Components under 150.
 - Prefer editing a named function over rewriting a file.

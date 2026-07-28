@@ -7,7 +7,8 @@ export default defineConfig({
       { extends: true, root: "packages/shared", test: { name: "shared" } },
       // api runs in the Workers pool with a real D1 — see packages/api/vitest.config.ts.
       "packages/api/vitest.config.ts",
-      { extends: true, root: "packages/web", test: { name: "web" } },
+      // web runs in jsdom with React Testing Library — see packages/web/vitest.config.ts.
+      "packages/web/vitest.config.ts",
     ],
   },
 });
