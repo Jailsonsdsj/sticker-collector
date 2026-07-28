@@ -8,6 +8,7 @@ import { Home } from "./galleries/Home";
 import { Layout } from "./galleries/Layout";
 import { Overlays } from "./galleries/Overlays";
 import { Progress } from "./galleries/Progress";
+import { Weekly } from "./galleries/Weekly";
 import { SectionIndex } from "./SectionIndex";
 import { TokenSheet } from "./TokenSheet";
 
@@ -40,6 +41,7 @@ export function DevUI() {
       <Progress />
       <Layout />
       <Home />
+      <Weekly />
     </main>
   );
 }

@@ -1,8 +1,9 @@
+import type { Task } from "@sticker-collector/shared";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useQuickAdd } from "./mutations";
+import { useQuickAdd, useUpdateTask } from "./mutations";
 
 /**
  * The mutation layer, not the component. What matters here is what reaches the
@@ -87,5 +88,77 @@ describe("useQuickAdd", () => {
 
     await expect(result.current.mutateAsync("Buy milk")).rejects.toThrow();
     expect(invalidate).not.toHaveBeenCalled();
+  });
+});
+
+describe("useUpdateTask — optimistic, with rollback", () => {
+  const task = (over: Partial<Task> = {}): Task => ({
+    id: "t1",
+    epicId: null,
+    title: "Stretch",
+    description: null,
+    url: null,
+    effortMinutes: 15,
+    rewardCoins: 15,
+    priority: "medium",
+    type: "routine",
+    weekdays: 1,
+    startsOn: null,
+    endsOn: null,
+    dueAt: null,
+    createdAt: "2026-07-01T00:00:00Z",
+    deletedAt: null,
+    lastCompletedOn: null,
+    ...over,
+  });
+
+  const cached = () => queryClient.getQueryData<Task[]>(["tasks"]);
+
+  it("shows the new mask before the server answers", async () => {
+    queryClient.setQueryData(["tasks"], [task()]);
+    let release: (() => void) | undefined;
+    fetchMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = () =>
+            resolve(new Response(JSON.stringify(task({ weekdays: 31 })), { status: 200 }));
+        }),
+    );
+
+    const { result } = renderHook(() => useUpdateTask(), { wrapper });
+    const inFlight = act(() => {
+      void result.current.mutateAsync({ id: "t1", patch: { weekdays: 31 } });
+    });
+
+    await waitFor(() => expect(cached()?.[0]?.weekdays).toBe(31)); // already applied
+    release?.();
+    await inFlight;
+  });
+
+  it("puts the old mask back when the request fails", async () => {
+    queryClient.setQueryData(["tasks"], [task({ weekdays: 1 })]);
+    fetchMock.mockImplementation(
+      async () => new Response(JSON.stringify({ error: "bad request" }), { status: 400 }),
+    );
+
+    const { result } = renderHook(() => useUpdateTask(), { wrapper });
+    await expect(
+      result.current.mutateAsync({ id: "t1", patch: { weekdays: 0 } }),
+    ).rejects.toThrow();
+
+    // Without this the grid keeps showing a day the server refused to store.
+    await waitFor(() => expect(cached()?.[0]?.weekdays).toBe(1));
+  });
+
+  it("leaves other tasks alone", async () => {
+    queryClient.setQueryData(["tasks"], [task({ id: "a" }), task({ id: "b", weekdays: 4 })]);
+    fetchMock.mockImplementation(
+      async () => new Response(JSON.stringify(task({ id: "a", weekdays: 31 })), { status: 200 }),
+    );
+
+    const { result } = renderHook(() => useUpdateTask(), { wrapper });
+    await result.current.mutateAsync({ id: "a", patch: { weekdays: 31 } });
+
+    expect(cached()?.find((t) => t.id === "b")?.weekdays).toBe(4);
   });
 });

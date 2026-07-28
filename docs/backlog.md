@@ -70,7 +70,8 @@ Ship this whole phase before touching albums. At the end of it you can use the a
 | **T-10** | Web: full task form — effort presets (15/30/60/90), reward defaulting to effort, routine/one-off switch, weekday picker | M | sonnet | `prd/02-tasks.md` | ✅ Both entry points asserted. Rules live in `lib/taskForm.ts` as a reducer (30 tests) — reward tracks effort until overridden, switching type discards the other type's scheduling, mask is bit 0 = Monday. **Create only** — editing is `T-10b` |
 | **T-10b** | Web: edit an existing task — the same form, opened from a task row | S | sonnet | `prd/02-tasks.md`, T-10 output | Split out of T-10 to keep it in one session. `type` is immutable after creation (T-03 returns 400), so the switch must be locked; the patch is a diff, not the whole form. **Until this lands there is no way to change a task** |
 | **T-11** | Web: complete interaction — coin animation, balance ticker, **undo window**, optimistic mutation | M | sonnet | `prd/02-tasks.md` §Enhancements, `design-system.md` | ✅ A completion is **deferred, not rolled back** — undo clears the timer and no request is ever issued (asserted by advancing the clock past the window afterwards). Past the window, unticking calls `uncomplete`, which appends a reversing ledger row. Queue lives above the router and **flushes on unmount** rather than dropping coins |
-| **T-12** | Web: weekly grid — tasks as rows, 7 weekday columns, toggle cells | M | sonnet | `prd/02-tasks.md` §Weekly grid | Mon–Fri habit created in 5 taps; no form opened |
+| **T-12** | Web: weekly grid — tasks as rows, 7 weekday columns, toggle cells | M | sonnet | `prd/02-tasks.md` §Weekly grid | ✅ Five taps → mask 31 → exactly Mon–Fri generated (verified against the API). A cell edits the **weekday mask**, not completion — see the note below. Bit 0 = Monday, asserted per day. The last remaining day cannot be removed, because `weekdayMaskSchema` is min(1) |
+| **T-12b** | Web: weekly completion view — the design bundle's version of this screen, where a cell ticks that day rather than editing the schedule | M | sonnet | `docs/design/`, T-12 output | The spec calls the weekly grid "routine maintenance" and the done-when says a habit is *created* in five taps, so T-12 built the schedule editor. The bundle's `_toggleCell` pays coins instead — seeing a week of ticks at a glance is genuinely useful, it is just a different screen. Needs a way to tell the two apart (a mode switch, or a second view) |
 | **T-13** | Web: epics screen + epic detail + multi-select bulk actions | M | sonnet | `prd/03-epics.md` | CRUD works; add-task from epic pre-fills |
 
 ---
@@ -203,12 +204,12 @@ Keep this table updated — it is the first thing a new session reads, and it co
 |---|---|---|---|
 | 0 Foundation | 10 | 10 | ✅ complete — deployed & healthy at sticker-collector.jailson-junior36.workers.dev |
 | 1 Design system | 6 | 6 | ✅ complete — read `docs/design-system.md`, not `docs/design/`. Live at `/dev/ui` |
-| 2 Earning loop | 12 | 15 | 🔄 T-01–T-11 + W-01 done — the earning loop is usable end to end. T-12 next |
+| 2 Earning loop | 13 | 16 | 🔄 T-01–T-12 + W-01 done. T-13 (epics screen) closes the phase |
 | 3 Spending loop | 0 | 11 | not started |
 | 4 Export | 0 | 2 | not started |
 | 5 Reports | 0 | 4 | not started |
 | 6 Hardening | 0 | 6 | not started |
-| **MVP total** | **28** | **54** | |
+| **MVP total** | **29** | **55** | |
 
 Post-MVP is tracked separately and deliberately excluded from the total: 5 auth
 follow-ups (`A-W1`–`A-W5`) and 12 technical-debt items (`TD-01`–`TD-12`). See

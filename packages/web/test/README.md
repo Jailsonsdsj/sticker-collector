@@ -30,14 +30,15 @@ it. These tests are that layer's **only** enforcement mechanism. See `TD-01` in
 
 ## Owed by later tasks
 
-Two behaviours are named in `TD-01` and cannot be written until the code exists.
-Whoever builds these must bring the test with them:
+Two behaviours were named in `TD-01` and could not be written until the code
+existed. Both have since landed:
 
 - ~~**T-11 — the undo window.**~~ ✅ Delivered in `src/lib/completionQueue.test.tsx`.
   Every case asserts `onCommit` was never called AND advances the clock past the
   window afterwards, so a late fire cannot hide.
-- **T-12 — the weekly grid.** Toggling a cell must flip the correct bit of the
-  weekday mask. **Bit 0 is Monday** (`shared/recurrence.ts`); the grid renders
-  Monday-first, so an off-by-one here is invisible on screen and moves a
-  routine to the wrong day. The test: toggle each of the seven cells and assert
-  the exact mask sent.
+- ~~**T-12 — the weekly grid.**~~ ✅ Delivered in `src/components/WeeklyGrid.test.tsx`.
+  Each of the seven cells is asserted individually, and the columns are checked
+  to render Monday-first so the bit order and the layout cannot drift apart.
+
+Both are done. Anything new that is stateful or interactive should arrive with
+its own behaviour test — that is the standing rule, not a backlog item.

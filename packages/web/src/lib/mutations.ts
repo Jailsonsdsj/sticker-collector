@@ -1,4 +1,9 @@
-import type { CompleteOccurrence, CreateTaskInput, Task } from "@sticker-collector/shared";
+import type {
+  CompleteOccurrence,
+  CreateTaskInput,
+  Task,
+  UpdateTask,
+} from "@sticker-collector/shared";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "./api";
 import { keys } from "./queries";
@@ -73,6 +78,47 @@ function useOccurrenceMutation(path: string) {
       api<unknown>(path, { method: "POST", body: ref, idempotencyKey: crypto.randomUUID() }),
     onSuccess: () => {
       for (const key of [keys.tasks, keys.occurrencesAll, keys.wallet]) {
+        queryClient.invalidateQueries({ queryKey: key });
+      }
+    },
+  });
+}
+
+/**
+ * Editing a task. Used by the weekly grid, where a cell has to feel instant.
+ *
+ * Optimistic with rollback — the right pattern here, unlike completion: this is
+ * an edit, not a payment, so there is nothing to undo and no coins to protect.
+ * Without the rollback the grid would keep showing a day the server rejected.
+ */
+export function useUpdateTask() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: UpdateTask }) =>
+      api<Task>(`/api/tasks/${id}`, {
+        method: "PATCH",
+        body: patch,
+        idempotencyKey: crypto.randomUUID(),
+      }),
+
+    onMutate: async ({ id, patch }) => {
+      // Stop an in-flight refetch from landing on top of the optimistic value.
+      await queryClient.cancelQueries({ queryKey: keys.tasks });
+      const previous = queryClient.getQueryData<Task[]>(keys.tasks);
+      queryClient.setQueryData<Task[]>(keys.tasks, (old) =>
+        old?.map((task) => (task.id === id ? { ...task, ...patch } : task)),
+      );
+      return { previous };
+    },
+
+    onError: (_error, _variables, context) => {
+      if (context?.previous) queryClient.setQueryData(keys.tasks, context.previous);
+    },
+
+    onSettled: () => {
+      // The mask changes which days generate, so the window is stale either way.
+      for (const key of [keys.tasks, keys.occurrencesAll]) {
         queryClient.invalidateQueries({ queryKey: key });
       }
     },
