@@ -1,15 +1,19 @@
-import type { CreateTaskInput, Epic } from "@sticker-collector/shared";
+import type { CreateTaskInput, Epic, Task, UpdateTask } from "@sticker-collector/shared";
 import { useReducer, useState } from "react";
-import { initialState, reduce, toPayload, validate } from "../lib/taskForm";
+import { initialState, reduce, stateFromTask, toPatch, toPayload, validate } from "../lib/taskForm";
+import { DeleteTaskAction } from "./taskForm/DeleteTaskAction";
 import { EffortFields } from "./taskForm/EffortFields";
 import { MetaFields } from "./taskForm/MetaFields";
 import { ScheduleFields } from "./taskForm/ScheduleFields";
 import { Button, Input, Sheet, Textarea } from "./ui";
 
 /**
- * The one task form. The same sheet opens from the main button and from inside
- * an epic (prd/03-epics.md) — the only difference is that the second arrives
- * with its epic already chosen.
+ * The one task form. The same sheet creates, and — given a `task` — edits.
+ *
+ * Editing differs in two ways that are not cosmetic. The type switch is locked,
+ * because the choice is fixed at creation and the API rejects a change. And the
+ * save sends a **diff**: `updateTaskSchema` is strict, so a full payload would
+ * be refused for carrying `type` at all.
  *
  * All the rules live in `lib/taskForm.ts`; this is the wiring.
  */
@@ -17,25 +21,47 @@ export interface TaskFormProps {
   open: boolean;
   onClose: () => void;
   onSubmit: (payload: CreateTaskInput) => Promise<unknown>;
+  /** Present to edit rather than create. */
+  task?: Task | null;
+  onUpdate?: (patch: UpdateTask) => Promise<unknown>;
+  onDelete?: () => Promise<unknown>;
   epics?: Epic[];
   /** Set when opened from an epic — the one thing that is not blank. */
   defaultEpicId?: string | null;
 }
 
-export function TaskForm({ open, onClose, onSubmit, epics = [], defaultEpicId }: TaskFormProps) {
-  const [state, dispatch] = useReducer(reduce, { epicId: defaultEpicId }, initialState);
+export function TaskForm({
+  open,
+  onClose,
+  onSubmit,
+  task,
+  onUpdate,
+  onDelete,
+  epics = [],
+  defaultEpicId,
+}: TaskFormProps) {
+  const [state, dispatch] = useReducer(reduce, undefined, () =>
+    task ? stateFromTask(task) : initialState({ epicId: defaultEpicId }),
+  );
   const [saving, setSaving] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
 
   const problem = validate(state);
+  const patch = task ? toPatch(state, task) : null;
+  // Editing with nothing changed is not an error, but there is nothing to send.
+  const nothingToSave = task ? patch === null : problem !== null;
 
   async function save() {
-    const payload = toPayload(state);
-    if (!payload || saving) return;
+    if (saving || nothingToSave) return;
     setSaving(true);
     setFailed(null);
     try {
-      await onSubmit(payload);
+      if (task && patch) await onUpdate?.(patch);
+      else {
+        const payload = toPayload(state);
+        if (!payload) return;
+        await onSubmit(payload);
+      }
       onClose();
     } catch {
       // Stay open: everything typed is still here, and closing would lose it.
@@ -45,18 +71,30 @@ export function TaskForm({ open, onClose, onSubmit, epics = [], defaultEpicId }:
     }
   }
 
+  async function remove() {
+    setSaving(true);
+    try {
+      await onDelete?.();
+      onClose();
+    } catch {
+      setFailed("Could not delete. Try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <Sheet
       open={open}
       onClose={onClose}
-      title="New task"
+      title={task ? "Edit task" : "New task"}
       leading={
         <Button variant="ghost" tone="neutral" size="sm" onClick={onClose}>
           Cancel
         </Button>
       }
       trailing={
-        <Button tone="lime" size="sm" disabled={problem !== null || saving} onClick={save}>
+        <Button tone="lime" size="sm" disabled={nothingToSave || saving} onClick={save}>
           Save
         </Button>
       }
@@ -85,7 +123,7 @@ export function TaskForm({ open, onClose, onSubmit, epics = [], defaultEpicId }:
         onChange={(e) => dispatch({ kind: "url", value: e.target.value })}
       />
 
-      <ScheduleFields state={state} dispatch={dispatch} />
+      <ScheduleFields state={state} dispatch={dispatch} typeLocked={Boolean(task)} />
       <EffortFields state={state} dispatch={dispatch} />
       <MetaFields state={state} dispatch={dispatch} epics={epics} />
 
@@ -94,6 +132,8 @@ export function TaskForm({ open, onClose, onSubmit, epics = [], defaultEpicId }:
           {failed ?? problem}
         </p>
       )}
+
+      {task && onDelete && <DeleteTaskAction disabled={saving} onDelete={remove} />}
     </Sheet>
   );
 }

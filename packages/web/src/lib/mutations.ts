@@ -1,7 +1,11 @@
 import type {
   CompleteOccurrence,
+  CreateEpicInput,
   CreateTaskInput,
+  DeleteEpic,
+  Epic,
   Task,
+  UpdateEpic,
   UpdateTask,
 } from "@sticker-collector/shared";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -124,3 +128,88 @@ export function useUpdateTask() {
     },
   });
 }
+
+export function useCreateEpic() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CreateEpicInput) =>
+      api<Epic>("/api/epics", { method: "POST", body, idempotencyKey: crypto.randomUUID() }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.epics }),
+  });
+}
+
+export function useUpdateEpic() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: UpdateEpic }) =>
+      api<Epic>(`/api/epics/${id}`, {
+        method: "PATCH",
+        body: patch,
+        idempotencyKey: crypto.randomUUID(),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.epics }),
+  });
+}
+
+/**
+ * Deleting an epic always touches its tasks — `cascade` soft-deletes them,
+ * `unlink` just clears their `epic_id` — so the task list and the occurrence
+ * window are stale either way, not only the epic list.
+ */
+export function useDeleteEpic() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, mode }: { id: string } & DeleteEpic) =>
+      api<unknown>(`/api/epics/${id}?mode=${mode}`, {
+        method: "DELETE",
+        idempotencyKey: crypto.randomUUID(),
+      }),
+    onSuccess: () => {
+      for (const key of [keys.epics, keys.tasks, keys.occurrencesAll]) {
+        queryClient.invalidateQueries({ queryKey: key });
+      }
+    },
+  });
+}
+
+/** Soft delete. The task stops generating; its occurrences and the coins they
+ *  paid survive (T-03). */
+export function useDeleteTask() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      api<unknown>(`/api/tasks/${id}`, {
+        method: "DELETE",
+        idempotencyKey: crypto.randomUUID(),
+      }),
+    onSuccess: () => {
+      for (const key of [keys.tasks, keys.occurrencesAll, keys.epics]) {
+        queryClient.invalidateQueries({ queryKey: key });
+      }
+    },
+  });
+}
+
+/**
+ * The bulk actions (prd/02-tasks.md §CRUD: "select multiple tasks and then
+ * duplicate or delete them").
+ *
+ * Duplicating copies definitions only — occurrences are history, so a copy has
+ * none. Deleting is soft, so the originals' occurrences and the coins they paid
+ * survive (T-03).
+ */
+function useBulkTaskAction(path: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) =>
+      api<unknown>(path, { method: "POST", body: { ids }, idempotencyKey: crypto.randomUUID() }),
+    onSuccess: () => {
+      for (const key of [keys.tasks, keys.occurrencesAll, keys.epics]) {
+        queryClient.invalidateQueries({ queryKey: key });
+      }
+    },
+  });
+}
+
+export const useBulkDeleteTasks = () => useBulkTaskAction("/api/tasks/bulk-delete");
+export const useBulkDuplicateTasks = () => useBulkTaskAction("/api/tasks/bulk-duplicate");

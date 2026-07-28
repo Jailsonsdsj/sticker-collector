@@ -1,17 +1,27 @@
-import { addDays, type Epic, todayIn } from "@sticker-collector/shared";
+import { addDays, type Epic, type Task, todayIn } from "@sticker-collector/shared";
 import { useMemo, useState } from "react";
 import { Navigate } from "react-router";
 import { QuickAdd } from "../components/QuickAdd";
 import { SectionHeading, type SectionTone } from "../components/SectionHeading";
+import { SelectionBar } from "../components/SelectionBar";
 import { TaskForm } from "../components/TaskForm";
 import { TaskRow } from "../components/TaskRow";
-import { Button, EmptyState, Skeleton } from "../components/ui";
+import { Button, Dialog, EmptyState, Skeleton } from "../components/ui";
 import { WalletCard } from "../components/WalletCard";
 import { ApiError } from "../lib/api";
 import { usePendingCompletions } from "../lib/completionQueue";
 import { buildHome, HOME_WINDOW_BACK, HOME_WINDOW_FORWARD, type HomeItem } from "../lib/home";
-import { useCreateTask, useQuickAdd, useUncompleteOccurrence } from "../lib/mutations";
+import {
+  useBulkDeleteTasks,
+  useBulkDuplicateTasks,
+  useCreateTask,
+  useDeleteTask,
+  useQuickAdd,
+  useUncompleteOccurrence,
+  useUpdateTask,
+} from "../lib/mutations";
 import { useEpics, useOccurrences, useTasks, useWallet } from "../lib/queries";
+import { useSelection } from "../lib/selection";
 
 /**
  * Home — Missed, Today, Backlog, in that order (prd/02-tasks.md §Home).
@@ -35,8 +45,26 @@ export function Tasks() {
   const quickAdd = useQuickAdd();
   const createTask = useCreateTask();
   const [formOpen, setFormOpen] = useState(false);
+  // The form seeds its state once on mount, so each open needs a fresh mount.
+  const [editing, setEditing] = useState<{ task: Task; nonce: number } | null>(null);
+  const updateTask = useUpdateTask();
+  const deleteTask = useDeleteTask();
   const uncomplete = useUncompleteOccurrence();
   const queue = usePendingCompletions();
+
+  const [selecting, setSelecting] = useState(false);
+  const [confirmingBulkDelete, setConfirmingBulkDelete] = useState(false);
+  const selection = useSelection();
+  const bulkDelete = useBulkDeleteTasks();
+  const bulkDuplicate = useBulkDuplicateTasks();
+
+  // Leaving the mode always drops the selection: a stale one is how the wrong
+  // thing gets deleted the next time the mode is opened.
+  const leaveSelection = () => {
+    setSelecting(false);
+    setConfirmingBulkDelete(false);
+    selection.clear();
+  };
 
   const unauthorised = [occurrences.error, tasks.error, epics.error, wallet.error].some(
     (e) => e instanceof ApiError && e.status === 401,
@@ -85,6 +113,10 @@ export function Tasks() {
         typeLabel={item.task.type === "routine" ? "↻ routine" : "· one-off"}
         done={item.done || waiting}
         disabled={future}
+        selecting={selecting}
+        selected={selection.has(item.task.id)}
+        onSelect={() => selection.toggle(item.task.id)}
+        onEdit={() => setEditing({ task: item.task, nonce: Date.now() })}
         onToggle={(next) => {
           if (next) {
             queue.complete(ref, { title: item.task.title, coins });
@@ -106,23 +138,83 @@ export function Tasks() {
         pendingCoins={queue.pendingCoins}
       />
 
-      <QuickAdd onAdd={(title) => quickAdd.mutateAsync(title)} pending={quickAdd.isPending} />
+      {selecting ? (
+        <SelectionBar
+          count={selection.count}
+          pending={bulkDelete.isPending || bulkDuplicate.isPending}
+          onCancel={leaveSelection}
+          onDuplicate={async () => {
+            await bulkDuplicate.mutateAsync(selection.ids);
+            leaveSelection();
+          }}
+          onDelete={() => setConfirmingBulkDelete(true)}
+        />
+      ) : (
+        <>
+          <QuickAdd onAdd={(title) => quickAdd.mutateAsync(title)} pending={quickAdd.isPending} />
 
-      {/* Deferred from T-09: the full form is one tap away, per the spec. */}
-      <Button
-        variant="outline"
-        tone="violet"
-        block
-        className="mb-5"
-        onClick={() => setFormOpen(true)}
+          <div className="mb-5 flex gap-2">
+            {/* Deferred from T-09: the full form is one tap away, per the spec. */}
+            <Button
+              variant="outline"
+              tone="violet"
+              className="flex-1"
+              onClick={() => setFormOpen(true)}
+            >
+              ＋ New task — full form
+            </Button>
+            <Button variant="outline" tone="neutral" onClick={() => setSelecting(true)}>
+              Select
+            </Button>
+          </div>
+        </>
+      )}
+
+      <Dialog
+        open={confirmingBulkDelete}
+        onClose={() => setConfirmingBulkDelete(false)}
+        tone="danger"
+        title="Delete selected?"
+        footer={
+          <>
+            <Button variant="ghost" tone="neutral" onClick={() => setConfirmingBulkDelete(false)}>
+              Cancel
+            </Button>
+            <Button
+              tone="magenta"
+              disabled={bulkDelete.isPending}
+              onClick={async () => {
+                await bulkDelete.mutateAsync(selection.ids);
+                leaveSelection();
+              }}
+            >
+              Delete {selection.count}
+            </Button>
+          </>
+        }
       >
-        ＋ New task — full form
-      </Button>
+        {selection.count} task{selection.count === 1 ? "" : "s"} will stop appearing. Coins they
+        already earned are kept.
+      </Dialog>
 
       <TaskForm
+        key={`create-${formOpen}`}
         open={formOpen}
         onClose={() => setFormOpen(false)}
         onSubmit={(payload) => createTask.mutateAsync(payload)}
+        epics={epics.data ?? []}
+      />
+
+      <TaskForm
+        key={`edit-${editing?.nonce ?? "closed"}`}
+        open={editing !== null}
+        task={editing?.task}
+        onClose={() => setEditing(null)}
+        onSubmit={(payload) => createTask.mutateAsync(payload)}
+        onUpdate={(patch) =>
+          editing ? updateTask.mutateAsync({ id: editing.task.id, patch }) : Promise.resolve()
+        }
+        onDelete={() => (editing ? deleteTask.mutateAsync(editing.task.id) : Promise.resolve())}
         epics={epics.data ?? []}
       />
 

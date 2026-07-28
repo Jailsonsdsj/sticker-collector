@@ -16,15 +16,18 @@ const TYPES = [
 export function ScheduleFields({
   state,
   dispatch,
+  typeLocked = false,
 }: {
   state: TaskFormState;
   dispatch: (action: TaskFormAction) => void;
+  /** True while editing: the choice is fixed at creation and the API refuses it. */
+  typeLocked?: boolean;
 }) {
   return (
     <>
-      <Field label="Type">
+      <Field label="Type" hint={typeLocked ? "fixed at creation" : undefined}>
         <Tabs
-          items={TYPES}
+          items={typeLocked ? TYPES.map((t) => ({ ...t, disabled: true })) : TYPES}
           value={state.type}
           onChange={(value) => dispatch({ kind: "type", value })}
           label="Task type"

@@ -2,7 +2,9 @@ import {
   type CreateTaskInput,
   maskToggleDay,
   type Priority,
+  type Task,
   type TaskType,
+  type UpdateTask,
   WEEKDAYS_MASK_NONE,
   type Weekday,
 } from "@sticker-collector/shared";
@@ -175,3 +177,79 @@ export function toPayload(state: TaskFormState): CreateTaskInput | null {
 /** What the reward field's hint should say — the design's `rewardHint`. */
 export const rewardHint = (state: TaskFormState) =>
   state.rewardLocked ? "overridden" : "matches effort";
+
+/**
+ * A UTC instant back into the local date and time the pickers show — the exact
+ * inverse of `toDueAt`. Local getters, not UTC ones: otherwise every reopen of
+ * the form shifts the due time by the user's offset, a little further each time.
+ */
+export function splitDueAt(instant: string | null): { dueDate: string; dueTime: string } {
+  if (!instant) return { dueDate: "", dueTime: "" };
+  const at = new Date(instant);
+  if (Number.isNaN(at.getTime())) return { dueDate: "", dueTime: "" };
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return {
+    dueDate: `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`,
+    dueTime: `${pad(at.getHours())}:${pad(at.getMinutes())}`,
+  };
+}
+
+/** Seeds the form from an existing task, for editing. */
+export function stateFromTask(task: Task): TaskFormState {
+  const { dueDate, dueTime } = splitDueAt(task.dueAt);
+  return {
+    title: task.title,
+    description: task.description ?? "",
+    url: task.url ?? "",
+    type: task.type,
+    weekdays: task.weekdays ?? WEEKDAYS_MASK_NONE,
+    dueDate,
+    dueTime,
+    effortMinutes: String(task.effortMinutes),
+    rewardCoins: String(task.rewardCoins),
+    // A task whose reward equals its effort was never overridden, so it keeps
+    // tracking. One that differs stays pinned — editing effort must not quietly
+    // rewrite a number the user chose deliberately.
+    rewardLocked: task.rewardCoins !== task.effortMinutes,
+    priority: task.priority,
+    epicId: task.epicId,
+  };
+}
+
+/**
+ * Only what changed.
+ *
+ * A full payload would be refused three ways: `updateTaskSchema` is strict and
+ * rejects `type` (fixed at creation); the API rejects a one-off carrying
+ * `weekdays` or a routine carrying `dueAt`; and a patch with no fields at all
+ * is itself a 400. Null means nothing changed — there is nothing to send.
+ */
+export function toPatch(state: TaskFormState, original: Task): UpdateTask | null {
+  if (validate(state) !== null) return null;
+
+  const patch: Record<string, unknown> = {};
+  const set = (key: string, next: unknown, previous: unknown) => {
+    if (next !== previous) patch[key] = next;
+  };
+
+  set("title", state.title.trim(), original.title);
+  set("description", state.description.trim() || null, original.description);
+  set("url", state.url.trim() || null, original.url);
+  set("epicId", state.epicId, original.epicId);
+  set("effortMinutes", Number(state.effortMinutes), original.effortMinutes);
+  set(
+    "rewardCoins",
+    Number(state.rewardCoins === "" ? state.effortMinutes : state.rewardCoins),
+    original.rewardCoins,
+  );
+  set("priority", state.priority, original.priority);
+
+  // The task's own type decides which schedule may be sent, not the form's.
+  if (original.type === "routine") {
+    set("weekdays", state.weekdays, original.weekdays);
+  } else {
+    set("dueAt", toDueAt(state.dueDate, state.dueTime), original.dueAt);
+  }
+
+  return Object.keys(patch).length > 0 ? (patch as UpdateTask) : null;
+}

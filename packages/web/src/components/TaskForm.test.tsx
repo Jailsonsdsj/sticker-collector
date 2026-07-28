@@ -1,4 +1,4 @@
-import type { Epic } from "@sticker-collector/shared";
+import type { Epic, Task } from "@sticker-collector/shared";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
@@ -203,5 +203,174 @@ describe("saving", () => {
 
     expect(onClose).toHaveBeenCalled();
     expect(onSubmit).not.toHaveBeenCalled();
+  });
+});
+
+const TASK: Task = {
+  id: "t1",
+  epicId: "e1",
+  title: "Stretch",
+  description: "In the morning",
+  url: null,
+  effortMinutes: 15,
+  rewardCoins: 15,
+  priority: "medium",
+  type: "routine",
+  weekdays: 0b0000001, // Monday
+  startsOn: null,
+  endsOn: null,
+  dueAt: null,
+  createdAt: "2026-07-01T00:00:00Z",
+  deletedAt: null,
+  lastCompletedOn: null,
+};
+
+function setupEdit(task: Task = TASK, extra: Partial<Parameters<typeof TaskForm>[0]> = {}) {
+  const onUpdate = vi.fn().mockResolvedValue({});
+  const onDelete = vi.fn().mockResolvedValue({});
+  const onClose = vi.fn();
+  render(
+    <TaskForm
+      open
+      task={task}
+      onClose={onClose}
+      onSubmit={vi.fn()}
+      onUpdate={onUpdate}
+      onDelete={onDelete}
+      epics={EPICS}
+      {...extra}
+    />,
+  );
+  return { onUpdate, onDelete, onClose, user: userEvent.setup() };
+}
+
+describe("editing — the form arrives filled in", () => {
+  it("seeds every field from the task", () => {
+    setupEdit();
+    expect(screen.getByLabelText(/title/i)).toHaveValue("Stretch");
+    expect(screen.getByLabelText(/description/i)).toHaveValue("In the morning");
+    expect(screen.getByLabelText(/^effort/i)).toHaveValue("15");
+    expect(screen.getByLabelText(/reward/i)).toHaveValue("15");
+    expect(screen.getByRole("button", { name: "Mon" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Sticker App" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  it("says so in the header", () => {
+    setupEdit();
+    expect(screen.getByText("Edit task")).toBeInTheDocument();
+  });
+});
+
+describe("editing — type is fixed at creation", () => {
+  it("locks the switch and says why", () => {
+    setupEdit();
+    expect(screen.getByRole("tab", { name: /routine/i })).toBeDisabled();
+    expect(screen.getByRole("tab", { name: /one-off/i })).toBeDisabled();
+    expect(screen.getByText(/fixed at creation/i)).toBeInTheDocument();
+  });
+
+  it("leaves it switchable when creating", () => {
+    render(<TaskForm open onClose={vi.fn()} onSubmit={vi.fn()} epics={EPICS} />);
+    expect(screen.getByRole("tab", { name: /one-off/i })).toBeEnabled();
+  });
+});
+
+describe("editing — the patch is a diff", () => {
+  it("keeps Save off until something actually changes", async () => {
+    const u = userEvent.setup();
+    setupEdit();
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+
+    await u.type(screen.getByLabelText(/title/i), "!");
+    expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+  });
+
+  it("sends only the field that changed", async () => {
+    const { onUpdate, user } = setupEdit();
+    await user.clear(screen.getByLabelText(/title/i));
+    await user.type(screen.getByLabelText(/title/i), "Stretch more");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onUpdate).toHaveBeenCalledExactlyOnceWith({ title: "Stretch more" });
+  });
+
+  it("never sends type, even after the state has one", async () => {
+    const { onUpdate, user } = setupEdit();
+    await user.click(screen.getByRole("button", { name: "Tue" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    const patch = onUpdate.mock.calls[0]?.[0];
+    expect(patch).toEqual({ weekdays: 0b0000011 }); // Mon + Tue
+    expect(patch).not.toHaveProperty("type");
+    expect(patch).not.toHaveProperty("dueAt");
+  });
+
+  it("sends a one-off's due date and never a mask", async () => {
+    const { onUpdate, user } = setupEdit({
+      ...TASK,
+      type: "oneoff",
+      weekdays: null,
+      dueAt: null,
+    });
+    await user.type(screen.getByLabelText(/due date/i), "2026-08-05");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    const patch = onUpdate.mock.calls[0]?.[0];
+    expect(patch?.dueAt).toBeTypeOf("string");
+    expect(patch).not.toHaveProperty("weekdays");
+  });
+
+  it("stays open and keeps the edit when saving fails", async () => {
+    const onUpdate = vi.fn().mockRejectedValue(new Error("offline"));
+    const { onClose, user } = setupEdit(TASK, { onUpdate });
+
+    await user.type(screen.getByLabelText(/title/i), "!");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toHaveTextContent(/could not save/i);
+    expect(screen.getByLabelText(/title/i)).toHaveValue("Stretch!");
+  });
+});
+
+describe("editing — delete", () => {
+  it("asks before deleting", async () => {
+    const { onDelete, user } = setupEdit();
+    await user.click(screen.getByRole("button", { name: /delete task/i }));
+
+    expect(onDelete).not.toHaveBeenCalled();
+    expect(screen.getByText(/delete this task/i)).toBeInTheDocument();
+  });
+
+  it("says the coins already earned are kept", async () => {
+    const { user } = setupEdit();
+    await user.click(screen.getByRole("button", { name: /delete task/i }));
+    expect(screen.getByText(/coins it already earned are kept/i)).toBeInTheDocument();
+  });
+
+  it("deletes once confirmed, and closes", async () => {
+    const { onDelete, onClose, user } = setupEdit();
+    await user.click(screen.getByRole("button", { name: /delete task/i }));
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+
+    expect(onDelete).toHaveBeenCalledOnce();
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("backs out without deleting", async () => {
+    const { onDelete, user } = setupEdit();
+    await user.click(screen.getByRole("button", { name: /delete task/i }));
+    await user.click(screen.getByRole("button", { name: /keep it/i }));
+
+    expect(onDelete).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /delete task/i })).toBeInTheDocument();
+  });
+
+  it("offers no delete while creating", () => {
+    render(<TaskForm open onClose={vi.fn()} onSubmit={vi.fn()} epics={EPICS} />);
+    expect(screen.queryByRole("button", { name: /delete task/i })).not.toBeInTheDocument();
   });
 });

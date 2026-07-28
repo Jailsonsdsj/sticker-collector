@@ -118,3 +118,84 @@ describe("content", () => {
 });
 
 const short = (p: Priority) => (p === "medium" ? "med" : p);
+
+describe("opening the edit form", () => {
+  it("makes the title its own target", async () => {
+    const onEdit = vi.fn();
+    renderRow({ onEdit, title: "Stretch" });
+    await userEvent.click(screen.getByRole("button", { name: "Stretch" }));
+    expect(onEdit).toHaveBeenCalledOnce();
+  });
+
+  it("does not tick the box when the title is tapped", async () => {
+    const onEdit = vi.fn();
+    const onToggle = vi.fn();
+    renderRow({ onEdit, onToggle, title: "Stretch" });
+
+    await userEvent.click(screen.getByRole("button", { name: "Stretch" }));
+    expect(onEdit).toHaveBeenCalledOnce();
+    expect(onToggle).not.toHaveBeenCalled();
+  });
+
+  it("does not open the form when the box is ticked", async () => {
+    const onEdit = vi.fn();
+    const onToggle = vi.fn();
+    renderRow({ onEdit, onToggle, title: "Stretch" });
+
+    await userEvent.click(screen.getByRole("checkbox", { name: "Stretch" }));
+    expect(onToggle).toHaveBeenCalledWith(true);
+    expect(onEdit).not.toHaveBeenCalled();
+  });
+
+  it("leaves the title inert when there is nowhere to go", () => {
+    renderRow({ title: "Stretch" });
+    expect(screen.queryByRole("button", { name: "Stretch" })).not.toBeInTheDocument();
+  });
+});
+
+describe("multi-select mode", () => {
+  it("makes the checkbox select instead of complete", async () => {
+    const onSelect = vi.fn();
+    const onToggle = vi.fn();
+    renderRow({ selecting: true, onSelect, onToggle, title: "Stretch" });
+
+    await userEvent.click(screen.getByRole("checkbox", { name: "Select Stretch" }));
+    expect(onSelect).toHaveBeenCalledOnce();
+    expect(onToggle).not.toHaveBeenCalled();
+  });
+
+  it("makes the title select instead of edit", async () => {
+    const onSelect = vi.fn();
+    const onEdit = vi.fn();
+    renderRow({ selecting: true, onSelect, onEdit, title: "Stretch" });
+
+    await userEvent.click(screen.getByRole("button", { name: "Stretch" }));
+    expect(onSelect).toHaveBeenCalledOnce();
+    expect(onEdit).not.toHaveBeenCalled();
+  });
+
+  it("shows selection rather than completion in the box", () => {
+    renderRow({ selecting: true, selected: true, done: false, title: "Stretch" });
+    expect(screen.getByRole("checkbox", { name: "Select Stretch" })).toBeChecked();
+  });
+
+  it("does not show a done task as selected", () => {
+    renderRow({ selecting: true, selected: false, done: true, title: "Stretch" });
+    expect(screen.getByRole("checkbox", { name: "Select Stretch" })).not.toBeChecked();
+  });
+
+  it("stays selectable even when completion is not allowed", async () => {
+    // A future occurrence cannot be completed, but it can certainly be deleted.
+    const onSelect = vi.fn();
+    renderRow({ selecting: true, disabled: true, onSelect, title: "Stretch" });
+    await userEvent.click(screen.getByRole("checkbox", { name: "Select Stretch" }));
+    expect(onSelect).toHaveBeenCalledOnce();
+  });
+
+  it("goes back to completing when the mode ends", async () => {
+    const onToggle = vi.fn();
+    renderRow({ selecting: false, onToggle, title: "Stretch" });
+    await userEvent.click(screen.getByRole("checkbox", { name: "Stretch" }));
+    expect(onToggle).toHaveBeenCalledWith(true);
+  });
+});

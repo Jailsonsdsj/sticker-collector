@@ -21,6 +21,25 @@ jsdom loads no stylesheet, so a computed colour is unassertable anyway — but t
 custom properties a component writes *are* its output. Tailwind only consumes
 them.
 
+## Querying screens that mount sheets
+
+jsdom does not apply the UA stylesheet rule that hides a closed `<dialog>`, so a
+sheet that is mounted-but-closed is still queryable. On a screen with two sheets
+— the epic form and the task form, say — `getByLabelText(/title/i)` matches
+both, and an epic's name appears twice: once as its card heading, once as a chip
+inside the closed task form.
+
+Scope to what a person can actually see:
+
+```ts
+const sheet = () => within(document.querySelector("dialog[open]") as HTMLElement);
+sheet().getByLabelText(/title/i);
+```
+
+The same applies to `role` queries. Where two controls share a name, prefer the
+distinguishing ARIA attribute (`aria-expanded` for a disclosure, `aria-pressed`
+for a chip) over adding test ids.
+
 ## Why this exists
 
 `packages/shared` and `packages/api` are covered by unit and Workers-pool tests.

@@ -7,6 +7,7 @@ import {
   weekdayOf,
 } from "@sticker-collector/shared";
 import { Checkbox, EmptyState } from "./ui";
+import { WEEKDAY_INDICES, WeekGridShell, WeekRowLabel } from "./weekGrid/WeekGridShell";
 
 /**
  * Routine maintenance on one screen: tasks as rows, the seven weekdays as
@@ -14,14 +15,9 @@ import { Checkbox, EmptyState } from "./ui";
  * runs that day — five taps make a Mon–Fri habit, where the alternative was
  * five separate tasks.
  *
- * NOTE: the design bundle's version of this screen completes occurrences
- * instead of editing the schedule. The spec and the done-when both say
- * schedule, and completion already has a home on the Tasks screen, so that is
- * what this is. See the backlog row for the completion view.
- *
- * Columns are Monday-first because bit 0 of the mask is Monday
- * (shared/recurrence.ts). Rendering them Sunday-first while indexing them
- * Monday-first would look perfectly correct and move every routine by a day.
+ * Its sibling `WeeklyCompletionGrid` ticks days instead of scheduling them.
+ * Both sit behind the tabs on the Week screen, and both draw their columns from
+ * `WeekGridShell` so the Monday-first order can only be wrong in one place.
  */
 export interface WeeklyGridProps {
   routines: Task[];
@@ -44,19 +40,7 @@ export function WeeklyGrid({ routines, today, onChangeMask, disabled }: WeeklyGr
   }
 
   return (
-    <div className="grid grid-cols-[5rem_repeat(7,1fr)] items-center gap-1">
-      <span />
-      {WEEKDAYS.map((day, index) => (
-        <span
-          key={day}
-          className={`text-center font-numeric text-2xs font-bold ${
-            index === todayIndex ? "text-cyan" : "text-ink-muted"
-          }`}
-        >
-          {day.slice(0, 2).toUpperCase()}
-        </span>
-      ))}
-
+    <WeekGridShell today={today}>
       {routines.map((task) => {
         const mask = task.weekdays ?? 0;
         // A routine with no days is not a routine — `weekdayMaskSchema` is
@@ -76,7 +60,7 @@ export function WeeklyGrid({ routines, today, onChangeMask, disabled }: WeeklyGr
           />
         );
       })}
-    </div>
+    </WeekGridShell>
   );
 }
 
@@ -97,22 +81,19 @@ function Row({
 }) {
   return (
     <>
-      <div className="min-w-0 border-l-[3px] border-l-epic-none py-2 pl-2">
-        <div className="truncate font-body text-sm font-semibold">{task.title}</div>
-        <div className="font-numeric text-2xs font-bold text-coin">+{task.rewardCoins}</div>
-      </div>
+      <WeekRowLabel title={task.title} rewardCoins={task.rewardCoins} />
 
-      {WEEKDAYS.map((day, index) => {
-        const on = maskHasDay(mask, index as Weekday);
+      {WEEKDAY_INDICES.map((index) => {
+        const on = maskHasDay(mask, index);
         return (
           <Checkbox
-            key={day}
+            key={WEEKDAYS[index]}
             size="sm"
             className="w-full"
             checked={on}
             ring={index === todayIndex}
             disabled={disabled || (on && lastRemaining)}
-            label={`${task.title} — ${day}`}
+            label={`${task.title} — ${WEEKDAYS[index]}`}
             onChange={() => onChangeMask(task.id, maskToggleDay(mask, index as Weekday))}
           />
         );

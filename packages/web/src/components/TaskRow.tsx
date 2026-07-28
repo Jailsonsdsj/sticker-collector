@@ -43,9 +43,22 @@ export interface TaskRowProps {
   /** "↻ routine" / "· one-off", shown in Today where both appear together. */
   typeLabel?: string;
   done?: boolean;
-  /** Wired in T-11; the row renders its checkbox either way. */
   onToggle?: (next: boolean) => void;
+  /**
+   * Opens the edit form. The title is a separate target from the checkbox —
+   * tapping the words must never tick the box, and vice versa.
+   */
+  onEdit?: () => void;
   disabled?: boolean;
+  /**
+   * Multi-select mode. The row already has one checkbox and it means "done", so
+   * selection cannot add a second without one of them lying. Instead the same
+   * control changes meaning: while selecting, the box and the title both pick
+   * the row, and neither completes nor edits.
+   */
+  selecting?: boolean;
+  selected?: boolean;
+  onSelect?: () => void;
 }
 
 export function TaskRow({
@@ -57,9 +70,14 @@ export function TaskRow({
   typeLabel,
   done = false,
   onToggle,
+  onEdit,
   disabled,
+  selecting = false,
+  selected = false,
+  onSelect,
 }: TaskRowProps) {
   const p = PRIORITY[priority];
+  const titleAction = selecting ? onSelect : onEdit;
   const vars = {
     "--ui-row": `var(${p.row})`,
     "--ui-row-border": `var(${p.border})`,
@@ -73,20 +91,40 @@ export function TaskRow({
         "flex items-start gap-3 rounded-2xl border p-3",
         "[background:var(--ui-row)] [border-color:var(--ui-row-border)]",
         "border-l-[3px] [border-left-color:var(--ui-epic)]",
-        done && "opacity-55",
+        done && !selecting && "opacity-55",
+        selecting && selected && "[border-color:var(--color-cyan)]",
       )}
     >
-      <Checkbox checked={done} onChange={onToggle} disabled={disabled} label={title} />
+      <Checkbox
+        checked={selecting ? selected : done}
+        onChange={selecting ? onSelect : onToggle}
+        disabled={selecting ? false : disabled}
+        label={selecting ? `Select ${title}` : title}
+      />
 
       <div className="min-w-0 flex-1">
-        <div
-          className={cx(
-            "font-body text-lg leading-tight font-semibold",
-            done ? "text-ink-dim line-through" : "text-ink",
-          )}
-        >
-          {title}
-        </div>
+        {titleAction ? (
+          <button
+            type="button"
+            onClick={titleAction}
+            className={cx(
+              "block w-full cursor-pointer truncate text-left font-body text-lg leading-tight font-semibold outline-none",
+              "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan",
+              done ? "text-ink-dim line-through" : "text-ink",
+            )}
+          >
+            {title}
+          </button>
+        ) : (
+          <div
+            className={cx(
+              "font-body text-lg leading-tight font-semibold",
+              done ? "text-ink-dim line-through" : "text-ink",
+            )}
+          >
+            {title}
+          </div>
+        )}
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <Badge tone={p.tone as "high" | "med" | "low"} size="sm">
             {p.label}

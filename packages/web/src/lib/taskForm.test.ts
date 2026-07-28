@@ -1,5 +1,6 @@
 import {
   maskFromDays,
+  type Task,
   WEEKDAYS,
   WEEKDAYS_MASK_WEEKDAYS,
   type Weekday,
@@ -9,9 +10,12 @@ import {
   initialState,
   reduce,
   rewardHint,
+  splitDueAt,
+  stateFromTask,
   type TaskFormAction,
   type TaskFormState,
   toDueAt,
+  toPatch,
   toPayload,
   validate,
 } from "./taskForm";
@@ -249,5 +253,194 @@ describe("due date and time", () => {
 
   it("is null with no date at all", () => {
     expect(toDueAt("", "09:00")).toBeNull();
+  });
+});
+
+const existing = (over: Partial<Task> = {}): Task => ({
+  id: "t1",
+  epicId: null,
+  title: "Stretch",
+  description: null,
+  url: null,
+  effortMinutes: 15,
+  rewardCoins: 15,
+  priority: "medium",
+  type: "routine",
+  weekdays: WEEKDAYS_MASK_WEEKDAYS,
+  startsOn: null,
+  endsOn: null,
+  dueAt: null,
+  createdAt: "2026-07-01T00:00:00Z",
+  deletedAt: null,
+  lastCompletedOn: null,
+  ...over,
+});
+
+describe("splitDueAt — the inverse of toDueAt", () => {
+  it("round-trips a local date and time", () => {
+    const iso = toDueAt("2026-08-05", "09:30") as string;
+    expect(splitDueAt(iso)).toEqual({ dueDate: "2026-08-05", dueTime: "09:30" });
+  });
+
+  it("survives repeated opens without drifting", () => {
+    // The bug this guards: formatting with UTC getters shifts the time by the
+    // user's offset on every reopen, a little further each time.
+    let value = toDueAt("2026-08-05", "23:45") as string;
+    for (let i = 0; i < 5; i++) {
+      const { dueDate, dueTime } = splitDueAt(value);
+      expect({ dueDate, dueTime }).toEqual({ dueDate: "2026-08-05", dueTime: "23:45" });
+      value = toDueAt(dueDate, dueTime) as string;
+    }
+  });
+
+  it("is blank for an undated task", () => {
+    expect(splitDueAt(null)).toEqual({ dueDate: "", dueTime: "" });
+    expect(splitDueAt("not a date")).toEqual({ dueDate: "", dueTime: "" });
+  });
+});
+
+describe("stateFromTask", () => {
+  it("seeds every field", () => {
+    const s = stateFromTask(
+      existing({
+        title: "Stretch more",
+        description: "In the morning",
+        url: "https://example.com",
+        epicId: "e1",
+        effortMinutes: 45,
+        rewardCoins: 45,
+        priority: "high",
+        weekdays: 0b0000011,
+      }),
+    );
+    expect(s).toMatchObject({
+      title: "Stretch more",
+      description: "In the morning",
+      url: "https://example.com",
+      epicId: "e1",
+      effortMinutes: "45",
+      rewardCoins: "45",
+      priority: "high",
+      type: "routine",
+      weekdays: 0b0000011,
+    });
+  });
+
+  it("keeps reward tracking when it was never overridden", () => {
+    const s = stateFromTask(existing({ effortMinutes: 30, rewardCoins: 30 }));
+    expect(s.rewardLocked).toBe(false);
+    expect(reduce(s, { kind: "effort", value: "60" }).rewardCoins).toBe("60");
+  });
+
+  it("keeps reward pinned when it differs from effort", () => {
+    const s = stateFromTask(existing({ effortMinutes: 30, rewardCoins: 200 }));
+    expect(s.rewardLocked).toBe(true);
+    expect(reduce(s, { kind: "effort", value: "60" }).rewardCoins).toBe("200");
+  });
+
+  it("splits a one-off's due instant into the picker's fields", () => {
+    const dueAt = toDueAt("2026-08-05", "09:00") as string;
+    const s = stateFromTask(existing({ type: "oneoff", weekdays: null, dueAt }));
+    expect(s).toMatchObject({
+      type: "oneoff",
+      dueDate: "2026-08-05",
+      dueTime: "09:00",
+      weekdays: 0,
+    });
+  });
+});
+
+describe("toPatch — only what changed", () => {
+  it("is null when nothing was touched", () => {
+    const task = existing();
+    expect(toPatch(stateFromTask(task), task)).toBeNull();
+  });
+
+  it("carries one field when one field changed", () => {
+    const task = existing();
+    const patch = toPatch(reduce(stateFromTask(task), { kind: "title", value: "New" }), task);
+    expect(patch).toEqual({ title: "New" });
+  });
+
+  it("never sends type — the choice is fixed at creation", () => {
+    const task = existing();
+    const patch = toPatch(
+      reduce(reduce(stateFromTask(task), { kind: "type", value: "oneoff" }), {
+        kind: "title",
+        value: "New",
+      }),
+      task,
+    );
+    expect(patch).not.toHaveProperty("type");
+  });
+
+  it("sends a routine's mask and never a due date", () => {
+    const task = existing();
+    const patch = toPatch(
+      reduce(stateFromTask(task), { kind: "weekday", value: 5 as Weekday }),
+      task,
+    );
+    expect(patch).toMatchObject({ weekdays: maskFromDays([0, 1, 2, 3, 4, 5] as Weekday[]) });
+    expect(patch).not.toHaveProperty("dueAt");
+  });
+
+  it("sends a one-off's due date and never a mask", () => {
+    const task = existing({ type: "oneoff", weekdays: null, dueAt: null });
+    const patch = toPatch(
+      reduce(stateFromTask(task), { kind: "dueDate", value: "2026-08-05" }),
+      task,
+    );
+    expect(patch?.dueAt).toBeTypeOf("string");
+    expect(patch).not.toHaveProperty("weekdays");
+  });
+
+  it("clears an optional field to null rather than an empty string", () => {
+    const task = existing({ description: "old" });
+    const patch = toPatch(reduce(stateFromTask(task), { kind: "description", value: "  " }), task);
+    expect(patch).toEqual({ description: null });
+  });
+
+  it("is null while the form is invalid, so a broken edit is never sent", () => {
+    const task = existing();
+    expect(toPatch(reduce(stateFromTask(task), { kind: "title", value: "  " }), task)).toBeNull();
+  });
+});
+
+describe("toPatch — the TASK's type decides what may be sent, not the form's", () => {
+  // The switch is locked while editing, so these two states are unreachable
+  // through the UI today. They are reachable the moment anything unlocks it —
+  // and the server rejects a routine carrying dueAt whatever the form thinks.
+  it("refuses a due date for a routine even if the state says one-off", () => {
+    const task = existing({ type: "routine", weekdays: WEEKDAYS_MASK_WEEKDAYS, dueAt: null });
+    const drifted = run(
+      [
+        { kind: "type", value: "oneoff" },
+        { kind: "dueDate", value: "2026-08-05" },
+        { kind: "title", value: "Changed" },
+      ],
+      stateFromTask(task),
+    );
+
+    const patch = toPatch(drifted, task);
+    expect(patch?.title).toBe("Changed");
+    // `weekdays` is present because switching type cleared the mask, which is a
+    // real change. What matters is that the ROUTINE branch ran at all: no dueAt.
+    expect(patch).not.toHaveProperty("dueAt");
+  });
+
+  it("refuses a mask for a one-off even if the state says routine", () => {
+    const task = existing({ type: "oneoff", weekdays: null, dueAt: null });
+    const drifted = run(
+      [
+        { kind: "type", value: "routine" },
+        { kind: "weekday", value: 0 as Weekday },
+        { kind: "title", value: "Changed" },
+      ],
+      stateFromTask(task),
+    );
+
+    const patch = toPatch(drifted, task);
+    expect(patch).toEqual({ title: "Changed" });
+    expect(patch).not.toHaveProperty("weekdays");
   });
 });
