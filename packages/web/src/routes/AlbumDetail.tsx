@@ -3,6 +3,7 @@ import { canPullRandom, duplicateRefund, effectiveWeights } from "@sticker-colle
 import { useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router";
 import { DeleteAlbumDialog } from "../components/DeleteAlbumDialog";
+import { ExportPanel } from "../components/ExportPanel";
 import { AppHeader, StickerGrid } from "../components/layout";
 import { RevealDialog } from "../components/RevealDialog";
 import { StickerSlot } from "../components/StickerSlot";
@@ -155,6 +156,9 @@ export function AlbumDetail() {
           ))}
         </StickerGrid>
       )}
+      {/* Completion unlocks the print export — the reward for finishing (§Completed 1). */}
+      {summary.status === "completed" && <ExportPanel album={album.data} />}
+
       <div className="mt-8 border-border border-t pt-4">
         <Button variant="ghost" tone="magenta" size="sm" onClick={() => setDeleting(true)}>
           Delete this album

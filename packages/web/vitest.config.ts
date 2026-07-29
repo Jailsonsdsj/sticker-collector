@@ -13,5 +13,9 @@ export default defineConfig({
     globals: false,
     setupFiles: ["./test/setup.ts"],
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
+    // Comfortably above the 3 s async-query timeout in test/setup.ts. A query
+    // that has to retry must fail as a missing element, naming what it looked
+    // for — never as a bare "timed out", which says nothing.
+    testTimeout: 20_000,
   },
 });

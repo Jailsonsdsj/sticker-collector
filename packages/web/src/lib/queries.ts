@@ -2,8 +2,10 @@ import type {
   AlbumDetail,
   AlbumQuery,
   AlbumSummary,
+  EffortReport,
   Epic,
   LocalDate,
+  MomentumReport,
   Occurrence,
   Task,
   Wallet,
@@ -27,6 +29,8 @@ export const keys = {
   albumsAll: ["albums"] as const,
   albums: (query: AlbumQuery) => ["albums", query.status ?? "all", query.sort] as const,
   album: (id: string) => ["albums", "detail", id] as const,
+  momentum: ["reports", "momentum"] as const,
+  effort: ["reports", "effort"] as const,
 };
 
 export function useTasks() {
@@ -68,5 +72,24 @@ export function useAlbum(id: string) {
   return useQuery({
     queryKey: keys.album(id),
     queryFn: () => api<AlbumDetail>(`/api/albums/${id}`),
+  });
+}
+
+/**
+ * Momentum: streaks, perfect days, trailing rates, weekday shape and the
+ * heatmap's per-day series — all from one tally, so they cannot disagree.
+ */
+export function useMomentum() {
+  return useQuery({
+    queryKey: keys.momentum,
+    queryFn: () => api<MomentumReport>("/api/reports/momentum"),
+  });
+}
+
+/** Effort and collection: minutes invested, effort by epic, stickers, albums. */
+export function useEffort() {
+  return useQuery({
+    queryKey: keys.effort,
+    queryFn: () => api<EffortReport>("/api/reports/effort"),
   });
 }

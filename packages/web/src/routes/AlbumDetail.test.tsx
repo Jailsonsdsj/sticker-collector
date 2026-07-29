@@ -416,3 +416,34 @@ describe("deleting the album", () => {
     ).toBe(false);
   });
 });
+
+describe("the print export", () => {
+  const panel = () => screen.queryByRole("region", { name: "Print export" });
+
+  it("is offered on a completed album", async () => {
+    // Completion unlocks the export — it is the reward for finishing.
+    detail = body({ status: "completed", percent: 100, owned: 4 }, [
+      slot({ slotIndex: 0, quantity: 1 }),
+      slot({ slotIndex: 1, quantity: 1 }),
+      slot({ slotIndex: 2, quantity: 1 }),
+      slot({ slotIndex: 3, quantity: 2 }),
+    ]);
+    await open();
+
+    expect(panel()).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Export PDF" })).toBeEnabled();
+  });
+
+  it("is not offered while a slot is still empty", async () => {
+    // An incomplete album would print a sheet with holes in it.
+    await open(); // the default fixture is in progress, 2 of 4
+    expect(panel()).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Export PDF" })).not.toBeInTheDocument();
+  });
+
+  it("is not offered on a locked album, however full it looks", async () => {
+    detail = body({ status: "locked", unlockedAt: null, percent: 100, owned: 4 });
+    await open();
+    expect(panel()).not.toBeInTheDocument();
+  });
+});

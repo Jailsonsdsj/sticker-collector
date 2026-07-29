@@ -8,6 +8,7 @@ import { imageRoutes } from "./routes/images";
 import { occurrenceRoutes } from "./routes/occurrences";
 import { pullRoutes, stickerRoutes } from "./routes/pulls";
 import { purchaseRoutes } from "./routes/purchases";
+import { reportRoutes } from "./routes/reports";
 import { taskRoutes } from "./routes/tasks";
 import { walletRoutes } from "./routes/wallet";
 
@@ -21,6 +22,7 @@ app.route("/api/tasks", taskRoutes);
 app.route("/api/occurrences", occurrenceRoutes);
 app.route("/api/epics", epicRoutes);
 app.route("/api/wallet", walletRoutes);
+app.route("/api/reports", reportRoutes);
 app.route("/api/images", imageRoutes);
 app.route("/api/albums", albumRoutes);
 // Same prefix, separate router: albums.ts owns creation, purchases.ts owns spending.

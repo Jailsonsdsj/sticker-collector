@@ -195,20 +195,29 @@ describe("the roll", () => {
   it("can return a sticker already owned — that is what makes duplicates", async () => {
     // A duplicate is only *possible* while some unowned sticker is still
     // reachable; once nothing unowned can come back the pull is refused
-    // outright. So: one common (already held) and one rare that keeps the album
-    // pullable. At 99:1 the roll lands on the owned common essentially always.
+    // outright. So: one common, already held, plus rares that keep the album
+    // pullable.
+    //
+    // The rare count matters. With a single rare, one unlucky 1% roll completes
+    // the album and every later pull 409s — no duplicate can ever appear, and
+    // the test fails 1% of the time. Six rares mean the album can only close
+    // after six consecutive 1% rolls, so the loop below fails with probability
+    // on the order of 1e-12 rather than 1e-2.
     const { album, stickers } = await playable({
       odds: { common: 99, rare: 1, epic: 0, legendary: 0 },
       stickers: [
         { imageKey: key(1), tier: "common" },
-        { imageKey: key(2), tier: "rare" },
+        ...Array.from({ length: 6 }, (_, i) => ({
+          imageKey: key(i + 2),
+          tier: "rare" as const,
+        })),
       ],
     });
     const common = stickers.find((s) => s.tier === "common") as { id: string };
     await grant(common.id);
 
     const duplicates: number[] = [];
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 8 && duplicates.length === 0; i++) {
       const { body } = await pull(album.id);
       if (body.stickerId === common.id) duplicates.push(body.quantity);
     }

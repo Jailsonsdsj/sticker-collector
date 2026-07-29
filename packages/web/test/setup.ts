@@ -1,6 +1,21 @@
 import "@testing-library/jest-dom/vitest";
-import { cleanup } from "@testing-library/react";
+import { cleanup, configure } from "@testing-library/react";
 import { afterEach } from "vitest";
+
+/**
+ * Raise the async-query timeout above RTL's 1 s default — but keep it well
+ * under vitest's `testTimeout`.
+ *
+ * Nothing here waits a second on purpose. The 1 s default exists to stop a
+ * broken test hanging, but on a loaded machine a `findBy*` that normally
+ * resolves in 20 ms can exceed it and fail for no reason at all.
+ *
+ * The margin matters as much as the number: set this *at* `testTimeout` and a
+ * retrying query stops failing fast and blows the test timeout instead, which
+ * is a worse failure — it reports "timed out in 5000ms" and names no element.
+ * 3 s here against 20 s there leaves room for both to do their job.
+ */
+configure({ asyncUtilTimeout: 3000 });
 
 // React Testing Library leaves the last render mounted; without this a stray
 // query in the next test can match the previous test's DOM and pass for the
