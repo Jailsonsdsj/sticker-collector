@@ -1,6 +1,8 @@
 import { createBrowserRouter } from "react-router";
 import { AppShell } from "../components/layout";
 import { DevUI } from "../dev/DevUI";
+import { AlbumDetail } from "./AlbumDetail";
+import { AlbumNew } from "./AlbumNew";
 import { Albums } from "./Albums";
 import { Epics } from "./Epics";
 import { Login } from "./Login";
@@ -22,6 +24,9 @@ export const router = createBrowserRouter([
       { index: true, element: <Tasks /> },
       { path: "week", element: <Week /> },
       { path: "albums", element: <Albums /> },
+      { path: "albums/new", element: <AlbumNew /> },
+      // Placeholder until A-08 — A-06's cards have to lead somewhere.
+      { path: "albums/:id", element: <AlbumDetail /> },
       { path: "epics", element: <Epics /> },
       { path: "reports", element: <Reports /> },
       { path: "*", element: <NotFound /> },

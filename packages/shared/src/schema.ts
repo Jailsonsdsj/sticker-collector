@@ -346,6 +346,83 @@ export const sealedAlbumSchema = z.object({
 });
 export type SealedAlbum = z.infer<typeof sealedAlbumSchema>;
 
+/** What a purchase returns: the new balance, and what it bought. */
+export const purchaseResultSchema = z.object({
+  balance: z.int(),
+  spentCoins: z.int().min(0),
+  albumId: idSchema,
+  stickerId: idSchema.nullable(),
+  /** Copies held after the purchase; null when nothing was acquired. */
+  quantity: z.int().min(1).nullable(),
+});
+export type PurchaseResult = z.infer<typeof purchaseResultSchema>;
+
+/** What a random pull returned, and what it cost. */
+export const pullResultSchema = z.object({
+  balance: z.int(),
+  spentCoins: z.int().min(0),
+  albumId: idSchema,
+  stickerId: idSchema,
+  tier: tierSchema,
+  /** Copies held after the pull. Greater than 1 means the roll returned a dupe. */
+  quantity: z.int().min(1),
+  duplicate: z.boolean(),
+  /** What this copy would sell for, so a duplicate ends in a choice, not a dead end. */
+  refundIfSold: z.int().min(0),
+});
+export type PullResult = z.infer<typeof pullResultSchema>;
+
+export const saleResultSchema = z.object({
+  balance: z.int(),
+  refundedCoins: z.int().min(0),
+  stickerId: idSchema,
+  /** Copies still held after the sale. Never below 1 — the last copy is not for sale. */
+  quantity: z.int().min(1),
+});
+export type SaleResult = z.infer<typeof saleResultSchema>;
+
+export const albumStatusSchema = z.enum(["locked", "in_progress", "completed"]);
+
+/**
+ * An album in the listing. `owned`, `total`, `percent` and `status` are all
+ * computed from the holdings on every read — none of them is a column.
+ */
+export const albumSummarySchema = albumSchema.extend({
+  owned: z.int().min(0),
+  total: z.int().min(0),
+  percent: z.int().min(0).max(100),
+  status: albumStatusSchema,
+  remaining: z.int().min(0),
+  /** Within one or two slots of done — the nudge worth surfacing (§Enhancements). */
+  almostThere: z.boolean(),
+  /** Locked, and the current balance covers the unlock price. */
+  affordable: z.boolean(),
+});
+export type AlbumSummary = z.infer<typeof albumSummarySchema>;
+
+/** A sticker plus how many copies are held. Zero means the slot is still empty. */
+export const ownedStickerSchema = stickerSchema.extend({ quantity: z.int().min(0) });
+export type OwnedSticker = z.infer<typeof ownedStickerSchema>;
+
+/**
+ * One album with its whole grid. Unowned slots are **present with quantity 0**,
+ * never omitted — the grid has to render a locked slot's rarity frame before
+ * the sticker is owned (`prd/05-stickers.md` §Rarity 3).
+ */
+export const albumDetailSchema = z.object({
+  album: albumSummarySchema,
+  stickers: z.array(ownedStickerSchema),
+});
+export type AlbumDetail = z.infer<typeof albumDetailSchema>;
+
+export const ALBUM_SORTS = ["status", "title", "progress", "created"] as const;
+
+export const albumQuerySchema = z.strictObject({
+  status: albumStatusSchema.optional(),
+  sort: z.enum(ALBUM_SORTS).default("status"),
+});
+export type AlbumQuery = z.infer<typeof albumQuerySchema>;
+
 // ── Wallet ───────────────────────────────────────────────────────────────────
 
 export const ledgerReasonSchema = z.enum([

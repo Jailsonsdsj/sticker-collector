@@ -1,15 +1,19 @@
 import { describe, expect, it } from "vitest";
 import {
   albumCost,
+  albumStatus,
   canPullRandom,
   coinsToHours,
+  completionPercent,
   DEFAULT_ODDS,
   duplicateRefund,
   effectiveOddsPercent,
   effectiveWeights,
   expectedRandomValue,
   expectedRandomValueExact,
+  isAlmostThere,
   shuffleOrder,
+  slotsRemaining,
   TIERS,
   type Tier,
   type TierRecord,
@@ -388,5 +392,66 @@ describe("shuffleOrder", () => {
     expect(shuffleOrder(0, lcg(1))).toEqual([]);
     expect(shuffleOrder(1, lcg(1))).toEqual([0]);
     expect(shuffleOrder(-5, lcg(1))).toEqual([]);
+  });
+});
+
+describe("completionPercent", () => {
+  it("is the share of slots filled", () => {
+    expect(completionPercent(0, 12)).toBe(0);
+    expect(completionPercent(6, 12)).toBe(50);
+    expect(completionPercent(12, 12)).toBe(100);
+  });
+
+  it("rounds down, so 100 means finished and nothing else does", () => {
+    // 59/60 is 98.33; the dangerous rounding would report 100 for an album with
+    // a slot still empty, and the export gate reads this number.
+    expect(completionPercent(59, 60)).toBe(98);
+    expect(completionPercent(119, 120)).toBe(99);
+    expect(completionPercent(1, 3)).toBe(33);
+  });
+
+  it("survives an empty album instead of dividing by zero", () => {
+    expect(completionPercent(0, 0)).toBe(0);
+  });
+
+  it("cannot exceed 100, even with duplicates counted wrongly upstream", () => {
+    expect(completionPercent(20, 12)).toBe(100);
+    expect(completionPercent(-3, 12)).toBe(0);
+  });
+});
+
+describe("albumStatus", () => {
+  it("calls a locked album locked, however full it looks", () => {
+    expect(albumStatus({ unlocked: false, owned: 0, total: 12 })).toBe("locked");
+    expect(albumStatus({ unlocked: false, owned: 12, total: 12 })).toBe("locked");
+  });
+
+  it("separates in progress from completed", () => {
+    expect(albumStatus({ unlocked: true, owned: 0, total: 12 })).toBe("in_progress");
+    expect(albumStatus({ unlocked: true, owned: 11, total: 12 })).toBe("in_progress");
+    expect(albumStatus({ unlocked: true, owned: 12, total: 12 })).toBe("completed");
+  });
+
+  it("does not call an empty album finished", () => {
+    expect(albumStatus({ unlocked: true, owned: 0, total: 0 })).toBe("in_progress");
+  });
+});
+
+describe("almost there", () => {
+  it("fires on the last one or two slots", () => {
+    expect(isAlmostThere(11, 12)).toBe(true);
+    expect(isAlmostThere(10, 12)).toBe(true);
+  });
+
+  it("does not fire earlier, or once the album is done", () => {
+    expect(isAlmostThere(9, 12)).toBe(false);
+    expect(isAlmostThere(12, 12)).toBe(false);
+    expect(isAlmostThere(0, 12)).toBe(false);
+  });
+
+  it("counts the slots left", () => {
+    expect(slotsRemaining(10, 12)).toBe(2);
+    expect(slotsRemaining(12, 12)).toBe(0);
+    expect(slotsRemaining(15, 12)).toBe(0);
   });
 });

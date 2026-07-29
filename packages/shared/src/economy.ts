@@ -278,3 +278,54 @@ export function shuffleOrder(count: number, rand: () => number): number[] {
   }
   return order;
 }
+
+export type AlbumStatus = "locked" | "in_progress" | "completed";
+
+/**
+ * How full an album is, as a whole percentage.
+ *
+ * Computed from the holdings every time it is asked for — never stored, never
+ * cached. A percentage column would be a second source of truth that drifts the
+ * first time a sticker arrives by any path that forgot to update it.
+ *
+ * Rounds down, so 99% means "not finished". Only a genuinely complete album
+ * reports 100, which is what the export gate depends on.
+ */
+export function completionPercent(owned: number, total: number): number {
+  if (total <= 0) return 0;
+  const clamped = Math.min(Math.max(owned, 0), total);
+  return Math.floor((clamped * 100) / total);
+}
+
+/**
+ * Locked, in progress, or completed (`prd/04-albums.md` §3) — derived, so it
+ * cannot disagree with the holdings.
+ *
+ * `total > 0` matters: an album with no stickers would otherwise satisfy
+ * `owned === total` and report itself finished the moment it was created.
+ */
+export function albumStatus(input: {
+  unlocked: boolean;
+  owned: number;
+  total: number;
+}): AlbumStatus {
+  if (!input.unlocked) return "locked";
+  if (input.total > 0 && input.owned >= input.total) return "completed";
+  return "in_progress";
+}
+
+/** Slots left to fill. The number the "almost there" nudge is built on. */
+export function slotsRemaining(owned: number, total: number): number {
+  return Math.max(0, total - Math.min(owned, total));
+}
+
+/**
+ * Within one or two stickers of done (`prd/04-albums.md` §Enhancements). The
+ * last slot is the hardest and the most motivating, so the app points at it.
+ */
+export const ALMOST_THERE_THRESHOLD = 2;
+
+export function isAlmostThere(owned: number, total: number): boolean {
+  const left = slotsRemaining(owned, total);
+  return left > 0 && left <= ALMOST_THERE_THRESHOLD;
+}

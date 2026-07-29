@@ -1,4 +1,13 @@
-import type { Epic, LocalDate, Occurrence, Task, Wallet } from "@sticker-collector/shared";
+import type {
+  AlbumDetail,
+  AlbumQuery,
+  AlbumSummary,
+  Epic,
+  LocalDate,
+  Occurrence,
+  Task,
+  Wallet,
+} from "@sticker-collector/shared";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "./api";
 
@@ -15,6 +24,9 @@ export const keys = {
   wallet: ["wallet"] as const,
   occurrencesAll: ["occurrences"] as const,
   occurrences: (from: LocalDate, to: LocalDate) => ["occurrences", from, to] as const,
+  albumsAll: ["albums"] as const,
+  albums: (query: AlbumQuery) => ["albums", query.status ?? "all", query.sort] as const,
+  album: (id: string) => ["albums", "detail", id] as const,
 };
 
 export function useTasks() {
@@ -33,5 +45,28 @@ export function useOccurrences(from: LocalDate, to: LocalDate) {
   return useQuery({
     queryKey: keys.occurrences(from, to),
     queryFn: () => api<Occurrence[]>(`/api/occurrences?from=${from}&to=${to}`),
+  });
+}
+
+/**
+ * The shelf. Filtering and sorting happen server-side so the list the screen
+ * renders is the list the API decided on — completion, "almost there" and
+ * affordability are all computed there, and recomputing any of them here would
+ * be a second implementation to keep in step.
+ */
+export function useAlbums(query: AlbumQuery) {
+  const params = new URLSearchParams({ sort: query.sort });
+  if (query.status) params.set("status", query.status);
+
+  return useQuery({
+    queryKey: keys.albums(query),
+    queryFn: () => api<AlbumSummary[]>(`/api/albums?${params}`),
+  });
+}
+
+export function useAlbum(id: string) {
+  return useQuery({
+    queryKey: keys.album(id),
+    queryFn: () => api<AlbumDetail>(`/api/albums/${id}`),
   });
 }

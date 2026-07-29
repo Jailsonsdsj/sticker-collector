@@ -277,8 +277,29 @@ Then inspect `meta.changes`. `0` means insufficient funds — return `402`. `1` 
      conditional-insert ledger row (random_pull, -random_price),
      INSERT INTO holding … ON CONFLICT(sticker_id) DO UPDATE SET quantity = quantity + 1
    ])
-4. If the ledger insert changed 0 rows, the batch is rolled back and nothing happened.
+4. The holding upsert is gated on the ledger row: `… WHERE EXISTS (SELECT 1 FROM
+   ledger WHERE id = ?ledgerId)`. Inspect `meta.changes` of statement 1 for the 402.
 ```
+
+**Correction, found in A-04a.** An earlier version of step 4 read "if the ledger
+insert changed 0 rows, the batch is rolled back and nothing happened." **That is
+false, and it is the dangerous kind of false.** A conditional INSERT that matches
+nothing is a *successful* statement affecting 0 rows — D1 raises no error, so
+nothing is rolled back and the next statement in the batch lands anyway. Followed
+literally, a user with no coins gets the sticker for free. A batch only rolls back
+on an *error*.
+
+So every write that follows a spend must depend on the ledger row itself, not on
+the batch's good intentions. That works because a batch is one transaction: the
+gated statement sees the row the spend just wrote, or sees nothing and writes
+nothing. `PAID_FOR` in `lib/ledger.ts` is that predicate, and no purchase may skip it.
+
+Two more things the same section got wrong, both fixed in A-04a: `ON
+CONFLICT(sticker_id)` could not run at all, because `holding_sticker_idx` was a
+plain index and SQLite requires a uniqueness constraint on a conflict target
+(migration `0003`); and a guard that is read before the spend — "is this album
+still locked?" — must be **repeated inside the spend's WHERE**, or two concurrent
+requests both pass the read and the user is charged twice.
 
 Selling a duplicate never edits the pull; it appends a `duplicate_sale` row, per spec.
 

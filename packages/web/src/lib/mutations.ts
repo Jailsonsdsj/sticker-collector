@@ -1,9 +1,12 @@
 import type {
   CompleteOccurrence,
+  CreateAlbumInput,
   CreateEpicInput,
   CreateTaskInput,
   DeleteEpic,
   Epic,
+  PurchaseResult,
+  SealedAlbum,
   Task,
   UpdateEpic,
   UpdateTask,
@@ -213,3 +216,42 @@ function useBulkTaskAction(path: string) {
 
 export const useBulkDeleteTasks = () => useBulkTaskAction("/api/tasks/bulk-delete");
 export const useBulkDuplicateTasks = () => useBulkTaskAction("/api/tasks/bulk-duplicate");
+
+/**
+ * Unlocking an album spends coins, so both caches move: the listing (status,
+ * affordability of every *other* album) and the wallet. Missing the wallet
+ * would leave a balance on screen that the next purchase silently contradicts.
+ */
+export function useUnlockAlbum() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (albumId: string) =>
+      api<PurchaseResult>(`/api/albums/${albumId}/unlock`, {
+        method: "POST",
+        idempotencyKey: crypto.randomUUID(),
+      }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: keys.albumsAll });
+      void client.invalidateQueries({ queryKey: keys.wallet });
+    },
+  });
+}
+
+/**
+ * Seals an album. One POST carries the whole arrangement — the sticker rows are
+ * insert-only, so there is no second request that could add the rest.
+ */
+export function useCreateAlbum() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: CreateAlbumInput) =>
+      api<SealedAlbum>("/api/albums", {
+        method: "POST",
+        body: payload,
+        idempotencyKey: crypto.randomUUID(),
+      }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: keys.albumsAll });
+    },
+  });
+}

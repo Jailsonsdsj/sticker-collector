@@ -21,7 +21,10 @@ type StickerRow = typeof sticker.$inferSelect;
 export const albumRoutes = new Hono<{ Bindings: Env; Variables: { userId: string } }>();
 
 albumRoutes.use("*", requireAuth);
-albumRoutes.on(["POST"], "*", idempotency);
+// Idempotency is attached to the route, never to a wildcard: `purchases.ts`
+// mounts on this same prefix, and a wildcard here would claim the key for its
+// requests too — the second middleware would then see an in-flight claim of its
+// own and 409 every purchase.
 
 /**
  * POST /api/albums — create an album and seal it.
@@ -36,7 +39,7 @@ albumRoutes.on(["POST"], "*", idempotency);
  * interactive transaction, so that batch is the only thing standing between a
  * failed insert and an album that exists with half its stickers.
  */
-albumRoutes.post("/", async (c) => {
+albumRoutes.post("/", idempotency, async (c) => {
   const parsed = createAlbumSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) {
     return c.json({ error: "bad request", issues: parsed.error.issues }, 400);
