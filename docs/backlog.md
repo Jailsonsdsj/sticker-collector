@@ -137,7 +137,7 @@ Ship this whole phase before touching albums. At the end of it you can use the a
 > assume the pixel dimensions divide. `IMAGE_SIZES` in `shared/image.ts` carries
 > the same warning, and a test pins the exact values.
 
-| **E-01** | `lib/pdf.ts` with `pdf-lib`: cover page, 3×3 sticker pages, rarity frames, 0.25 pt cut guides, footer, A4 + Letter | L | **opus** | `prd/06-export.md`, `architecture.md` §10 | Unit test asserts point-level positions on both paper sizes; images embedded without resampling |
+| **E-01** | `lib/pdf.ts` + `lib/pdfLayout.ts` with `pdf-lib`: cover page, 3×3 sticker pages, rarity frames, 0.25 pt cut guides, footer, A4 + Letter | L | **opus** | `prd/06-export.md`, `architecture.md` §10 | ✅ Geometry is pure and asserted to the point against §10's own table on both papers; `pdf.ts` draws and computes nothing. **Verified by reading a generated PDF back with an independent parser (pypdf):** 3 pages for 12 stickers, A4 at 595.28 × 841.89, every image `/DCTDecode` at its **native pixel size** (591×827, 1772×2480) drawn at exactly 141.73 × 198.43 pt with 34.02 pt gutters — no resampling anywhere. Every position derives from **millimetres**, never the pixel dimensions (the cover is 3× the sticker in mm and not in px). Each distinct image is embedded **once**, not once per placement. Print inks live in `tokens.css` as `--print-*`, read at export time, so no colour literal reaches TypeScript |
 | **E-02** | Export UI — gated on completion, re-runnable forever, filename `sticker-collector-{slug}-{yyyy-mm-dd}.pdf` | S | sonnet | `prd/06-export.md` | Incomplete album offers no export; complete one exports repeatedly |
 
 ---
@@ -251,10 +251,10 @@ Keep this table updated — it is the first thing a new session reads, and it co
 | 1 Design system | 6 | 6 | ✅ complete — read `docs/design-system.md`, not `docs/design/`. Live at `/dev/ui` |
 | 2 Earning loop | 17 | 17 | ✅ complete — the earning loop runs end to end: create, schedule, complete with undo, edit, bulk act |
 | 3 Spending loop | 13 | 13 | ✅ complete — author, seal, unlock, buy, pull, sell and delete all work end to end |
-| 4 Export | 0 | 2 | not started |
+| 4 Export | 1 | 2 | 🔄 E-01 done — the PDF is correct to the point; E-02 (the export UI) is next |
 | 5 Reports | 0 | 4 | not started |
 | 6 Hardening | 0 | 6 | not started |
-| **MVP total** | **46** | **58** | |
+| **MVP total** | **47** | **58** | |
 
 Post-MVP is tracked separately and deliberately excluded from the total: 5 auth
 follow-ups (`A-W1`–`A-W5`) and 18 technical-debt items (`TD-01`–`TD-18`). See
