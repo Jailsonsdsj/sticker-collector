@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { WEEKDAYS_MASK_ALL, WEEKDAYS_MASK_WEEKDAYS } from "./recurrence.js";
 import {
+  ALBUM_MAX_STICKERS,
   bulkTaskIdsSchema,
+  createAlbumSchema,
   createEpicSchema,
   createTaskSchema,
   DEFAULT_EFFORT_MINUTES,
@@ -200,5 +202,74 @@ describe("epic payloads", () => {
     expect(deleteEpicSchema.safeParse({ mode: "unlink" }).success).toBe(true);
     expect(deleteEpicSchema.safeParse({}).success).toBe(false);
     expect(deleteEpicSchema.safeParse({ mode: "delete" }).success).toBe(false);
+  });
+});
+
+describe("album payloads", () => {
+  const key = (n: number) => `img/${n.toString(16).padStart(64, "0")}.jpg`;
+
+  const album = (over: Record<string, unknown> = {}) => ({
+    title: "Kitchen heroes",
+    coverKey: key(1),
+    unlockPrice: 500,
+    randomPrice: 40,
+    prices: { common: 20, rare: 50, epic: 120, legendary: 400 },
+    odds: { common: 60, rare: 25, epic: 12, legendary: 3 },
+    stickers: [{ imageKey: key(2), tier: "common" }],
+    ...over,
+  });
+
+  // The wizard validates with this same schema before it seals, so these rules
+  // have to hold in the browser, not only at the route.
+  it("accepts a sealable album", () => {
+    expect(createAlbumSchema.safeParse(album()).success).toBe(true);
+  });
+
+  it("applies the same odds rule the route and the CHECK apply", () => {
+    expect(
+      createAlbumSchema.safeParse(album({ odds: { common: 60, rare: 25, epic: 12, legendary: 2 } }))
+        .success,
+    ).toBe(false);
+    expect(
+      createAlbumSchema.safeParse(album({ odds: { common: 25, rare: 60, epic: 12, legendary: 3 } }))
+        .success,
+    ).toBe(false);
+    expect(
+      createAlbumSchema.safeParse(album({ odds: { common: 70, rare: 30, epic: 0, legendary: 0 } }))
+        .success,
+    ).toBe(true);
+  });
+
+  it("refuses an image that is not a content address", () => {
+    expect(createAlbumSchema.safeParse(album({ coverKey: "cover.jpg" })).success).toBe(false);
+    expect(
+      createAlbumSchema.safeParse(
+        album({ stickers: [{ imageKey: "img/../x.jpg", tier: "common" }] }),
+      ).success,
+    ).toBe(false);
+  });
+
+  it("refuses a free random pull, which would make a duplicate cost nothing", () => {
+    expect(createAlbumSchema.safeParse(album({ randomPrice: 0 })).success).toBe(false);
+    expect(createAlbumSchema.safeParse(album({ randomPrice: 1 })).success).toBe(true);
+  });
+
+  it("refuses an album with no stickers, and one past the batch cap", () => {
+    expect(createAlbumSchema.safeParse(album({ stickers: [] })).success).toBe(false);
+    const tooMany = Array.from({ length: ALBUM_MAX_STICKERS + 1 }, (_, i) => ({
+      imageKey: key(i + 1),
+      tier: "common" as const,
+    }));
+    expect(createAlbumSchema.safeParse(album({ stickers: tooMany })).success).toBe(false);
+  });
+
+  it("is strict — a sealed field cannot be smuggled in at creation", () => {
+    expect(createAlbumSchema.safeParse(album({ sealedAt: "2020-01-01T00:00:00Z" })).success).toBe(
+      false,
+    );
+    expect(createAlbumSchema.safeParse(album({ editionNumber: 9 })).success).toBe(false);
+    expect(createAlbumSchema.safeParse(album({ unlockedAt: "2020-01-01T00:00:00Z" })).success).toBe(
+      false,
+    );
   });
 });

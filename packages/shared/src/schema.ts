@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { TIERS, validateOdds } from "./economy.js";
+import { isImageKey } from "./image.js";
 import { WEEKDAYS_MASK_ALL } from "./recurrence.js";
 
 /**
@@ -242,6 +244,107 @@ export const epicSchema = z.object({
   oneOffDone: z.int().min(0),
 });
 export type Epic = z.infer<typeof epicSchema>;
+
+// ── Album ────────────────────────────────────────────────────────────────────
+
+export const tierSchema = z.enum(TIERS);
+
+/** Prices are integer coins, and a tier may legitimately be free. */
+const tierPriceSchema = z.int().min(0).max(1_000_000);
+const oddsValueSchema = z.int().min(0).max(100);
+
+const perTier = <T extends z.ZodTypeAny>(value: T) =>
+  z.strictObject({
+    common: value,
+    rare: value,
+    epic: value,
+    legendary: value,
+  });
+
+export const tierPricesSchema = perTier(tierPriceSchema);
+export const tierOddsSchema = perTier(oddsValueSchema);
+
+/** A stored image, addressed by the hash of its own bytes (`img/<sha256>.jpg`). */
+export const imageKeySchema = z.string().refine(isImageKey, "not an image key");
+
+/** An album's grid is capped so one seal stays inside a single D1 batch. */
+export const ALBUM_MAX_STICKERS = 200;
+
+export const createStickerSchema = z.strictObject({
+  imageKey: imageKeySchema,
+  tier: tierSchema,
+});
+export type CreateSticker = z.infer<typeof createStickerSchema>;
+
+/**
+ * Creating an album is also sealing it (§Sealing 11), so every economic number
+ * and the whole sticker set arrive in one request. There is no draft on the
+ * server: `sticker_frozen` blocks all updates to sticker rows, so a two-step
+ * flow could never add the second half of the set.
+ */
+export const createAlbumSchema = z
+  .strictObject({
+    title: titleSchema,
+    description: z.string().max(2000).nullish(),
+    coverKey: imageKeySchema,
+    unlockPrice: tierPriceSchema,
+    /**
+     * At least 1. At zero, `duplicateRefund` returns nothing and A-01's
+     * guarantee that a duplicate is always a net loss becomes vacuous — the
+     * pull would be free, so there would be nothing to lose.
+     */
+    randomPrice: z.int().min(1).max(1_000_000),
+    prices: tierPricesSchema,
+    odds: tierOddsSchema,
+    stickers: z.array(createStickerSchema).min(1).max(ALBUM_MAX_STICKERS),
+    /** Set when this album is a new edition of an existing one (§Creating from existing). */
+    derivedFromAlbumId: idSchema.nullish(),
+  })
+  .superRefine((value, ctx) => {
+    // One rule, three consumers: the wizard, this route, and the DB CHECK that
+    // enforces the sum. Monotonicity and the integer range live only here.
+    const problem = validateOdds(value.odds);
+    if (problem) {
+      ctx.addIssue({ code: "custom", path: ["odds"], message: problem });
+    }
+  });
+export type CreateAlbumInput = z.input<typeof createAlbumSchema>;
+export type CreateAlbum = z.output<typeof createAlbumSchema>;
+
+export const stickerSchema = z.object({
+  id: idSchema,
+  albumId: idSchema,
+  imageKey: z.string(),
+  tier: tierSchema,
+  slotIndex: z.int().min(0),
+});
+export type Sticker = z.infer<typeof stickerSchema>;
+
+export const albumSchema = z.object({
+  id: idSchema,
+  title: z.string(),
+  description: z.string().nullable(),
+  coverKey: z.string(),
+  derivedFromAlbumId: idSchema.nullable(),
+  unlockPrice: z.int().min(0),
+  randomPrice: z.int().min(0),
+  prices: tierPricesSchema,
+  odds: tierOddsSchema,
+  /** Null until bought. A new album always arrives locked (§Creating from existing 4). */
+  unlockedAt: instantSchema.nullable(),
+  /** Set exactly once, on first hit of 100% (A-05). */
+  completedAt: instantSchema.nullable(),
+  sealedAt: instantSchema,
+  createdAt: instantSchema,
+  editionNumber: z.int().min(1),
+});
+export type Album = z.infer<typeof albumSchema>;
+
+export const sealedAlbumSchema = z.object({
+  album: albumSchema,
+  stickers: z.array(stickerSchema),
+});
+export type SealedAlbum = z.infer<typeof sealedAlbumSchema>;
 
 // ── Wallet ───────────────────────────────────────────────────────────────────
 

@@ -81,9 +81,9 @@ Ship this whole phase before touching albums. At the end of it you can use the a
 
 | ID | Task | Size | Model | Load | Done when |
 |---|---|---|---|---|---|
-| **A-01** | `shared/economy.ts`: total album cost (coins + hours), expected value of a random pull, odds validation, **empty-tier redistribution**, duplicate refund | L | **opus** | `prd/04-albums.md` §Economy, `prd/05-stickers.md` §Random | Tests: odds sum to 100, monotonically decreasing, zero-odds tier permitted, redistribution is proportional, dupe sale is always a net loss under any user values |
-| **A-02** | Image pipeline: canvas aspect-fill crop + drag-to-reposition, exact 591×827 / 1772×2480, JPEG q0.92, sha256 key, upload, `GET /api/images/:key` via cookie auth | L | **opus** | `prd/04-albums.md` §Geometry, `architecture.md` §5 | Re-uploading identical bytes creates no second R2 object; image loads in a plain `<img>` tag |
-| **A-03** | API: create + seal album — sticker set, tier assignment, slot shuffle, all economics frozen. One `batch()`. **Sticker rows are insert-only** (the `sticker_frozen` trigger blocks all updates), so the full set must arrive in one POST; the wizard holds draft state client-side. | L | **opus** | `prd/04-albums.md` §Creating, §Sealing | Post-seal update attempt is rejected **by the trigger**, not by application code |
+| **A-01** | `shared/economy.ts`: total album cost (coins + hours), expected value of a random pull, odds validation, **empty-tier redistribution**, duplicate refund | L | **opus** | `prd/04-albums.md` §Economy, `prd/05-stickers.md` §Random | ✅ **Redistribution needs no arithmetic**: proportionally sharing an empty tier's odds across the survivors is exactly renormalising the survivors, so the roll keeps their original odds as integer weights and divides once. Nothing rounds, so nothing drifts — proved by cross-multiplied property tests, not examples. Monotonicity is **non-increasing**, not strict (see note below). EV uses the *effective* odds: an empty tier can never pay out. Refund floors, which is what makes the dupe loss universal — property-tested over 2,000 prices. `tierForRoll(weights, r)` takes its randomness as an argument, so A-04 supplies entropy and holds no arithmetic |
+| **A-02** | Image pipeline: canvas aspect-fill crop + drag-to-reposition, exact 591×827 / 1772×2480, JPEG q0.92, sha256 key, upload, `GET /api/images/:key` via cookie auth | L | **opus** | `prd/04-albums.md` §Geometry, `architecture.md` §5 | ✅ Verified against real R2: three successful PUTs of two distinct images leave **two blobs on disk**, and a cookie-only `GET` returns byte-identical JPEG. **The Worker derives the key itself** and refuses bytes that do not hash to the address they claim — otherwise `immutable` would be a lie. **Writes require the bearer header, reads accept the cookie**: an `<img>` cannot send a header, but a cookie rides along on cross-site requests, so only the read half of that trade is safe. Dimensions are enforced by parsing the JPEG frame header (no decode, ~200 bytes read) — a near-miss master otherwise breaks the print export weeks later. All crop geometry is pure in `shared/image.ts`; the canvas layer computes nothing, because jsdom cannot test it |
+| **A-03** | API: create + seal album — sticker set, tier assignment, slot shuffle, all economics frozen. One `batch()`. **Sticker rows are insert-only** (the `sticker_frozen` trigger blocks all updates), so the full set must arrive in one POST; the wizard holds draft state client-side. | L | **opus** | `prd/04-albums.md` §Creating, §Sealing | ✅ Verified against real D1: a post-seal economics `UPDATE` and any sticker `UPDATE` both fail with `SQLITE_CONSTRAINT_TRIGGER` — the database rejects them, not this code — while `unlocked_at`/`completed_at` still move, or A-04 could never unlock anything. **D1 binds max 100 parameters per statement**, so the sticker inserts are chunked at 20 rows and passed to the *same* `batch()`: without that an album silently 500s on its 21st sticker (see `TD-15`). Slot order is Fisher–Yates, drawn once and stored. There is no separate seal endpoint and cannot be one — `sticker_frozen` makes a two-step flow impossible |
 | **A-04** | API: unlock album / buy sticker directly / random pull / sell duplicate — all via `spend()` | L | **opus** | `prd/01-coins.md`, `prd/05-stickers.md`, `architecture.md` §4.3 | Buying inside a locked album → 403. Pull when no unowned sticker is reachable → 409. Insufficient balance → 402 with zero writes |
 | **A-05** | API: album list with computed completion %, status filter, sort | M | sonnet | `prd/04-albums.md` | Completion % computed, never stored. `completed_at` set exactly once, on first hit of 100% |
 | **A-06** | Web: album grid — locked B&W, unlocked colour, progress bar, "almost there" surfacing, affordability cue | M | sonnet | `prd/04-albums.md`, `design-system.md` | Grayscale is a CSS filter; no second image is ever stored |
@@ -93,12 +93,29 @@ Ship this whole phase before touching albums. At the end of it you can use the a
 | **A-10** | Web: create-from-existing (inherits images by key, no re-upload, no ownership carried) | M | sonnet | `prd/04-albums.md` §Creating from existing | New album arrives locked; every sticker locked; source album untouched; **zero bytes uploaded** |
 | **A-11** | Web: delete album — warning + type-the-title confirmation (trimmed, case-insensitive) | S | sonnet | `prd/04-albums.md` §Deleting | Wrong title keeps the button disabled |
 
+> **Spec resolution, decided in A-01 — odds are non-increasing, not strictly decreasing.**
+> `prd/04-albums.md` §Creating 8 says drop odds "must decrease from common to
+> legendary", while `prd/05-stickers.md` §Random 5 permits a tier with zero odds.
+> Two zero tiers (`70/30/0/0`) satisfy the second and violate the first, so read
+> strictly the rules contradict. `validateOdds` implements `common ≥ rare ≥ epic
+> ≥ legendary`, which satisfies both: a rarer tier is never likelier than a
+> commoner one, and any number of tiers may sit at zero. A-07's wizard must
+> validate the same way — one rule, one implementation.
+
 ---
 
 ## Phase 4 — Print export
 
 | ID | Task | Size | Model | Load | Done when |
 |---|---|---|---|---|---|
+> **Geometry warning for E-01, found in A-02.** `prd/04-albums.md` §Geometry says
+> "the cover is exactly three times the sticker". That is true in millimetres
+> (50 → 150) and **false in stored pixels**: 591 × 3 = 1773 against a stored
+> 1772, and 827 × 3 = 2481 against 2480, because each dimension is rounded from
+> 300 dpi independently. Lay the PDF out from the physical millimetres; do not
+> assume the pixel dimensions divide. `IMAGE_SIZES` in `shared/image.ts` carries
+> the same warning, and a test pins the exact values.
+
 | **E-01** | `lib/pdf.ts` with `pdf-lib`: cover page, 3×3 sticker pages, rarity frames, 0.25 pt cut guides, footer, A4 + Letter | L | **opus** | `prd/06-export.md`, `architecture.md` §10 | Unit test asserts point-level positions on both paper sizes; images embedded without resampling |
 | **E-02** | Export UI — gated on completion, re-runnable forever, filename `sticker-collector-{slug}-{yyyy-mm-dd}.pdf` | S | sonnet | `prd/06-export.md` | Incomplete album offers no export; complete one exports repeatedly |
 
@@ -175,6 +192,7 @@ Ordered by how likely it is to cost someone real time.
 | **TD-09** | **`lastCompletedOn` reports `MAX(scheduled_on)`, not the completion instant** | T-08 | A task completed *late* reports the day it was scheduled for, not the day it was done. Correct for "is this backlog item finished?", which is all it is used for — but wrong if a report ever reads it as a completion date |
 | **TD-10** | **A soft-deleted task's history is invisible in `GET /api/occurrences`** | T-04, deliberate | `occurrenceSchema` carries no task fields, so the client joins against `GET /api/tasks`, which excludes deleted tasks — it would render rows it cannot label. Reports read the ledger instead, so nothing is lost today. Revisit if a screen ever needs to show completed work from a deleted task |
 | **TD-12** | **`Input` remounts when an error appears.** It returns a bare `<input>` with no label/hint/error and a `<Field>`-wrapped one otherwise, so gaining an error changes the tree shape — React unmounts the field and the user loses focus and caret mid-typing | Found in T-09, when quick-add used the `error` slot | Any label-less input that can fail. `QuickAdd` works around it by rendering its own message; a form with a permanent label never switches, so T-10 is unaffected. Fix is to always wrap in `Field` — small, but it moves the flex target from the input to the wrapper in every current usage |
+| **TD-15** | **D1 binds at most 100 parameters per statement.** Found in A-03, where a 24-sticker album 500s on a single multi-row `INSERT` (5 columns × 21 rows > 100) while 20 seals fine — the failure is invisible below 21 rows | A-03 | Handled there by chunking at 20 rows inside one `batch()`. Any other multi-row insert has the same ceiling; `bulk-duplicate` (T-03) inserts full task rows and would break at a far smaller count. Worth a shared `chunkedInsert` helper before the next one |
 | **TD-14** | **A duplicated task is indistinguishable from its original.** `bulk-duplicate` copies the title verbatim, so the list shows two identical rows with nothing to tell them apart — and in selection mode that is how the wrong one gets deleted | T-13b, verified against the running Worker | The PRD does not ask for a suffix, so this is a deliberate deferral, not a bug. Fix is server-side in `bulk-duplicate` (a `(copy)` suffix, or `(copy 2)` when one exists) so the API and the UI cannot disagree about the name |
 | **TD-13** | **Multi-select is Home-only.** The epic card's task list is a plain `<ul>` of titles, not `TaskRow`, so it has no selection mode | T-13b | `prd/02-tasks.md` §5 says "select multiple tasks", without naming a screen; Home satisfies it. Fix is to render epic tasks through `TaskRow` and lift `useSelection` into the epic card — the hook and `SelectionBar` are already screen-agnostic |
 | **TD-11** | **The design bundle is committed at ~1.6 MB**, mostly sticker PNGs, and includes `_ds/classical-*` — a theme that is **not** this product's design system | D-01 | `architecture.md` §7 says `design/` should be gitignored, but D-02–D-04 name it as a `Load` input. Now that `docs/design-system.md` exists, the bundle is read only when the system itself changes, so it could move out of the repo |
@@ -208,13 +226,13 @@ Keep this table updated — it is the first thing a new session reads, and it co
 | 0 Foundation | 10 | 10 | ✅ complete — deployed & healthy at sticker-collector.jailson-junior36.workers.dev |
 | 1 Design system | 6 | 6 | ✅ complete — read `docs/design-system.md`, not `docs/design/`. Live at `/dev/ui` |
 | 2 Earning loop | 17 | 17 | ✅ complete — the earning loop runs end to end: create, schedule, complete with undo, edit, bulk act |
-| 3 Spending loop | 0 | 11 | not started |
+| 3 Spending loop | 3 | 11 | 🔄 A-01–A-03 done — economy, images, sealing; A-04 (unlock / buy / pull / sell) is next |
 | 4 Export | 0 | 2 | not started |
 | 5 Reports | 0 | 4 | not started |
 | 6 Hardening | 0 | 6 | not started |
-| **MVP total** | **33** | **56** | |
+| **MVP total** | **36** | **56** | |
 
 Post-MVP is tracked separately and deliberately excluded from the total: 5 auth
-follow-ups (`A-W1`–`A-W5`) and 14 technical-debt items (`TD-01`–`TD-14`). See
+follow-ups (`A-W1`–`A-W5`) and 15 technical-debt items (`TD-01`–`TD-15`). See
 **Post-MVP** above. `TD-01` is done and both tests it still owed (T-11's undo,
 T-12's mask bit) have landed — `packages/web/test/README.md` records the rules.
