@@ -8,7 +8,7 @@ import {
   TIERS,
   type TierRecord,
 } from "@sticker-collector/shared";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { Hono } from "hono";
 import { db } from "../db/client";
 import { album, sticker } from "../db/schema";
@@ -16,6 +16,17 @@ import { idempotency } from "../middleware/idempotency";
 import { requireAuth } from "../middleware/require-auth";
 
 type AlbumRow = typeof album.$inferSelect;
+
+/**
+ * The albums a user still has.
+ *
+ * Every read and every spend path filters through this. A deleted album that
+ * stayed reachable from even one of them would let coins be spent inside
+ * something the user believes is gone.
+ */
+export function liveAlbums(userId: string) {
+  return and(eq(album.userId, userId), isNull(album.deletedAt));
+}
 type StickerRow = typeof sticker.$inferSelect;
 
 export const albumRoutes = new Hono<{ Bindings: Env; Variables: { userId: string } }>();
@@ -56,7 +67,7 @@ albumRoutes.post("/", idempotency, async (c) => {
     const source = await database
       .select({ editionNumber: album.editionNumber })
       .from(album)
-      .where(and(eq(album.id, input.derivedFromAlbumId), eq(album.userId, userId)))
+      .where(and(eq(album.id, input.derivedFromAlbumId), liveAlbums(userId)))
       .get();
     if (!source) return c.json({ error: "source album not found" }, 404);
     editionNumber = source.editionNumber + 1;
@@ -190,3 +201,30 @@ export function toSticker(row: StickerRow): Sticker {
 
 /** Re-exported so A-04/A-05 use the same tier ordering when they aggregate. */
 export { TIERS };
+
+/**
+ * DELETE /api/albums/:id
+ *
+ * Destructive from the user's side: the album, its stickers and every coin
+ * spent inside it are gone, and nothing is refunded (`prd/04-albums.md`
+ * §Deleting 1).
+ *
+ * Soft, because it has to be. `ledger.album_id` is a foreign key and the ledger
+ * is append-only by trigger, so the spend rows can neither be removed nor
+ * repointed — the album row must outlive the album. What the user loses is
+ * every way of reaching it.
+ */
+albumRoutes.delete("/:id", idempotency, async (c) => {
+  const database = db(c.env);
+  const userId = c.get("userId");
+  const albumId = c.req.param("id");
+
+  const deleted = await database
+    .update(album)
+    .set({ deletedAt: new Date().toISOString() })
+    .where(and(eq(album.id, albumId), liveAlbums(userId)))
+    .returning({ id: album.id });
+
+  if (deleted.length === 0) return c.json({ error: "album not found" }, 404);
+  return c.json({ deleted: albumId });
+});

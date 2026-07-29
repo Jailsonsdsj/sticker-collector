@@ -6,6 +6,7 @@ import { album, holding, sticker } from "../db/schema";
 import { balance, PAID_FOR, spendStatement, stampCompletion } from "../lib/ledger";
 import { idempotency } from "../middleware/idempotency";
 import { requireAuth } from "../middleware/require-auth";
+import { liveAlbums } from "./albums";
 
 export const purchaseRoutes = new Hono<{ Bindings: Env; Variables: { userId: string } }>();
 
@@ -35,7 +36,7 @@ purchaseRoutes.post("/:id/unlock", idempotency, async (c) => {
   const row = await database
     .select({ id: album.id, unlockPrice: album.unlockPrice, unlockedAt: album.unlockedAt })
     .from(album)
-    .where(and(eq(album.id, albumId), eq(album.userId, userId)))
+    .where(and(eq(album.id, albumId), liveAlbums(userId)))
     .get();
   if (!row) return c.json({ error: "album not found" }, 404);
   if (row.unlockedAt) return c.json({ error: "already unlocked" }, 409);
@@ -100,7 +101,7 @@ purchaseRoutes.post("/:id/stickers/:stickerId/buy", idempotency, async (c) => {
     })
     .from(sticker)
     .innerJoin(album, eq(album.id, sticker.albumId))
-    .where(and(eq(sticker.id, stickerId), eq(sticker.albumId, albumId), eq(album.userId, userId)))
+    .where(and(eq(sticker.id, stickerId), eq(sticker.albumId, albumId), liveAlbums(userId)))
     .get();
   if (!row) return c.json({ error: "sticker not found" }, 404);
   if (!row.unlockedAt) return c.json({ error: "album is locked" }, 403);

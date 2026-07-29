@@ -16,6 +16,7 @@ import { album, holding, sticker } from "../db/schema";
 import { balance, creditStatement, PAID_FOR, spendStatement, stampCompletion } from "../lib/ledger";
 import { idempotency } from "../middleware/idempotency";
 import { requireAuth } from "../middleware/require-auth";
+import { liveAlbums } from "./albums";
 
 /**
  * The gamble, and its consolation.
@@ -61,7 +62,7 @@ pullRoutes.post("/:id/pull", idempotency, async (c) => {
       oddsLegendary: album.oddsLegendary,
     })
     .from(album)
-    .where(and(eq(album.id, albumId), eq(album.userId, userId)))
+    .where(and(eq(album.id, albumId), liveAlbums(userId)))
     .get();
   if (!albumRow) return c.json({ error: "album not found" }, 404);
   if (!albumRow.unlockedAt) return c.json({ error: "album is locked" }, 403);
@@ -162,7 +163,7 @@ stickerRoutes.post("/:id/sell", idempotency, async (c) => {
     .from(sticker)
     .innerJoin(album, eq(album.id, sticker.albumId))
     .leftJoin(holding, eq(holding.stickerId, sticker.id))
-    .where(and(eq(sticker.id, stickerId), eq(album.userId, userId)))
+    .where(and(eq(sticker.id, stickerId), liveAlbums(userId)))
     .get();
   if (!row) return c.json({ error: "sticker not found" }, 404);
   if (row.quantity === null) return c.json({ error: "not owned" }, 404);

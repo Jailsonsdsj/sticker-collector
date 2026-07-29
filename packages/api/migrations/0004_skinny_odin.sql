@@ -1,0 +1,1 @@
+ALTER TABLE `album` ADD `deleted_at` text;

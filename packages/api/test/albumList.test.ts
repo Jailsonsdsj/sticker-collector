@@ -375,3 +375,127 @@ describe("isolation", () => {
     expect(response.status).toBe(401);
   });
 });
+
+describe("deleting an album", () => {
+  const del = (albumId: string) =>
+    app.fetch(
+      new Request(`http://localhost/api/albums/${albumId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+      env,
+    );
+
+  const ledgerRows = () =>
+    env.DB.prepare(
+      "SELECT COUNT(*) AS n, COALESCE(SUM(amount_coins),0) AS total FROM ledger WHERE user_id = ?",
+    )
+      .bind(userId)
+      .first<{ n: number; total: number }>();
+
+  async function spentInto() {
+    const sealed = await seal({ unlockPrice: 100 });
+    await earn(1000);
+    expect((await post(`/api/albums/${sealed.album.id}/unlock`)).status).toBe(201);
+    const first = sealed.stickers[0] as { id: string };
+    expect((await post(`/api/albums/${sealed.album.id}/stickers/${first.id}/buy`)).status).toBe(
+      201,
+    );
+    return sealed;
+  }
+
+  it("keeps every coin spent, and every ledger row", async () => {
+    // The reason the delete is soft: those rows are foreign-keyed to the album
+    // and the ledger is append-only, so they can neither move nor be removed.
+    // Nothing is refunded either — that is the spec, not an accident.
+    const sealed = await spentInto();
+    const before = await ledgerRows();
+
+    expect((await del(sealed.album.id)).status).toBe(200);
+
+    expect(await ledgerRows()).toEqual(before);
+  });
+
+  it("takes the album out of the listing", async () => {
+    const sealed = await seal();
+    expect((await list()).some((a) => a.id === sealed.album.id)).toBe(true);
+
+    await del(sealed.album.id);
+    expect((await list()).some((a) => a.id === sealed.album.id)).toBe(false);
+  });
+
+  it("stops the album being opened", async () => {
+    const sealed = await seal();
+    await del(sealed.album.id);
+    expect((await get(`/api/albums/${sealed.album.id}`)).status).toBe(404);
+  });
+
+  it("closes every way of spending inside it", async () => {
+    // Missing one of these would leave coins spendable inside something the
+    // user believes is gone.
+    const sealed = await spentInto();
+    const spare = sealed.stickers[1] as { id: string };
+    await del(sealed.album.id);
+
+    expect((await post(`/api/albums/${sealed.album.id}/unlock`)).status).toBe(404);
+    expect((await post(`/api/albums/${sealed.album.id}/stickers/${spare.id}/buy`)).status).toBe(
+      404,
+    );
+    expect((await post(`/api/albums/${sealed.album.id}/pull`)).status).toBe(404);
+  });
+
+  it("cannot be used as the source of a new edition", async () => {
+    const sealed = await seal();
+    await del(sealed.album.id);
+
+    const response = await app.fetch(
+      new Request("http://localhost/api/albums", {
+        method: "POST",
+        headers: { "content-type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          title: "Second edition",
+          coverKey: key(999),
+          unlockPrice: 0,
+          randomPrice: 1,
+          prices: { common: 1, rare: 1, epic: 1, legendary: 1 },
+          odds: { common: 60, rare: 25, epic: 12, legendary: 3 },
+          stickers: [{ imageKey: key(1), tier: "common" }],
+          derivedFromAlbumId: sealed.album.id,
+        }),
+      }),
+      env,
+    );
+    expect(response.status).toBe(404);
+  });
+
+  it("is not an error the second time", async () => {
+    const sealed = await seal();
+    expect((await del(sealed.album.id)).status).toBe(200);
+    expect((await del(sealed.album.id)).status).toBe(404);
+  });
+
+  it("leaves another user's album alone", async () => {
+    const me = { id: userId, token };
+    switchTo(await makeUser());
+    const theirs = await seal();
+    switchTo(me);
+
+    expect((await del(theirs.album.id)).status).toBe(404);
+
+    // Untouched, not merely unreachable.
+    const row = await env.DB.prepare("SELECT deleted_at FROM album WHERE id = ?")
+      .bind(theirs.album.id)
+      .first<{ deleted_at: string | null }>();
+    expect(row?.deleted_at).toBeNull();
+  });
+
+  it("refuses an unauthenticated delete", async () => {
+    const sealed = await seal();
+    const response = await app.fetch(
+      new Request(`http://localhost/api/albums/${sealed.album.id}`, { method: "DELETE" }),
+      env,
+    );
+    expect(response.status).toBe(401);
+    expect((await get(`/api/albums/${sealed.album.id}`)).status).toBe(200);
+  });
+});

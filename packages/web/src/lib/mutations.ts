@@ -5,7 +5,9 @@ import type {
   CreateTaskInput,
   DeleteEpic,
   Epic,
+  PullResult,
   PurchaseResult,
+  SaleResult,
   SealedAlbum,
   Task,
   UpdateEpic,
@@ -248,6 +250,83 @@ export function useCreateAlbum() {
       api<SealedAlbum>("/api/albums", {
         method: "POST",
         body: payload,
+        idempotencyKey: crypto.randomUUID(),
+      }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: keys.albumsAll });
+    },
+  });
+}
+
+/**
+ * Buys a sticker outright — the user's protection against bad luck, and the
+ * only way to reach a tier with zero odds.
+ *
+ * Three caches move: this album's grid, the listing (its completion and every
+ * other album's affordability) and the wallet.
+ */
+export function useBuySticker(albumId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (stickerId: string) =>
+      api<PurchaseResult>(`/api/albums/${albumId}/stickers/${stickerId}/buy`, {
+        method: "POST",
+        idempotencyKey: crypto.randomUUID(),
+      }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: keys.album(albumId) });
+      void client.invalidateQueries({ queryKey: keys.albumsAll });
+      void client.invalidateQueries({ queryKey: keys.wallet });
+    },
+  });
+}
+
+/**
+ * Rolls for a random sticker. Costs the album's random price whatever comes
+ * back — including a duplicate, which is the price of gambling.
+ */
+export function usePullSticker(albumId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      api<PullResult>(`/api/albums/${albumId}/pull`, {
+        method: "POST",
+        idempotencyKey: crypto.randomUUID(),
+      }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: keys.album(albumId) });
+      void client.invalidateQueries({ queryKey: keys.albumsAll });
+      void client.invalidateQueries({ queryKey: keys.wallet });
+    },
+  });
+}
+
+/** Sells a spare copy for half the album's random price, floored. */
+export function useSellDuplicate(albumId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (stickerId: string) =>
+      api<SaleResult>(`/api/stickers/${stickerId}/sell`, {
+        method: "POST",
+        idempotencyKey: crypto.randomUUID(),
+      }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: keys.album(albumId) });
+      void client.invalidateQueries({ queryKey: keys.wallet });
+    },
+  });
+}
+
+/**
+ * Deletes an album. Soft on the server — the ledger rows it is foreign-keyed to
+ * are append-only and must survive — but from here it is simply gone.
+ */
+export function useDeleteAlbum() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (albumId: string) =>
+      api<{ deleted: string }>(`/api/albums/${albumId}`, {
+        method: "DELETE",
         idempotencyKey: crypto.randomUUID(),
       }),
     onSuccess: () => {

@@ -1,31 +1,204 @@
-import { useParams } from "react-router";
-import { AppHeader } from "../components/layout";
-import { EmptyState, Skeleton } from "../components/ui";
-import { useAlbum } from "../lib/queries";
+import type { PullResult, Tier, TierRecord } from "@sticker-collector/shared";
+import { canPullRandom, duplicateRefund, effectiveWeights } from "@sticker-collector/shared";
+import { useState } from "react";
+import { Navigate, useNavigate, useParams } from "react-router";
+import { DeleteAlbumDialog } from "../components/DeleteAlbumDialog";
+import { AppHeader, StickerGrid } from "../components/layout";
+import { RevealDialog } from "../components/RevealDialog";
+import { StickerSlot } from "../components/StickerSlot";
+import { Button, Chip, EmptyState, ProgressBar, Skeleton } from "../components/ui";
+import { ApiError } from "../lib/api";
+import { useBuySticker, useDeleteAlbum, usePullSticker, useSellDuplicate } from "../lib/mutations";
+import { useAlbum, useWallet } from "../lib/queries";
 
 /**
- * Placeholder for A-08.
+ * One album, all of its slots.
  *
- * A-06 links every card here, because a grid of albums that cannot be opened is
- * a dead end and §5 says clicking an album — locked or unlocked — must show its
- * stickers. The grid, the rarity frames, the duplicate badges and the
- * missing-only toggle are A-08's; this only proves the route and the query
- * exist. Replace it wholesale.
+ * Browsing is always allowed — a locked album shows every sticker it will ever
+ * hold, in black and white, with its rarity frames intact. Buying is what the
+ * lock forbids (`prd/04-albums.md` §5, §Locked 4).
  */
 export function AlbumDetail() {
   const { id = "" } = useParams();
-  const album = useAlbum(id);
+  const [missingOnly, setMissingOnly] = useState(false);
+  const [reveal, setReveal] = useState<PullResult | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const navigate = useNavigate();
 
-  if (album.isLoading) return <Skeleton variant="block" />;
+  const album = useAlbum(id);
+  const wallet = useWallet();
+  const buy = useBuySticker(id);
+  const pull = usePullSticker(id);
+  const sell = useSellDuplicate(id);
+  const remove = useDeleteAlbum();
+
+  if (album.error instanceof ApiError && album.error.status === 401) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (album.isLoading) {
+    return (
+      <>
+        <AppHeader title="Album" />
+        <Skeleton variant="block" />
+      </>
+    );
+  }
+
+  if (!album.data) {
+    return (
+      <>
+        <AppHeader title="Album" />
+        <EmptyState
+          icon="◈"
+          title="No such album"
+          description="It may have been deleted, or the link is wrong."
+        />
+      </>
+    );
+  }
+
+  const { album: summary, stickers } = album.data;
+  const balance = wallet.data?.balance ?? 0;
+  const unlocked = summary.status !== "locked";
+  const visible = missingOnly ? stickers.filter((s) => s.quantity === 0) : stickers;
+  const refund = duplicateRefund(summary.randomPrice);
+
+  // Reachability, decided by the same function the Worker uses. The API is
+  // still the authority — it 409s — but the button should not offer a roll that
+  // is guaranteed to be refused, and it must not simply mean "complete": a tier
+  // at zero odds can hold unowned stickers forever.
+  const rollable = pullIsPossible(stickers, summary.odds);
+  const canPull = unlocked && rollable && balance >= summary.randomPrice;
 
   return (
     <>
-      <AppHeader title={album.data?.album.title ?? "Album"} />
-      <EmptyState
-        icon="◈"
-        title={`${album.data?.album.owned ?? 0} of ${album.data?.album.total ?? 0} collected`}
-        description="The sticker grid is built in A-08."
+      <AppHeader
+        title={summary.title}
+        trailing={
+          <Chip
+            size="sm"
+            tone="cyan"
+            fill="tint"
+            font="body"
+            selected={missingOnly}
+            onClick={() => setMissingOnly((on) => !on)}
+          >
+            Missing only
+          </Chip>
+        }
+      />
+
+      <div className="mb-4 flex flex-col gap-2">
+        <ProgressBar
+          value={summary.percent}
+          tone={summary.status === "completed" ? "lime" : "cyan"}
+          label={`${summary.percent}%`}
+          aria-label={`${summary.owned} of ${summary.total} collected`}
+        />
+        <p className="font-body text-sm text-ink-dim">
+          {summary.owned} of {summary.total} collected
+          {!unlocked && " · locked"}
+        </p>
+      </div>
+
+      {!unlocked && (
+        <p className="mb-4 font-body text-sm text-ink-secondary">
+          Unlock this album from the shelf to start collecting. Until then you can see everything it
+          holds, but nothing can be bought.
+        </p>
+      )}
+
+      {unlocked && (
+        <div className="mb-4 flex items-center gap-3">
+          <Button
+            tone="violet"
+            disabled={!canPull || pull.isPending}
+            loading={pull.isPending}
+            onClick={async () => setReveal(await pull.mutateAsync())}
+          >
+            Random sticker · {summary.randomPrice}
+          </Button>
+          {!rollable && (
+            <p className="font-body text-sm text-ink-dim">
+              Nothing left that a roll can reach — the rest is direct purchase only.
+            </p>
+          )}
+        </div>
+      )}
+
+      {visible.length === 0 ? (
+        <EmptyState
+          icon="✓"
+          title="Nothing missing"
+          description="Every slot in this album is filled."
+          action={
+            <Button variant="outline" tone="cyan" onClick={() => setMissingOnly(false)}>
+              Show the whole album
+            </Button>
+          }
+        />
+      ) : (
+        <StickerGrid>
+          {visible.map((sticker) => (
+            <StickerSlot
+              key={sticker.id}
+              sticker={sticker}
+              price={summary.prices[sticker.tier as Tier]}
+              albumUnlocked={unlocked}
+              affordable={balance >= summary.prices[sticker.tier as Tier]}
+              pending={buy.isPending || sell.isPending}
+              onBuy={() => buy.mutate(sticker.id)}
+              refund={refund}
+              onSell={() => sell.mutate(sticker.id)}
+            />
+          ))}
+        </StickerGrid>
+      )}
+      <div className="mt-8 border-border border-t pt-4">
+        <Button variant="ghost" tone="magenta" size="sm" onClick={() => setDeleting(true)}>
+          Delete this album
+        </Button>
+      </div>
+
+      <DeleteAlbumDialog
+        open={deleting}
+        title={summary.title}
+        owned={summary.owned}
+        pending={remove.isPending}
+        onClose={() => setDeleting(false)}
+        onConfirm={async () => {
+          await remove.mutateAsync(id);
+          setDeleting(false);
+          navigate("/albums");
+        }}
+      />
+
+      <RevealDialog
+        pull={reveal}
+        imageKey={stickers.find((s) => s.id === reveal?.stickerId)?.imageKey ?? null}
+        selling={sell.isPending}
+        onSell={async () => {
+          if (reveal) await sell.mutateAsync(reveal.stickerId);
+          setReveal(null);
+        }}
+        onClose={() => setReveal(null)}
       />
     </>
   );
+}
+
+/** True while a roll could still return something the user does not own. */
+function pullIsPossible(
+  stickers: { tier: string; quantity: number }[],
+  odds: TierRecord<number>,
+): boolean {
+  const counts: TierRecord<number> = { common: 0, rare: 0, epic: 0, legendary: 0 };
+  const owned: TierRecord<number> = { common: 0, rare: 0, epic: 0, legendary: 0 };
+  for (const sticker of stickers) {
+    const tier = sticker.tier as Tier;
+    counts[tier] += 1;
+    if (sticker.quantity > 0) owned[tier] += 1;
+  }
+  return canPullRandom({ weights: effectiveWeights(odds, counts), counts, owned });
 }

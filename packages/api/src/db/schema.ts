@@ -48,6 +48,11 @@ export const album = sqliteTable(
     completedAt: text("completed_at"),
     sealedAt: text("sealed_at").notNull(),
     createdAt: text("created_at").notNull(),
+    // Soft, and not by preference: `ledger.album_id` is a foreign key and the
+    // coins spent inside a deleted album must stay spent, so those rows have to
+    // survive. Nulling their columns first is blocked by `ledger_no_update`.
+    // Removing the row is therefore impossible without breaking an invariant.
+    deletedAt: text("deleted_at"),
     // makes the edition chain readable without recursion (architecture.md §4.5).
     editionNumber: integer("edition_number").notNull().default(1),
   },

@@ -1,4 +1,4 @@
-import type { CreateAlbumInput, Tier, TierRecord } from "@sticker-collector/shared";
+import type { AlbumDetail, CreateAlbumInput, Tier, TierRecord } from "@sticker-collector/shared";
 import {
   ALBUM_MAX_STICKERS,
   albumCost,
@@ -33,6 +33,12 @@ export interface AlbumDraft {
   randomPrice: number;
   prices: TierRecord<number>;
   odds: TierRecord<number>;
+  /**
+   * Set when this album is a new **edition** of an existing one. It carries the
+   * artwork and the pricing forward; it carries no ownership, and the source
+   * album is untouched (`prd/04-albums.md` §Creating from existing).
+   */
+  derivedFromAlbumId: string | null;
 }
 
 /**
@@ -49,7 +55,50 @@ export const initialDraft: AlbumDraft = {
   randomPrice: 40,
   prices: { common: 20, rare: 50, epic: 120, legendary: 400 },
   odds: DEFAULT_ODDS,
+  derivedFromAlbumId: null,
 };
+
+/**
+ * A draft seeded from an album that already exists.
+ *
+ * Nothing is uploaded and nothing is cropped: the artwork comes across as image
+ * **keys**, which is the whole reason this mode exists — a new version of an
+ * album without re-importing its pictures.
+ *
+ * Ownership cannot come with it, because a draft has no way to express it. The
+ * new album's stickers are `{imageKey, tier}` and nothing else, so every one of
+ * them starts locked and must be earned again.
+ */
+export function draftFromAlbum(source: AlbumDetail): AlbumDraft {
+  return {
+    title: source.album.title,
+    description: source.album.description ?? "",
+    coverKey: source.album.coverKey,
+    stickers: [...source.stickers]
+      .sort((a, b) => a.slotIndex - b.slotIndex)
+      .map((sticker) => ({ imageKey: sticker.imageKey, tier: sticker.tier })),
+    unlockPrice: source.album.unlockPrice,
+    randomPrice: source.album.randomPrice,
+    prices: { ...source.album.prices },
+    odds: { ...source.album.odds },
+    derivedFromAlbumId: source.album.id,
+  };
+}
+
+/**
+ * True while the user has decided nothing yet — the only moment it makes sense
+ * to ask "from scratch, or from an existing album?". A draft that survived a
+ * refresh has already answered.
+ */
+export function isPristine(draft: AlbumDraft): boolean {
+  return (
+    draft.title.trim() === "" &&
+    draft.description.trim() === "" &&
+    draft.coverKey === null &&
+    draft.stickers.length === 0 &&
+    draft.derivedFromAlbumId === null
+  );
+}
 
 export type DraftAction =
   | { type: "field"; field: "title" | "description"; value: string }
@@ -193,6 +242,7 @@ export function toPayload(draft: AlbumDraft): CreateAlbumInput {
     prices: draft.prices,
     odds: draft.odds,
     stickers: draft.stickers.map((s) => ({ imageKey: s.imageKey, tier: s.tier })),
+    derivedFromAlbumId: draft.derivedFromAlbumId,
   };
 }
 

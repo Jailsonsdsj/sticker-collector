@@ -76,10 +76,26 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllGlobals());
 
-/** Renders and waits for the stored draft to have been restored. */
+/**
+ * Renders and waits for the stored draft to have been restored.
+ *
+ * A pristine draft is met by the "scratch or existing?" chooser first, so this
+ * answers it — the tests below are about what happens after that choice.
+ */
 async function open() {
   const user = userEvent.setup();
   render(<AlbumNew />, { wrapper });
+
+  // Wait for the restore to settle into one of its two outcomes.
+  await waitFor(() => {
+    const asked = screen.queryByRole("button", { name: "Start from scratch" });
+    const form = screen.queryByLabelText(/title/i);
+    expect(asked ?? form).not.toBeNull();
+  });
+
+  const chooser = screen.queryByRole("button", { name: "Start from scratch" });
+  if (chooser) await user.click(chooser);
+
   await screen.findByLabelText(/title/i);
   return user;
 }
@@ -328,5 +344,176 @@ describe("sealing", () => {
 
     expect(screen.getByText("Some stickers can only be bought directly")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Seal album" })).toBeEnabled();
+  });
+});
+
+describe("starting from an existing album", () => {
+  const SOURCE = {
+    album: {
+      id: "alb-source",
+      title: "Kitchen heroes",
+      description: "Everyone who feeds me",
+      coverKey: key(999),
+      derivedFromAlbumId: null,
+      unlockPrice: 750,
+      randomPrice: 41,
+      prices: { common: 11, rare: 22, epic: 33, legendary: 44 },
+      odds: { common: 70, rare: 20, epic: 10, legendary: 0 },
+      unlockedAt: "2026-07-02T00:00:00Z",
+      completedAt: "2026-07-20T00:00:00Z",
+      sealedAt: "2026-07-01T00:00:00Z",
+      createdAt: "2026-07-01T00:00:00Z",
+      editionNumber: 1,
+      owned: 2,
+      total: 2,
+      percent: 100,
+      status: "completed",
+      remaining: 0,
+      almostThere: false,
+      affordable: false,
+    },
+    stickers: [
+      {
+        id: "s1",
+        albumId: "alb-source",
+        imageKey: key(1),
+        tier: "common",
+        slotIndex: 0,
+        quantity: 1,
+      },
+      {
+        id: "s2",
+        albumId: "alb-source",
+        imageKey: key(2),
+        tier: "legendary",
+        slotIndex: 1,
+        quantity: 4,
+      },
+    ],
+  };
+
+  function serveSource() {
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if ((init?.method ?? "GET") !== "GET") {
+        return json({ album: { id: "alb-new" }, stickers: [] }, 201);
+      }
+      if (url.startsWith("/api/albums?")) return json([SOURCE.album]);
+      if (url.startsWith("/api/albums/")) return json(SOURCE);
+      return json([]);
+    });
+  }
+
+  async function copySource() {
+    serveSource();
+    const user = userEvent.setup();
+    render(<AlbumNew />, { wrapper });
+
+    await user.click(await screen.findByRole("button", { name: /existing album/ }));
+    await user.click(await screen.findByRole("button", { name: /Kitchen heroes/ }));
+    await screen.findByLabelText(/title/i);
+    return user;
+  }
+
+  it("asks the question before anything has been decided", async () => {
+    serveSource();
+    render(<AlbumNew />, { wrapper });
+
+    expect(await screen.findByRole("button", { name: "Start from scratch" })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/title/i)).not.toBeInTheDocument();
+  });
+
+  it("does not ask again when a draft is waiting", async () => {
+    // Being asked to choose again would look like the work had been lost.
+    await sealedDraft();
+    serveSource();
+    render(<AlbumNew />, { wrapper });
+
+    expect(await screen.findByLabelText(/title/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Start from scratch" })).not.toBeInTheDocument();
+  });
+
+  it("inherits the artwork, the title and the prices", async () => {
+    await copySource();
+
+    expect((screen.getByLabelText(/title/i) as HTMLInputElement).value).toBe("Kitchen heroes");
+    await waitFor(async () => {
+      const stored = await loadDraft();
+      expect(stored?.coverKey).toBe(key(999));
+      expect(stored?.unlockPrice).toBe(750);
+      expect(stored?.stickers).toEqual([
+        { imageKey: key(1), tier: "common" },
+        { imageKey: key(2), tier: "legendary" },
+      ]);
+    });
+  });
+
+  it("uploads nothing at all", async () => {
+    // The claim of the whole mode: a new version without re-importing artwork.
+    const user = await copySource();
+    await user.click(screen.getByRole("tab", { name: "Seal" }));
+    await user.click(screen.getByRole("button", { name: "Seal album" }));
+
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(([, init]) => (init as RequestInit)?.method === "POST"),
+      ).toBe(true),
+    );
+    expect(uploadImage).not.toHaveBeenCalled();
+    expect(fetchMock.mock.calls.some(([url]) => (url as string).startsWith("/api/images"))).toBe(
+      false,
+    );
+  });
+
+  it("tells the server which album it is a version of", async () => {
+    const user = await copySource();
+    await user.click(screen.getByRole("tab", { name: "Seal" }));
+    await user.click(screen.getByRole("button", { name: "Seal album" }));
+
+    await waitFor(() => {
+      const post = fetchMock.mock.calls.find(
+        ([url, init]) => url === "/api/albums" && (init as RequestInit)?.method === "POST",
+      );
+      expect(post).toBeDefined();
+      const body = JSON.parse((post as [string, RequestInit])[1].body as string);
+      expect(body.derivedFromAlbumId).toBe("alb-source");
+      expect(body.stickers).toHaveLength(2);
+    });
+  });
+
+  it("leaves the source album alone", async () => {
+    const user = await copySource();
+    await user.click(screen.getByRole("tab", { name: "Seal" }));
+    await user.click(screen.getByRole("button", { name: "Seal album" }));
+
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(([, init]) => (init as RequestInit)?.method === "POST"),
+      ).toBe(true),
+    );
+    // Every write went to the collection endpoint, never to the source.
+    const writes = fetchMock.mock.calls.filter(
+      ([, init]) => (init as RequestInit)?.method !== "GET" && (init as RequestInit)?.method,
+    );
+    expect(writes.every(([url]) => url === "/api/albums")).toBe(true);
+  });
+
+  it("lets the inherited set be edited before sealing", async () => {
+    const user = await copySource();
+    await user.click(screen.getByRole("tab", { name: "Stickers" }));
+
+    await user.click(screen.getAllByRole("button", { name: "Remove" })[0] as HTMLElement);
+
+    await waitFor(async () => expect((await loadDraft())?.stickers).toHaveLength(1));
+  });
+
+  it("starts empty when the user chooses scratch", async () => {
+    serveSource();
+    const user = userEvent.setup();
+    render(<AlbumNew />, { wrapper });
+
+    await user.click(await screen.findByRole("button", { name: "Start from scratch" }));
+
+    expect(((await screen.findByLabelText(/title/i)) as HTMLInputElement).value).toBe("");
+    expect((await loadDraft())?.derivedFromAlbumId ?? null).toBeNull();
   });
 });

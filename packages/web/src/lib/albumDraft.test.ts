@@ -1,10 +1,13 @@
+import type { AlbumDetail } from "@sticker-collector/shared";
 import { ALBUM_MAX_STICKERS, createAlbumSchema } from "@sticker-collector/shared";
 import { describe, expect, it } from "vitest";
 import {
   type AlbumDraft,
   type DraftAction,
   draftCost,
+  draftFromAlbum,
   initialDraft,
+  isPristine,
   isSealable,
   reduce,
   tierCounts,
@@ -210,5 +213,124 @@ describe("replacing the whole draft", () => {
   it("restores a draft loaded from disk", () => {
     const restored = sealable();
     expect(reduce(initialDraft, { type: "replace", draft: restored })).toEqual(restored);
+  });
+});
+
+/** A finished album, as the detail endpoint returns it. */
+const source = (): AlbumDetail => ({
+  album: {
+    id: "alb-source",
+    title: "Kitchen heroes",
+    description: "Everyone who feeds me",
+    coverKey: key(999),
+    derivedFromAlbumId: null,
+    unlockPrice: 750,
+    randomPrice: 41,
+    prices: { common: 11, rare: 22, epic: 33, legendary: 44 },
+    odds: { common: 70, rare: 20, epic: 10, legendary: 0 },
+    unlockedAt: "2026-07-02T00:00:00Z",
+    completedAt: "2026-07-20T00:00:00Z",
+    sealedAt: "2026-07-01T00:00:00Z",
+    createdAt: "2026-07-01T00:00:00Z",
+    editionNumber: 2,
+    owned: 2,
+    total: 2,
+    percent: 100,
+    status: "completed",
+    remaining: 0,
+    almostThere: false,
+    affordable: false,
+  },
+  stickers: [
+    {
+      id: "stk-b",
+      albumId: "alb-source",
+      imageKey: key(2),
+      tier: "legendary",
+      slotIndex: 1,
+      quantity: 4,
+    },
+    {
+      id: "stk-a",
+      albumId: "alb-source",
+      imageKey: key(1),
+      tier: "common",
+      slotIndex: 0,
+      quantity: 1,
+    },
+  ],
+});
+
+describe("a new edition of an existing album", () => {
+  it("inherits the artwork by key, so nothing is re-imported", () => {
+    const draft = draftFromAlbum(source());
+    expect(draft.coverKey).toBe(key(999));
+    expect(draft.stickers.map((s) => s.imageKey)).toEqual([key(1), key(2)]);
+  });
+
+  it("carries no ownership — a draft cannot even express it", () => {
+    // The source holds four copies of the legendary. The new edition's sticker
+    // is `{imageKey, tier}` and nothing else, which is what makes "every sticker
+    // starts locked" structural rather than a promise.
+    const draft = draftFromAlbum(source());
+    expect(draft.stickers).toEqual([
+      { imageKey: key(1), tier: "common" },
+      { imageKey: key(2), tier: "legendary" },
+    ]);
+  });
+
+  it("inherits the title, description and every price as a starting point", () => {
+    const draft = draftFromAlbum(source());
+    expect(draft.title).toBe("Kitchen heroes");
+    expect(draft.description).toBe("Everyone who feeds me");
+    expect(draft.unlockPrice).toBe(750);
+    expect(draft.randomPrice).toBe(41);
+    expect(draft.prices).toEqual({ common: 11, rare: 22, epic: 33, legendary: 44 });
+    expect(draft.odds).toEqual({ common: 70, rare: 20, epic: 10, legendary: 0 });
+  });
+
+  it("remembers which album it came from", () => {
+    expect(draftFromAlbum(source()).derivedFromAlbumId).toBe("alb-source");
+    expect(toPayload(draftFromAlbum(source())).derivedFromAlbumId).toBe("alb-source");
+  });
+
+  it("does not link an album built from scratch to anything", () => {
+    expect(toPayload(sealable()).derivedFromAlbumId).toBeNull();
+  });
+
+  it("keeps the inherited prices editable", () => {
+    // They arrive pre-filled and may be changed (§Creating from existing 2).
+    const draft = reduce(draftFromAlbum(source()), {
+      type: "price",
+      field: "unlockPrice",
+      value: 10,
+    });
+    expect(draft.unlockPrice).toBe(10);
+    expect(draft.derivedFromAlbumId).toBe("alb-source");
+  });
+
+  it("keeps the inherited sticker set editable", () => {
+    const draft = reduce(draftFromAlbum(source()), { type: "removeSticker", imageKey: key(1) });
+    expect(draft.stickers).toEqual([{ imageKey: key(2), tier: "legendary" }]);
+  });
+
+  it("produces a body the real request schema accepts", () => {
+    expect(createAlbumSchema.safeParse(toPayload(draftFromAlbum(source()))).success).toBe(true);
+  });
+});
+
+describe("the first question", () => {
+  it("is worth asking only before anything is decided", () => {
+    expect(isPristine(initialDraft)).toBe(true);
+    expect(isPristine(sealable())).toBe(false);
+  });
+
+  it("is answered by copying an album", () => {
+    expect(isPristine(draftFromAlbum(source()))).toBe(false);
+  });
+
+  it("is answered by a single typed character", () => {
+    const started = reduce(initialDraft, { type: "field", field: "title", value: "K" });
+    expect(isPristine(started)).toBe(false);
   });
 });

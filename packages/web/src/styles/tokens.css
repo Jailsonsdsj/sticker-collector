@@ -197,6 +197,19 @@
   --color-rarity-legendary-deep: #7a5300;
   --color-rarity-legendary-ring: #ffe89a;
 
+  /* ── Colour · rarity frames, for print ─────────────────────────────────
+     The screen frame is a gradient; a PDF frame is one flat ink. These are
+     the solid equivalents, read by lib/pdf.ts at export time so no colour
+     literal ever lives in TypeScript. */
+  --print-rarity-common: #6b7385;
+  --print-rarity-rare: #1f7fd4;
+  --print-rarity-epic: #8b30d8;
+  --print-rarity-legendary: #b8860b;
+
+  /* Ink for the printed page: the title, and the quieter footer and guides. */
+  --print-ink: #1a1a1f;
+  --print-muted: #73737f;
+
   /* ── Colour · reports heatmap (5 steps, empty → full) ────────────────── */
   --color-heat-0: rgba(255, 255, 255, 0.05);
   --color-heat-1: rgba(182, 255, 61, 0.28);

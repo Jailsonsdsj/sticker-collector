@@ -109,10 +109,10 @@ Ship this whole phase before touching albums. At the end of it you can use the a
 > addressing is what makes that safe — re-adding an image costs zero bytes and
 > the key never changes. The cost is orphaned R2 objects when a wizard is
 > abandoned (`TD-17`).
-| **A-08** | Web: album detail — sticker grid, rarity frames on locked slots, duplicate quantity badge, missing-only toggle | M | sonnet | `prd/05-stickers.md`, A-05 output | Legendary slot identifiable while still locked. **Replace `routes/AlbumDetail.tsx`**, the placeholder A-06 added so its cards had somewhere to lead; `useAlbum(id)` and `GET /api/albums/:id` already return every slot including unowned ones (`quantity: 0`) |
-| **A-09** | Web: the reveal — B&W floods to colour, held longer for higher tiers; inline "sell for X" on a duplicate | M | sonnet | `prd/05-stickers.md` §Enhancements | Duplicate ends in a choice, not a dead end |
-| **A-10** | Web: create-from-existing (inherits images by key, no re-upload, no ownership carried) | M | sonnet | `prd/04-albums.md` §Creating from existing | New album arrives locked; every sticker locked; source album untouched; **zero bytes uploaded** |
-| **A-11** | Web: delete album — warning + type-the-title confirmation (trimmed, case-insensitive) | S | sonnet | `prd/04-albums.md` §Deleting | Wrong title keeps the button disabled |
+| **A-08** | Web: album detail — sticker grid, rarity frames on locked slots, duplicate quantity badge, missing-only toggle | M | sonnet | `prd/05-stickers.md`, A-05 output | ✅ The frame is the bezel **behind** the art — gradient plus `--frame-pad-*` widening 4→7px — so an *unowned* legendary is distinguishable from an unowned common with no art loaded at all, which is the criterion. Direct buy is priced by the slot's own tier and is absent inside a locked album; browsing one is still allowed. Duplicates count only past the first copy. **No pull button here** — A-09 owns the reveal *and* the inline sell, and a pull without the sell is the dead end §Enhancements warns about |
+| **A-09** | Web: the reveal — B&W floods to colour, held longer for higher tiers; inline "sell for X" on a duplicate. **Also adds the random-pull button to the album detail**, deliberately deferred from A-08 so a pull never lands without its sell affordance | M | sonnet | `prd/05-stickers.md` §Enhancements, A-04b output, A-08 output | ✅ A duplicate reveal offers **Sell for N** beside **Keep it**; a first copy offers neither, because the last copy is the collection. The pull button uses `canPullRandom` — the same function the Worker uses — so it refuses a roll the API would 409, including the case that is *not* completion: unowned stickers stranded in a zero-odds tier. **The sale is also reachable from the grid** (`Sell ×N`), or `duplicate_sale` would exist for four seconds per pull and spares would pile up forever. The per-tier hold is pinned to `--duration-shake-*` **by a test that reads `tokens.css`**, since a JS timer cannot read a custom property and a hand-copied constant drifts |
+| **A-10** | Web: create-from-existing (inherits images by key, no re-upload, no ownership carried) | M | sonnet | `prd/04-albums.md` §Creating from existing | ✅ **Zero bytes uploaded** — asserted directly: seeding and sealing an edition makes no request to `/api/images` and never calls `uploadImage`. Ownership cannot be carried because a draft has no way to express it; a seeded sticker is `{imageKey, tier}` and nothing else. §Creating 2's **from-scratch/from-existing chooser landed here** (A-07b built the steps without it); it is shown only while the draft is pristine, so returning to half-built work never asks again |
+| **A-11** | **API + Web:** delete album — soft delete, warning + type-the-title confirmation (trimmed, case-insensitive) | M | sonnet | `prd/04-albums.md` §Deleting | ✅ **The row said "Web" and "S", and both were wrong: no delete endpoint existed.** A hard delete is also impossible — `ledger.album_id` is a foreign key, the spend rows must survive (nothing is refunded), and repointing them is blocked by `ledger_no_update`. So the album row outlives the album and every read filters through one shared `liveAlbums` predicate; verified end-to-end that detail, unlock, buy and pull all 404 afterwards while the balance and all three ledger rows are untouched. The confirm stays disabled until the title matches, trimmed and case-insensitive |
 
 > **Spec resolution, decided in A-01 — odds are non-increasing, not strictly decreasing.**
 > `prd/04-albums.md` §Creating 8 says drop odds "must decrease from common to
@@ -250,11 +250,11 @@ Keep this table updated — it is the first thing a new session reads, and it co
 | 0 Foundation | 10 | 10 | ✅ complete — deployed & healthy at sticker-collector.jailson-junior36.workers.dev |
 | 1 Design system | 6 | 6 | ✅ complete — read `docs/design-system.md`, not `docs/design/`. Live at `/dev/ui` |
 | 2 Earning loop | 17 | 17 | ✅ complete — the earning loop runs end to end: create, schedule, complete with undo, edit, bulk act |
-| 3 Spending loop | 9 | 13 | 🔄 Albums can be authored, sealed and unlocked end to end; A-08 (album detail) is next |
+| 3 Spending loop | 13 | 13 | ✅ complete — author, seal, unlock, buy, pull, sell and delete all work end to end |
 | 4 Export | 0 | 2 | not started |
 | 5 Reports | 0 | 4 | not started |
 | 6 Hardening | 0 | 6 | not started |
-| **MVP total** | **42** | **58** | |
+| **MVP total** | **46** | **58** | |
 
 Post-MVP is tracked separately and deliberately excluded from the total: 5 auth
 follow-ups (`A-W1`–`A-W5`) and 18 technical-debt items (`TD-01`–`TD-18`). See

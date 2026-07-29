@@ -1,21 +1,27 @@
+import type { AlbumDetail } from "@sticker-collector/shared";
 import { useEffect, useReducer, useState } from "react";
 import { useNavigate } from "react-router";
 import { AppHeader } from "../components/layout";
-import { Button, Tabs } from "../components/ui";
+import { Button, Skeleton, Tabs } from "../components/ui";
 import { DetailsStep } from "../components/wizard/DetailsStep";
 import { EconomyStep } from "../components/wizard/EconomyStep";
 import { SealStep } from "../components/wizard/SealStep";
+import { SourceStep } from "../components/wizard/SourceStep";
 import { StickersStep } from "../components/wizard/StickersStep";
 import {
   type AlbumDraft,
+  draftFromAlbum,
   initialDraft,
+  isPristine,
   isSealable,
   reduce,
   toPayload,
   validate,
 } from "../lib/albumDraft";
+import { api } from "../lib/api";
 import { clearDraft, loadDraft, saveDraft } from "../lib/draftStore";
 import { useCreateAlbum } from "../lib/mutations";
+import { useAlbums } from "../lib/queries";
 
 /**
  * Creating an album, from scratch.
@@ -40,15 +46,24 @@ export function AlbumNew() {
   const [step, setStep] = useState<Step>("details");
   const [restored, setRestored] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  // Whether the first question is still open. Decided once, when the stored
+  // draft is read, and then only by the user answering it.
+  const [choosing, setChoosing] = useState(true);
+  const [seeding, setSeeding] = useState(false);
   const create = useCreateAlbum();
+  const albums = useAlbums({ sort: "created" });
 
   // A draft left behind by an earlier visit is the whole arrangement — restore
   // it before the user can type over it.
   useEffect(() => {
     let cancelled = false;
     void loadDraft().then((stored) => {
-      if (!cancelled && stored) dispatch({ type: "replace", draft: stored });
-      if (!cancelled) setRestored(true);
+      if (cancelled) return;
+      if (stored) dispatch({ type: "replace", draft: stored });
+      // A draft that survived a refresh has already answered the first
+      // question; asking again would look like losing the work.
+      setChoosing(!stored || isPristine(stored));
+      setRestored(true);
     });
     return () => {
       cancelled = true;
@@ -80,6 +95,21 @@ export function AlbumNew() {
 
   const stepProps = { draft: draft as AlbumDraft, problems, dispatch };
 
+  /** Seeds the whole draft from an album that already exists. Uploads nothing. */
+  const copyFrom = async (albumId: string) => {
+    setSeeding(true);
+    setFailure(null);
+    try {
+      const source = await api<AlbumDetail>(`/api/albums/${albumId}`);
+      dispatch({ type: "replace", draft: draftFromAlbum(source) });
+      setChoosing(false);
+    } catch (cause) {
+      setFailure(cause instanceof Error ? cause.message : "That album could not be copied.");
+    } finally {
+      setSeeding(false);
+    }
+  };
+
   return (
     <>
       <AppHeader
@@ -91,12 +121,35 @@ export function AlbumNew() {
         }
       />
 
-      <Tabs items={STEPS} value={step} onChange={setStep} label="Creation step" className="mb-5" />
+      {/* Nothing is decided until the stored draft has been read. Rendering the
+          steps first would flash the form and then replace it with the chooser
+          — and a first tap landing in that gap goes nowhere. */}
+      {!restored ? (
+        <Skeleton variant="block" />
+      ) : choosing ? (
+        <SourceStep
+          albums={albums.data ?? []}
+          loading={albums.isLoading}
+          seeding={seeding}
+          onScratch={() => setChoosing(false)}
+          onCopy={(albumId) => void copyFrom(albumId)}
+        />
+      ) : (
+        <>
+          <Tabs
+            items={STEPS}
+            value={step}
+            onChange={setStep}
+            label="Creation step"
+            className="mb-5"
+          />
 
-      {step === "details" && <DetailsStep {...stepProps} />}
-      {step === "stickers" && <StickersStep {...stepProps} />}
-      {step === "economy" && <EconomyStep {...stepProps} />}
-      {step === "seal" && <SealStep {...stepProps} />}
+          {step === "details" && <DetailsStep {...stepProps} />}
+          {step === "stickers" && <StickersStep {...stepProps} />}
+          {step === "economy" && <EconomyStep {...stepProps} />}
+          {step === "seal" && <SealStep {...stepProps} />}
+        </>
+      )}
 
       {failure && (
         <p role="alert" className="mt-4 font-body text-sm text-magenta">
@@ -105,7 +158,7 @@ export function AlbumNew() {
       )}
 
       <div className="mt-6 flex justify-end gap-2">
-        {step !== "seal" ? (
+        {choosing ? null : step !== "seal" ? (
           <Button tone="cyan" onClick={() => setStep(nextStep(step))}>
             Next
           </Button>

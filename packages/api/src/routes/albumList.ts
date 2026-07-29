@@ -15,7 +15,7 @@ import { db } from "../db/client";
 import { album, holding, sticker } from "../db/schema";
 import { balance } from "../lib/ledger";
 import { requireAuth } from "../middleware/require-auth";
-import { toAlbum } from "./albums";
+import { liveAlbums, toAlbum } from "./albums";
 
 export const albumListRoutes = new Hono<{ Bindings: Env; Variables: { userId: string } }>();
 
@@ -51,7 +51,7 @@ albumListRoutes.get("/", async (c) => {
   const rows = await db(c.env)
     .select({ album, total: totalSlots, owned: ownedSlots })
     .from(album)
-    .where(eq(album.userId, userId));
+    .where(liveAlbums(userId));
 
   // The balance is read once for the whole listing, not once per album — the
   // affordability cue answers "what can I afford right now" without arithmetic
@@ -83,7 +83,7 @@ albumListRoutes.get("/:id", async (c) => {
   const row = await database
     .select({ album, total: totalSlots, owned: ownedSlots })
     .from(album)
-    .where(and(eq(album.id, albumId), eq(album.userId, userId)))
+    .where(and(eq(album.id, albumId), liveAlbums(userId)))
     .get();
   if (!row) return c.json({ error: "album not found" }, 404);
 
