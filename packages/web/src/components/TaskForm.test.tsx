@@ -1,0 +1,376 @@
+import type { Epic, Task } from "@sticker-collector/shared";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
+import { TaskForm } from "./TaskForm";
+
+/**
+ * The wiring, not the reducer — `lib/taskForm.test.ts` covers the rules. What
+ * this file asserts is that the controls are connected to them, and that the
+ * done-when holds: from an epic the epic arrives filled in, from the main
+ * button nothing does.
+ */
+
+const EPICS: Epic[] = [
+  {
+    id: "e1",
+    title: "Sticker App",
+    accent: "epic-1",
+    coinGoalAlbumId: null,
+    createdAt: "2026-07-01T00:00:00Z",
+    oneOffTotal: 0,
+    oneOffDone: 0,
+  },
+  {
+    id: "e2",
+    title: "Health",
+    accent: "epic-2",
+    coinGoalAlbumId: null,
+    createdAt: "2026-07-01T00:00:00Z",
+    oneOffTotal: 0,
+    oneOffDone: 0,
+  },
+];
+
+function setup(props: Partial<Parameters<typeof TaskForm>[0]> = {}) {
+  const onSubmit = vi.fn().mockResolvedValue({ id: "t1" });
+  const onClose = vi.fn();
+  render(<TaskForm open onClose={onClose} onSubmit={onSubmit} epics={EPICS} {...props} />);
+  return {
+    onSubmit,
+    onClose,
+    save: () => screen.getByRole("button", { name: "Save" }),
+    field: (name: string | RegExp) => screen.getByLabelText(name),
+    chip: (name: string | RegExp) => screen.getByRole("button", { name }),
+  };
+}
+
+/** The minimum a routine needs before Save turns on. */
+async function fillValidRoutine(u: ReturnType<typeof userEvent.setup>) {
+  await u.type(screen.getByLabelText(/title/i), "Stretch");
+  await u.type(screen.getByLabelText(/^effort/i), "15");
+  await u.click(screen.getByRole("button", { name: "Mon" }));
+}
+
+describe("the done-when — epic pre-fill", () => {
+  it("arrives with the epic selected when opened from one", () => {
+    setup({ defaultEpicId: "e2" });
+    expect(screen.getByRole("button", { name: "Health" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "None" })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("submits that epic without the user touching it", async () => {
+    const u = userEvent.setup();
+    const { onSubmit, save } = setup({ defaultEpicId: "e2" });
+    await fillValidRoutine(u);
+    await u.click(save());
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ epicId: "e2" }));
+  });
+
+  it("arrives entirely blank when opened from the main button", async () => {
+    const u = userEvent.setup();
+    const { onSubmit, save } = setup();
+
+    expect(screen.getByLabelText(/title/i)).toHaveValue("");
+    expect(screen.getByLabelText(/description/i)).toHaveValue("");
+    expect(screen.getByLabelText(/url/i)).toHaveValue("");
+    expect(screen.getByLabelText(/^effort/i)).toHaveValue("");
+    expect(screen.getByLabelText(/reward/i)).toHaveValue("");
+    expect(screen.getByRole("button", { name: "None" })).toHaveAttribute("aria-pressed", "true");
+    for (const day of ["Mon", "Sat", "Sun"]) {
+      expect(screen.getByRole("button", { name: day })).toHaveAttribute("aria-pressed", "false");
+    }
+
+    await fillValidRoutine(u);
+    await u.click(save());
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ epicId: null }));
+  });
+});
+
+describe("effort and reward", () => {
+  it("mirrors typed effort into reward", async () => {
+    const u = userEvent.setup();
+    setup();
+    await u.type(screen.getByLabelText(/^effort/i), "45");
+    expect(screen.getByLabelText(/reward/i)).toHaveValue("45");
+  });
+
+  it("stops mirroring once reward is edited", async () => {
+    const u = userEvent.setup();
+    setup();
+    await u.type(screen.getByLabelText(/^effort/i), "45");
+    await u.clear(screen.getByLabelText(/reward/i));
+    await u.type(screen.getByLabelText(/reward/i), "100");
+    await u.type(screen.getByLabelText(/^effort/i), "0"); // now 450
+
+    expect(screen.getByLabelText(/reward/i)).toHaveValue("100");
+    expect(screen.getByText(/overridden/i)).toBeInTheDocument();
+  });
+
+  it("sets effort from a preset chip", async () => {
+    const u = userEvent.setup();
+    setup();
+    await u.click(screen.getByRole("button", { name: "60m" }));
+    expect(screen.getByLabelText(/^effort/i)).toHaveValue("60");
+    expect(screen.getByLabelText(/reward/i)).toHaveValue("60");
+  });
+});
+
+describe("the type switch changes which schedule is asked for", () => {
+  it("shows the weekday picker for a routine and the due date for a one-off", async () => {
+    const u = userEvent.setup();
+    setup();
+
+    expect(screen.getByRole("button", { name: "Mon" })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/due date/i)).not.toBeInTheDocument();
+
+    await u.click(screen.getByRole("tab", { name: "· One-off" }));
+
+    expect(screen.queryByRole("button", { name: "Mon" })).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/due date/i)).toBeInTheDocument();
+  });
+
+  it("sends a mask for a routine and no due date", async () => {
+    const u = userEvent.setup();
+    const { onSubmit, save } = setup();
+    await fillValidRoutine(u);
+    await u.click(screen.getByRole("button", { name: "Tue" }));
+    await u.click(save());
+
+    const payload = onSubmit.mock.calls[0]?.[0];
+    expect(payload).toMatchObject({ type: "routine", weekdays: 0b0000011 }); // Mon + Tue
+    expect(payload).not.toHaveProperty("dueAt");
+  });
+
+  it("sends a due date for a one-off and no mask", async () => {
+    const u = userEvent.setup();
+    const { onSubmit, save } = setup();
+    await u.type(screen.getByLabelText(/title/i), "Passport");
+    await u.type(screen.getByLabelText(/^effort/i), "60");
+    await u.click(screen.getByRole("tab", { name: "· One-off" }));
+    await u.click(save());
+
+    const payload = onSubmit.mock.calls[0]?.[0];
+    expect(payload).toMatchObject({ type: "oneoff" });
+    expect(payload).not.toHaveProperty("weekdays");
+  });
+});
+
+describe("saving", () => {
+  it("keeps Save off until the form is valid, and says why", async () => {
+    const u = userEvent.setup();
+    const { save } = setup();
+    expect(save()).toBeDisabled();
+    expect(screen.getByRole("alert")).toHaveTextContent(/title/i);
+
+    await u.type(screen.getByLabelText(/title/i), "Stretch");
+    expect(screen.getByRole("alert")).toHaveTextContent(/effort/i);
+
+    await u.type(screen.getByLabelText(/^effort/i), "15");
+    expect(screen.getByRole("alert")).toHaveTextContent(/weekday/i); // routine needs a day
+    expect(save()).toBeDisabled();
+
+    await u.click(screen.getByRole("button", { name: "Mon" }));
+    expect(save()).toBeEnabled();
+  });
+
+  it("closes on success", async () => {
+    const u = userEvent.setup();
+    const { onClose, save } = setup();
+    await fillValidRoutine(u);
+    await u.click(save());
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("stays open and reports the failure, so nothing typed is lost", async () => {
+    const u = userEvent.setup();
+    const onSubmit = vi.fn().mockRejectedValue(new Error("offline"));
+    const { onClose, save } = setup({ onSubmit });
+
+    await fillValidRoutine(u);
+    await u.click(save());
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toHaveTextContent(/could not save/i);
+    expect(screen.getByLabelText(/title/i)).toHaveValue("Stretch");
+  });
+
+  it("cancels without submitting", async () => {
+    const u = userEvent.setup();
+    const { onSubmit, onClose } = setup();
+    await fillValidRoutine(u);
+    await u.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(onClose).toHaveBeenCalled();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+});
+
+const TASK: Task = {
+  id: "t1",
+  epicId: "e1",
+  title: "Stretch",
+  description: "In the morning",
+  url: null,
+  effortMinutes: 15,
+  rewardCoins: 15,
+  priority: "medium",
+  type: "routine",
+  weekdays: 0b0000001, // Monday
+  startsOn: null,
+  endsOn: null,
+  dueAt: null,
+  createdAt: "2026-07-01T00:00:00Z",
+  deletedAt: null,
+  lastCompletedOn: null,
+};
+
+function setupEdit(task: Task = TASK, extra: Partial<Parameters<typeof TaskForm>[0]> = {}) {
+  const onUpdate = vi.fn().mockResolvedValue({});
+  const onDelete = vi.fn().mockResolvedValue({});
+  const onClose = vi.fn();
+  render(
+    <TaskForm
+      open
+      task={task}
+      onClose={onClose}
+      onSubmit={vi.fn()}
+      onUpdate={onUpdate}
+      onDelete={onDelete}
+      epics={EPICS}
+      {...extra}
+    />,
+  );
+  return { onUpdate, onDelete, onClose, user: userEvent.setup() };
+}
+
+describe("editing — the form arrives filled in", () => {
+  it("seeds every field from the task", () => {
+    setupEdit();
+    expect(screen.getByLabelText(/title/i)).toHaveValue("Stretch");
+    expect(screen.getByLabelText(/description/i)).toHaveValue("In the morning");
+    expect(screen.getByLabelText(/^effort/i)).toHaveValue("15");
+    expect(screen.getByLabelText(/reward/i)).toHaveValue("15");
+    expect(screen.getByRole("button", { name: "Mon" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Sticker App" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  it("says so in the header", () => {
+    setupEdit();
+    expect(screen.getByText("Edit task")).toBeInTheDocument();
+  });
+});
+
+describe("editing — type is fixed at creation", () => {
+  it("locks the switch and says why", () => {
+    setupEdit();
+    expect(screen.getByRole("tab", { name: /routine/i })).toBeDisabled();
+    expect(screen.getByRole("tab", { name: /one-off/i })).toBeDisabled();
+    expect(screen.getByText(/fixed at creation/i)).toBeInTheDocument();
+  });
+
+  it("leaves it switchable when creating", () => {
+    render(<TaskForm open onClose={vi.fn()} onSubmit={vi.fn()} epics={EPICS} />);
+    expect(screen.getByRole("tab", { name: /one-off/i })).toBeEnabled();
+  });
+});
+
+describe("editing — the patch is a diff", () => {
+  it("keeps Save off until something actually changes", async () => {
+    const u = userEvent.setup();
+    setupEdit();
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+
+    await u.type(screen.getByLabelText(/title/i), "!");
+    expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+  });
+
+  it("sends only the field that changed", async () => {
+    const { onUpdate, user } = setupEdit();
+    await user.clear(screen.getByLabelText(/title/i));
+    await user.type(screen.getByLabelText(/title/i), "Stretch more");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onUpdate).toHaveBeenCalledExactlyOnceWith({ title: "Stretch more" });
+  });
+
+  it("never sends type, even after the state has one", async () => {
+    const { onUpdate, user } = setupEdit();
+    await user.click(screen.getByRole("button", { name: "Tue" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    const patch = onUpdate.mock.calls[0]?.[0];
+    expect(patch).toEqual({ weekdays: 0b0000011 }); // Mon + Tue
+    expect(patch).not.toHaveProperty("type");
+    expect(patch).not.toHaveProperty("dueAt");
+  });
+
+  it("sends a one-off's due date and never a mask", async () => {
+    const { onUpdate, user } = setupEdit({
+      ...TASK,
+      type: "oneoff",
+      weekdays: null,
+      dueAt: null,
+    });
+    await user.type(screen.getByLabelText(/due date/i), "2026-08-05");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    const patch = onUpdate.mock.calls[0]?.[0];
+    expect(patch?.dueAt).toBeTypeOf("string");
+    expect(patch).not.toHaveProperty("weekdays");
+  });
+
+  it("stays open and keeps the edit when saving fails", async () => {
+    const onUpdate = vi.fn().mockRejectedValue(new Error("offline"));
+    const { onClose, user } = setupEdit(TASK, { onUpdate });
+
+    await user.type(screen.getByLabelText(/title/i), "!");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toHaveTextContent(/could not save/i);
+    expect(screen.getByLabelText(/title/i)).toHaveValue("Stretch!");
+  });
+});
+
+describe("editing — delete", () => {
+  it("asks before deleting", async () => {
+    const { onDelete, user } = setupEdit();
+    await user.click(screen.getByRole("button", { name: /delete task/i }));
+
+    expect(onDelete).not.toHaveBeenCalled();
+    expect(screen.getByText(/delete this task/i)).toBeInTheDocument();
+  });
+
+  it("says the coins already earned are kept", async () => {
+    const { user } = setupEdit();
+    await user.click(screen.getByRole("button", { name: /delete task/i }));
+    expect(screen.getByText(/coins it already earned are kept/i)).toBeInTheDocument();
+  });
+
+  it("deletes once confirmed, and closes", async () => {
+    const { onDelete, onClose, user } = setupEdit();
+    await user.click(screen.getByRole("button", { name: /delete task/i }));
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+
+    expect(onDelete).toHaveBeenCalledOnce();
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("backs out without deleting", async () => {
+    const { onDelete, user } = setupEdit();
+    await user.click(screen.getByRole("button", { name: /delete task/i }));
+    await user.click(screen.getByRole("button", { name: /keep it/i }));
+
+    expect(onDelete).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /delete task/i })).toBeInTheDocument();
+  });
+
+  it("offers no delete while creating", () => {
+    render(<TaskForm open onClose={vi.fn()} onSubmit={vi.fn()} epics={EPICS} />);
+    expect(screen.queryByRole("button", { name: /delete task/i })).not.toBeInTheDocument();
+  });
+});

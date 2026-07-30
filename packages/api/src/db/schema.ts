@@ -8,6 +8,7 @@ import {
   sqliteTable,
   text,
   unique,
+  uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 
 // one row, effectively; user_id exists so a second person is a migration, not a rewrite.
@@ -47,6 +48,11 @@ export const album = sqliteTable(
     completedAt: text("completed_at"),
     sealedAt: text("sealed_at").notNull(),
     createdAt: text("created_at").notNull(),
+    // Soft, and not by preference: `ledger.album_id` is a foreign key and the
+    // coins spent inside a deleted album must stay spent, so those rows have to
+    // survive. Nulling their columns first is blocked by `ledger_no_update`.
+    // Removing the row is therefore impossible without breaking an invariant.
+    deletedAt: text("deleted_at"),
     // makes the edition chain readable without recursion (architecture.md §4.5).
     editionNumber: integer("edition_number").notNull().default(1),
   },
@@ -160,7 +166,11 @@ export const holding = sqliteTable(
   },
   (table) => [
     check("holding_quantity_min_1", sql`${table.quantity} >= 1`),
-    index("holding_sticker_idx").on(table.stickerId),
+    // UNIQUE, not a plain index. `ON CONFLICT(sticker_id)` needs a uniqueness
+    // constraint to compile at all, and without it a second pull of the same
+    // sticker writes a second row instead of incrementing quantity — the
+    // duplicate count would then be silently wrong.
+    uniqueIndex("holding_sticker_idx").on(table.stickerId),
   ],
 );
 

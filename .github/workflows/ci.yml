@@ -51,3 +51,53 @@ jobs:
       # Bundles + validates the Worker and wrangler.jsonc without deploying. Needs the
       # web build above for the assets binding; needs no authentication.
       - run: npx wrangler deploy --dry-run
+
+  # A separate job, not extra steps on `ci`: the browser download and the
+  # wrangler boot are minutes that the fast feedback (lint, types, unit tests)
+  # should not wait behind. They fail independently and report independently.
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Only chromium. The app is an installed PWA on one device, not a
+      # cross-browser matrix, and every extra engine is download time on every PR.
+      - run: pnpm exec playwright install --with-deps chromium
+
+      # `wrangler dev` reads .dev.vars, which is gitignored — so it exists on every
+      # developer machine and on none of the runners. Its absence surfaced as a
+      # 500 from inside hono's JWT signer, nowhere near its cause. The unit tests
+      # bind the same stand-in value in packages/api/vitest.config.ts; this is the
+      # e2e equivalent, and the value is a throwaway, not a secret.
+      - run: cp .dev.vars.example .dev.vars
+
+      # Playwright transpiles rather than typechecks, so a broken e2e type would
+      # otherwise surface as a runtime failure with a worse error.
+      - run: pnpm typecheck:e2e
+
+      # Seeds local D1 + R2, builds the SPA and boots wrangler — all driven by
+      # the webServer block in e2e/playwright.config.ts, so this is the same
+      # command a developer runs.
+      - run: pnpm e2e
+        env:
+          CLOUDFLARE_TELEMETRY_DISABLED: "1"
+
+      # Only on failure: the trace and screenshots are the whole point of having
+      # run a browser, and uploading them on green is noise.
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7

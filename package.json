@@ -11,15 +11,21 @@
     "build": "pnpm -r --filter=./packages/web run build",
     "test": "vitest run",
     "typecheck": "tsc -b && tsc -b packages/api/test/tsconfig.json",
+    "typecheck:e2e": "tsc --noEmit -p e2e/tsconfig.json",
     "lint": "biome ci .",
     "lint:tokens": "bash scripts/check-tokens.sh",
     "types": "wrangler types packages/api/src/worker-configuration.d.ts",
     "db:generate": "pnpm --filter @sticker-collector/api exec drizzle-kit generate",
-    "seed": "bash scripts/seed.sh"
+    "seed": "bash scripts/seed.sh",
+    "e2e": "playwright test --config e2e/playwright.config.ts",
+    "e2e:ui": "playwright test --config e2e/playwright.config.ts --ui"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.5",
+    "@playwright/test": "^1.62.0",
     "@types/node": "^24.13.3",
+    "jpeg-js": "^0.4.4",
+    "pdf-lib": "^1.17.1",
     "typescript": "^5.9.3",
     "vitest": "^4.1.10",
     "wrangler": "^4.114.0"

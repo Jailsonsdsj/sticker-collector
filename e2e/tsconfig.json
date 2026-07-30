@@ -1,0 +1,22 @@
+{
+  // The e2e suite compiles on its own.
+  //
+  // Playwright reads the nearest tsconfig to its config file and then walks
+  // every `references` path, resolving only the file form — the repo root uses
+  // the directory form throughout, which is equally valid TypeScript and is
+  // what `tsc -b` expects. Rather than reshape the build to suit the runner,
+  // the runner gets its own config next to its own tests, with no references
+  // to walk. This is why playwright.config.ts lives in this folder.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM"],
+    "strict": true,
+    "noEmit": true,
+    "types": ["node"],
+    "esModuleInterop": true,
+    "skipLibCheck": true
+  },
+  "include": ["**/*.ts"]
+}

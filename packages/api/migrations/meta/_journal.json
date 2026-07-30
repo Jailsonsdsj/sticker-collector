@@ -15,6 +15,20 @@
       "when": 1784847244588,
       "tag": "0002_triggers",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1785287578335,
+      "tag": "0003_windy_paper_doll",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1785352584416,
+      "tag": "0004_skinny_odin",
+      "breakpoints": true
     }
   ]
 }

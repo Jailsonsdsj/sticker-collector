@@ -16,6 +16,9 @@ export default defineConfig(async () => {
           compatibilityDate: "2026-07-01",
           compatibilityFlags: ["nodejs_compat"],
           d1Databases: ["DB"],
+          // A real (in-memory) R2 for the image pipeline, so "no second object"
+          // is asserted by listing the bucket rather than by trusting a mock.
+          r2Buckets: ["IMAGES"],
           // TEST_MIGRATIONS is applied by the setup file before any test runs;
           // TOKEN_SIGNING_KEY stands in for the production Worker secret.
           bindings: {
