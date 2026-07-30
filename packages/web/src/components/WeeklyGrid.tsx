@@ -89,6 +89,7 @@ function Row({
           <Checkbox
             key={WEEKDAYS[index]}
             size="sm"
+            fill
             className="w-full"
             checked={on}
             ring={index === todayIndex}

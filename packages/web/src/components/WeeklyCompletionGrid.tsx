@@ -126,6 +126,7 @@ function Row({
           <Checkbox
             key={date}
             size="sm"
+            fill
             className="w-full"
             muted={!runs}
             checked={runs && ticked}

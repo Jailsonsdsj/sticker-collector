@@ -27,6 +27,16 @@ export interface CheckboxProps
   muted?: boolean;
   /** Today's column in the weekly grid wears a cyan halo. */
   ring?: boolean;
+  /**
+   * Stretch the box to the label's width.
+   *
+   * The weekly grids render wide cells rather than squares, so they set this
+   * AND give the label a width. It used to be applied unconditionally, which
+   * silently broke every other use: `w-full` overrides the width half of
+   * `size-6`/`size-7`, and with no width on the label the percentage collapsed
+   * to the borders alone — a 4px-wide tap target on the home screen.
+   */
+  fill?: boolean;
   label?: string;
   className?: string;
   onChange?: (checked: boolean) => void;
@@ -37,6 +47,7 @@ export function Checkbox({
   size = "md",
   muted = false,
   ring = false,
+  fill = false,
   label,
   onChange,
   disabled,
@@ -46,7 +57,18 @@ export function Checkbox({
 }: CheckboxProps) {
   const inert = disabled || muted;
   return (
-    <label className={cx("inline-flex", inert ? "cursor-default" : "cursor-pointer", className)}>
+    <label
+      className={cx(
+        "inline-flex items-center justify-center",
+        // 44px minimum touch target, per Apple's guidance — the same rule the
+        // tab bar follows. The visible box stays 24/28px; the label around it is
+        // what the finger actually has to hit. Grid cells opt out: seven of them
+        // across a phone cannot each be 44px, and they are already wide.
+        !fill && "min-h-11 min-w-11",
+        inert ? "cursor-default" : "cursor-pointer",
+        className,
+      )}
+    >
       <input
         type="checkbox"
         className="peer sr-only"
@@ -62,7 +84,12 @@ export function Checkbox({
           ...(ring ? { boxShadow: "0 0 0 2px var(--color-ring-today)" } : {}),
           ...style,
         }}
-        className={cx(BASE, SIZE[size], muted ? MUTED : checked ? CHECKED : UNCHECKED, "w-full")}
+        className={cx(
+          BASE,
+          SIZE[size],
+          muted ? MUTED : checked ? CHECKED : UNCHECKED,
+          fill && "w-full",
+        )}
       >
         {muted ? "·" : checked ? "✓" : ""}
       </span>
