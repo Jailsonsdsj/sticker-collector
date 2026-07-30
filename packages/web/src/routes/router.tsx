@@ -1,5 +1,6 @@
 import { createBrowserRouter } from "react-router";
 import { AppShell } from "../components/layout";
+import { RouteCrash } from "../components/RouteCrash";
 import { DevUI } from "../dev/DevUI";
 import { AlbumDetail } from "./AlbumDetail";
 import { AlbumNew } from "./AlbumNew";
@@ -21,6 +22,12 @@ export const router = createBrowserRouter([
   {
     path: "/",
     element: <AppShell />,
+    // The router catches a route crash before any React boundary above it can,
+    // and its default fallback prints a stack trace at the user. Every top-level
+    // route gets ours instead. AppShell's own boundary still handles the tab
+    // screens — it is nested closer to the throw — so this one covers AppShell
+    // itself and anything the router does before a screen renders.
+    errorElement: <RouteCrash />,
     children: [
       { index: true, element: <Tasks /> },
       { path: "week", element: <Week /> },
@@ -34,6 +41,8 @@ export const router = createBrowserRouter([
       { path: "*", element: <NotFound /> },
     ],
   },
-  { path: "/login", element: <Login /> },
-  { path: "/dev/ui", element: <DevUI /> },
+  // Outside the shell, so with no errorElement these two had no fallback
+  // at all beyond the router's stack-trace page.
+  { path: "/login", element: <Login />, errorElement: <RouteCrash /> },
+  { path: "/dev/ui", element: <DevUI />, errorElement: <RouteCrash /> },
 ]);

@@ -7,7 +7,7 @@ import { ExportPanel } from "../components/ExportPanel";
 import { AppHeader, StickerGrid } from "../components/layout";
 import { RevealDialog } from "../components/RevealDialog";
 import { StickerSlot } from "../components/StickerSlot";
-import { Button, Chip, EmptyState, ProgressBar, Skeleton } from "../components/ui";
+import { Button, Chip, EmptyState, ErrorState, ProgressBar, Skeleton } from "../components/ui";
 import { ApiError } from "../lib/api";
 import { useBuySticker, useDeleteAlbum, usePullSticker, useSellDuplicate } from "../lib/mutations";
 import { useAlbum, useWallet } from "../lib/queries";
@@ -42,6 +42,21 @@ export function AlbumDetail() {
       <>
         <AppHeader title="Album" />
         <Skeleton variant="block" />
+      </>
+    );
+  }
+
+  // 404 is the one non-401 status with real meaning here, and it is the only
+  // one that earns the "deleted" copy below. A 500 or an offline read reaches
+  // the same `!album.data` state, and telling someone their album is gone on
+  // the strength of a dropped connection is the worst lie this app can tell.
+  const notFound = album.error instanceof ApiError && album.error.status === 404;
+
+  if (album.isError && !notFound) {
+    return (
+      <>
+        <AppHeader title="Album" />
+        <ErrorState error={album.error} onRetry={() => void album.refetch()} />
       </>
     );
   }

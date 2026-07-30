@@ -56,7 +56,7 @@ describe("images", () => {
     expect(statuses).toEqual([200]);
   });
 
-  it("do not fall through to the revalidating read rule", () => {
+  it("do not fall through to the network-first read rule", () => {
     // Matched first, and excluded there: otherwise every sticker would be
     // revalidated on every view for no benefit at all.
     const api = routes.find(
@@ -68,10 +68,31 @@ describe("images", () => {
 });
 
 describe("reads", () => {
-  it("render the last-seen copy and refresh behind it", () => {
+  it("go to the network first, falling back to the cache", () => {
     const route = routeFor("/api/tasks");
-    expect(route?.handler).toBe("StaleWhileRevalidate");
+    expect(route?.handler).toBe("NetworkFirst");
     expect((route?.options as { cacheName?: string })?.cacheName).toBe(CACHE_API);
+  });
+
+  it("are never answered from cache while the network is available", () => {
+    // Not a style preference. `StaleWhileRevalidate` here served the read that
+    // a mutation had just invalidated from the *pre-mutation* cache: buying an
+    // album's last sticker left the album showing as incomplete until the next
+    // navigation. The e2e journey caught it; this pins it.
+    for (const route of routes) {
+      if ((route.options as { cacheName?: string })?.cacheName !== CACHE_API) continue;
+      expect(route.handler).not.toBe("StaleWhileRevalidate");
+      expect(route.handler).not.toBe("CacheFirst");
+    }
+  });
+
+  it("give up on a slow network rather than hanging offline", () => {
+    // Without a timeout, "network first" on a dead connection means waiting for
+    // the browser's own timeout before the cached copy appears.
+    const route = routeFor("/api/tasks");
+    expect(
+      (route?.options as { networkTimeoutSeconds?: number })?.networkTimeoutSeconds,
+    ).toBeGreaterThan(0);
   });
 
   it("cover every read the app makes", () => {
@@ -83,7 +104,7 @@ describe("reads", () => {
       "/api/wallet",
       "/api/reports/momentum",
     ]) {
-      expect(routeFor(path)?.handler, path).toBe("StaleWhileRevalidate");
+      expect(routeFor(path)?.handler, path).toBe("NetworkFirst");
     }
   });
 });

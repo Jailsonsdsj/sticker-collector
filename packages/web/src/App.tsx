@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { RouterProvider } from "react-router";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ApiError } from "./lib/api";
 import { CompletionQueueProvider } from "./lib/completionQueue";
 import { useCompleteOccurrence } from "./lib/mutations";
@@ -31,12 +32,25 @@ function CompletionQueue({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * Two boundaries, not one.
+ *
+ * `AppShell` holds the inner one, which keeps the tab bar alive when a screen
+ * crashes. This outer one covers what sits *above* the router: the query client
+ * and the undo queue.
+ *
+ * It deliberately does **not** cover route crashes, and could not if it wanted
+ * to — React Router installs a default boundary on every route and catches
+ * those first. `RouteCrash`, wired as `errorElement`, is what handles them.
+ */
 export function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <CompletionQueue>
-        <RouterProvider router={router} />
-      </CompletionQueue>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <CompletionQueue>
+          <RouterProvider router={router} />
+        </CompletionQueue>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }

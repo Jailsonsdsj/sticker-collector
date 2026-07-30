@@ -6,7 +6,7 @@ import { EpicCard } from "../components/EpicCard";
 import { EpicForm } from "../components/EpicForm";
 import { AppHeader } from "../components/layout";
 import { TaskForm } from "../components/TaskForm";
-import { Button, EmptyState, Skeleton } from "../components/ui";
+import { Button, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { ApiError } from "../lib/api";
 import { useCreateEpic, useCreateTask, useDeleteEpic, useUpdateEpic } from "../lib/mutations";
 import { useEpics, useTasks } from "../lib/queries";
@@ -71,7 +71,13 @@ export function Epics() {
         </div>
       )}
 
-      {!epics.isLoading && (epics.data ?? []).length === 0 && (
+      {/* Ahead of the empty check: a failed read has no epics either, and the
+          empty state invites the user to create one they may already own. */}
+      {!epics.isLoading && epics.isError && (
+        <ErrorState error={epics.error} onRetry={() => void epics.refetch()} />
+      )}
+
+      {!epics.isLoading && !epics.isError && (epics.data ?? []).length === 0 && (
         <EmptyState
           icon="◆"
           title="No epics yet"

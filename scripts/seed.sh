@@ -26,14 +26,30 @@ export CLOUDFLARE_TELEMETRY_DISABLED=1
 DB="sticker-collector"
 WRANGLER="./node_modules/.bin/wrangler"
 
-echo "Resetting local D1 ($DB)..."
+echo "Resetting local D1 ($DB) and R2..."
 rm -rf .wrangler/state/v3/d1
+# R2 as well, and not merely for tidiness. Images are content-addressed and
+# immutable, so leaving them looks harmless — but it means a local seed starts
+# from state a previous run created, while CI starts from an empty bucket. That
+# gap hides exactly one class of bug: a seed that no longer stores its images
+# still "works" locally because the old objects are lying around.
+rm -rf .wrangler/state/v3/r2
 
 echo "Applying migrations (schema + triggers)..."
 "$WRANGLER" d1 migrations apply "$DB" --local >/dev/null
 
 echo "Loading sample data..."
 "$WRANGLER" d1 execute "$DB" --local --file packages/api/seed.sql >/dev/null
+
+# Real JPEGs in the local R2 bucket, and the seed rows repointed at their
+# content-addressed keys. seed.sql cannot do this itself: the key IS the hash of
+# the bytes, so it is only knowable once the bytes exist. Without it the print
+# export has nothing to embed.
+echo "Generating images and pointing rows at them..."
+IMAGE_SQL="$(mktemp -t sticker-seed-images)"
+trap 'rm -f "$IMAGE_SQL"' EXIT
+node scripts/seed-images.mjs > "$IMAGE_SQL"
+"$WRANGLER" d1 execute "$DB" --local --file "$IMAGE_SQL" >/dev/null
 
 echo "Verifying (row counts):"
 # Single-row SELECT with scalar subqueries — D1 rejects wide compound SELECTs.
@@ -45,7 +61,13 @@ echo "Verifying (row counts):"
     (SELECT COUNT(*) FROM task WHERE type = 'routine')   AS routines,
     (SELECT COUNT(*) FROM task WHERE type = 'oneoff')    AS oneoffs,
     (SELECT COUNT(*) FROM album)                         AS albums,
-    (SELECT COUNT(*) FROM sticker)                       AS stickers;
+    (SELECT COUNT(*) FROM sticker)                       AS stickers,
+    -- The wallet is SUM(ledger) and nothing else. Zero here means the sample
+    -- data is unusable: the seeded album costs 200 to unlock.
+    (SELECT COALESCE(SUM(amount_coins), 0) FROM ledger)  AS balance,
+    -- A placeholder key here means the export would fail; it must be 0.
+    (SELECT COUNT(*) FROM sticker WHERE image_key NOT LIKE 'img/%.jpg')
+                                                         AS bad_keys;
 "
 
 echo "Local D1 seeded."

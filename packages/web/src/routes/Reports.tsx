@@ -7,7 +7,7 @@ import { EffortPanel } from "../components/reports/EffortPanel";
 import { RateCards } from "../components/reports/RateCards";
 import { StreakList } from "../components/reports/StreakList";
 import { WeekdayBars } from "../components/reports/WeekdayBars";
-import { EmptyState, Skeleton } from "../components/ui";
+import { EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { ApiError } from "../lib/api";
 import { useEffort, useEpics, useMomentum } from "../lib/queries";
 
@@ -58,14 +58,20 @@ export function Reports() {
 
   const report = momentum.data;
   const work = effort.data;
+  // Not empty — *failed*. This branch is only reachable when a read came back
+  // with nothing, and it used to render the same "Nothing to report yet" copy
+  // as the genuine no-history case below. Someone with a 400-day streak and a
+  // dead connection was being told they had no history.
   if (!report || !work) {
     return (
       <>
         <AppHeader title="Reports" />
-        <EmptyState
-          icon="▲"
-          title="Nothing to report yet"
-          description="Streaks, completion rate and the heatmap land once there is history to draw."
+        <ErrorState
+          error={momentum.error ?? effort.error}
+          onRetry={() => {
+            void momentum.refetch();
+            void effort.refetch();
+          }}
         />
       </>
     );

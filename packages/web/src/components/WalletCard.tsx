@@ -23,7 +23,13 @@ export function WalletCard({ balance, loading, pendingCoins = 0 }: WalletCardPro
   const shown = (balance ?? 0) + pendingCoins;
 
   return (
-    <section className="mb-5 overflow-hidden rounded-4xl border border-border p-5 [background:var(--gradient-wallet)]">
+    <section
+      // Names the region, so the balance is reachable by role rather than by a
+      // test-only hook. The visible "Wallet" kicker is styling; this is the
+      // accessible name.
+      aria-label="Wallet"
+      className="mb-5 overflow-hidden rounded-4xl border border-border p-5 [background:var(--gradient-wallet)]"
+    >
       <div className="flex items-center justify-between gap-4">
         <div>
           <div className="font-numeric text-xs text-ink-muted tracking-mono uppercase">Wallet</div>

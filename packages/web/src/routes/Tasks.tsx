@@ -6,7 +6,7 @@ import { SectionHeading, type SectionTone } from "../components/SectionHeading";
 import { SelectionBar } from "../components/SelectionBar";
 import { TaskForm } from "../components/TaskForm";
 import { TaskRow } from "../components/TaskRow";
-import { Button, Dialog, EmptyState, Skeleton } from "../components/ui";
+import { Button, Dialog, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { WalletCard } from "../components/WalletCard";
 import { ApiError } from "../lib/api";
 import { usePendingCompletions } from "../lib/completionQueue";
@@ -83,8 +83,13 @@ export function Tasks() {
   if (unauthorised) return <Navigate to="/login" replace />;
 
   const loading = occurrences.isLoading || tasks.isLoading;
+  // Either read failing makes the home screen wrong rather than empty: the
+  // sections are built from `?? []`, so a dead network would otherwise render
+  // "Nothing to do yet" to someone with a full day ahead of them.
+  const failed = !loading && (occurrences.isError || tasks.isError);
   const empty =
     !loading &&
+    !failed &&
     sections.missed.length === 0 &&
     sections.today.length === 0 &&
     sections.backlog.length === 0;
@@ -236,6 +241,16 @@ export function Tasks() {
         </div>
       )}
 
+      {failed && (
+        <ErrorState
+          error={occurrences.error ?? tasks.error}
+          onRetry={() => {
+            void occurrences.refetch();
+            void tasks.refetch();
+          }}
+        />
+      )}
+
       {empty && (
         <EmptyState
           icon="✓"
@@ -244,7 +259,7 @@ export function Tasks() {
         />
       )}
 
-      {!loading && !empty && (
+      {!loading && !failed && !empty && (
         <div className="flex flex-col gap-6">
           <Section tone="missed" title="Missed" items={sections.missed} render={renderRow} />
           <Section

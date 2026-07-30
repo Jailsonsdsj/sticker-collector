@@ -18,3 +18,8 @@ docs/design/**/*.png
 docs/design/**/*.jpg
 docs/design/**/*.webp
 
+
+# Playwright output — reports, traces and screenshots are per-run artifacts.
+/playwright-report/
+/test-results/
+/blob-report/

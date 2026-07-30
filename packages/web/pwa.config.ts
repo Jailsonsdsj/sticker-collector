@@ -67,17 +67,40 @@ export const pwaOptions: Partial<VitePWAOptions> = {
       },
       {
         /**
-         * Reads render from the last-seen copy immediately and refresh behind
-         * it. Images are matched above and excluded here, or they would be
-         * revalidated on every view for no benefit.
+         * Reads go to the network first, and fall back to the last-seen copy
+         * only when it cannot be reached.
+         *
+         * This was `StaleWhileRevalidate` until the end-to-end journey caught
+         * what that costs. SWR answers from cache and refreshes *behind* the
+         * response, so the caller receives pre-mutation data: buy the last
+         * sticker in an album and the very next read — the one the mutation
+         * just invalidated — still says the slot is empty. The album does not
+         * complete, the export never appears, and it all corrects itself one
+         * navigation later, which is the worst possible way to be wrong.
+         *
+         * The proof was blunt: with the database at `owned: 1`, a fetch from a
+         * service-worker-controlled page returned `owned: 0`.
+         *
+         * SWR is right for content that changes underneath you. This is a
+         * single-user app where the only thing that changes the data is the
+         * user, one tap ago — so freshness is not a nicety, it is the entire
+         * point. `architecture.md` §6 asks for *read anywhere, write online*,
+         * and NetworkFirst still delivers that: offline, the network fails and
+         * the cache answers. The timeout keeps a flaky connection from being
+         * worse than no connection.
+         *
+         * Images are matched above and excluded here — they are
+         * content-addressed and immutable, which is why CacheFirst is safe for
+         * them and only for them.
          */
         urlPattern: ({ url, request }: { url: URL; request: Request }) =>
           url.pathname.startsWith("/api/") &&
           !url.pathname.startsWith("/api/images/") &&
           request.method === "GET",
-        handler: "StaleWhileRevalidate",
+        handler: "NetworkFirst",
         options: {
           cacheName: CACHE_API,
+          networkTimeoutSeconds: 3,
           cacheableResponse: { statuses: [200] },
         },
       },

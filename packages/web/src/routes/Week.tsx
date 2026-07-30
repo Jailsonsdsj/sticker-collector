@@ -2,7 +2,7 @@ import { todayIn } from "@sticker-collector/shared";
 import { useMemo, useState } from "react";
 import { Navigate } from "react-router";
 import { AppHeader } from "../components/layout";
-import { Skeleton, Tabs } from "../components/ui";
+import { ErrorState, Skeleton, Tabs } from "../components/ui";
 import { WeeklyCompletionGrid } from "../components/WeeklyCompletionGrid";
 import { WeeklyGrid } from "../components/WeeklyGrid";
 import { ApiError } from "../lib/api";
@@ -62,6 +62,11 @@ export function Week() {
           <Skeleton variant="block" />
           <Skeleton variant="block" />
         </div>
+      ) : tasks.isError ? (
+        // The grid renders from `tasks.data ?? []`, so a failed read would
+        // otherwise draw a plausible, empty week — a routine schedule that
+        // looks wiped rather than unavailable.
+        <ErrorState error={tasks.error} onRetry={() => void tasks.refetch()} />
       ) : view === "schedule" ? (
         <>
           <WeeklyGrid

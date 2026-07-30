@@ -6,7 +6,7 @@ import { AlbumCard } from "../components/AlbumCard";
 import { BackupNudge } from "../components/BackupNudge";
 import { AlbumGrid, AppHeader } from "../components/layout";
 import { UnlockDialog } from "../components/UnlockDialog";
-import { Chip, EmptyState, Skeleton, Tabs } from "../components/ui";
+import { Chip, EmptyState, ErrorState, Skeleton, Tabs } from "../components/ui";
 import { ApiError } from "../lib/api";
 import { useUnlockAlbum } from "../lib/mutations";
 import { useAlbums, useWallet } from "../lib/queries";
@@ -95,6 +95,11 @@ export function Albums() {
           <Skeleton variant="card" />
           <Skeleton variant="card" />
         </AlbumGrid>
+      ) : albums.isError ? (
+        // Before the empty check, never after. A failed read has no rows
+        // either, and "No albums yet" would tell someone their collection is
+        // gone when the truth is that the request never landed.
+        <ErrorState error={albums.error} onRetry={() => void albums.refetch()} />
       ) : rows.length === 0 ? (
         <EmptyState
           icon="◈"
