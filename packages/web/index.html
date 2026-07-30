@@ -6,6 +6,49 @@
          iOS. Without it the shell's insets silently resolve to 0. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Sticker Collector</title>
+
+    <!-- Installable. `theme_color` and `background_color` both match
+         --color-void so the launch flash is the app's own background rather
+         than a stock white one. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#0c0a13" />
+
+    <!-- iOS ignores the manifest for these two: standalone launch and the home
+         screen icon are still driven by the Apple meta tags. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Stickers" />
+    <link rel="apple-touch-icon" href="/icons/icon-180.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png" />
+
+    <!-- iOS launch images are per device, matched by media query. The phones in
+         use now are covered; the rest fall back to background_color (TD-22). -->
+    <link
+      rel="apple-touch-startup-image"
+      href="/splash/iphone-15-pro-max.png"
+      media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3)"
+    />
+    <link
+      rel="apple-touch-startup-image"
+      href="/splash/iphone-15-pro.png"
+      media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3)"
+    />
+    <link
+      rel="apple-touch-startup-image"
+      href="/splash/iphone-14.png"
+      media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3)"
+    />
+    <link
+      rel="apple-touch-startup-image"
+      href="/splash/iphone-x.png"
+      media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3)"
+    />
+    <link
+      rel="apple-touch-startup-image"
+      href="/splash/iphone-11.png"
+      media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2)"
+    />
   </head>
   <body>
     <div id="root"></div>

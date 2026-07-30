@@ -1,4 +1,6 @@
 import { Outlet } from "react-router";
+import { InstallPrompt } from "../InstallPrompt";
+import { UpdateToast } from "../UpdateToast";
 import { TabBar } from "./TabBar";
 
 /**
@@ -12,9 +14,15 @@ export function AppShell() {
   return (
     <div className="min-h-dvh">
       <main className="mx-auto w-full max-w-5xl px-4 pt-[calc(env(safe-area-inset-top)+var(--space-4))] pb-[calc(var(--size-tabbar)+env(safe-area-inset-bottom)+var(--space-4))]">
+        {/* Above the screen rather than inside one: installing is about the
+            app, not about whichever tab happens to be open. */}
+        <InstallPrompt />
         <Outlet />
       </main>
       <TabBar />
+      {/* Above everything, and never in the way: the running version keeps
+          working until the user chooses to reload. */}
+      <UpdateToast />
     </div>
   );
 }
