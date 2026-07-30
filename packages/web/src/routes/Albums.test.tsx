@@ -110,6 +110,27 @@ describe("the shelf", () => {
   });
 });
 
+describe("the backup nudge", () => {
+  it("asks for a backup on the shelf, where albums are made and finished", async () => {
+    // Rendering the component in isolation proves nothing about whether the
+    // user ever sees it.
+    await open();
+    expect(
+      screen.getByRole("complementary", { name: "Back up your collection" }),
+    ).toBeInTheDocument();
+  });
+
+  it("stays away once a backup is newer than every album", async () => {
+    const { recordExport } = await import("../lib/backupState");
+    recordExport("2030-01-01T00:00:00.000Z");
+
+    await open();
+    expect(
+      screen.queryByRole("complementary", { name: "Back up your collection" }),
+    ).not.toBeInTheDocument();
+  });
+});
+
 describe("filtering and sorting", () => {
   it("asks the server for the chosen status", async () => {
     const user = await open();

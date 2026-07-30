@@ -3,6 +3,7 @@ import { ALBUM_SORTS } from "@sticker-collector/shared";
 import { useState } from "react";
 import { Link, Navigate } from "react-router";
 import { AlbumCard } from "../components/AlbumCard";
+import { BackupNudge } from "../components/BackupNudge";
 import { AlbumGrid, AppHeader } from "../components/layout";
 import { UnlockDialog } from "../components/UnlockDialog";
 import { Chip, EmptyState, Skeleton, Tabs } from "../components/ui";
@@ -60,6 +61,9 @@ export function Albums() {
           </Link>
         }
       />
+
+      {/* Right where an album is created or finished. */}
+      <BackupNudge albums={rows} />
 
       <Tabs
         items={FILTERS}

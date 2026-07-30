@@ -8,6 +8,7 @@ import { Epics } from "./Epics";
 import { Login } from "./Login";
 import { NotFound } from "./NotFound";
 import { Reports } from "./Reports";
+import { Settings } from "./Settings";
 import { Tasks } from "./Tasks";
 import { Week } from "./Week";
 
@@ -29,6 +30,7 @@ export const router = createBrowserRouter([
       { path: "albums/:id", element: <AlbumDetail /> },
       { path: "epics", element: <Epics /> },
       { path: "reports", element: <Reports /> },
+      { path: "settings", element: <Settings /> },
       { path: "*", element: <NotFound /> },
     ],
   },

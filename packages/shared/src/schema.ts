@@ -423,6 +423,57 @@ export const albumQuerySchema = z.strictObject({
 });
 export type AlbumQuery = z.infer<typeof albumQuerySchema>;
 
+// ── Backup ───────────────────────────────────────────────────────────────────
+
+export const BACKUP_VERSION = 1;
+
+/**
+ * Everything the app knows, in one object.
+ *
+ * Three things are deliberately **absent**, and their absence is the design:
+ *
+ * - `auth_key_hash`, `kdf_salt`, `kdf_iterations`. A file carrying those is a
+ *   credential file, and the spec's own recovery story is that *a lost
+ *   passphrase is recovered by restoring the export* — restoring the old hash
+ *   would defeat the one thing the backup exists for.
+ * - `mutation`. Idempotency keys are about requests in flight; replaying old
+ *   ones after a restore makes the next retry of any mutation return a stale
+ *   response from a previous life.
+ * - `auth_attempt`. Rate-limit state, meaningless once restored elsewhere.
+ *
+ * Rows keep their own ids so references between them survive; `user_id` is
+ * rewritten on restore, which is what makes a backup portable between
+ * deployments.
+ */
+export const backupManifestSchema = z.object({
+  version: z.literal(BACKUP_VERSION),
+  exportedAt: instantSchema,
+  user: z.object({ timezone: z.string() }),
+  epics: z.array(z.record(z.string(), z.unknown())),
+  tasks: z.array(z.record(z.string(), z.unknown())),
+  occurrences: z.array(z.record(z.string(), z.unknown())),
+  ledger: z.array(z.record(z.string(), z.unknown())),
+  albums: z.array(z.record(z.string(), z.unknown())),
+  stickers: z.array(z.record(z.string(), z.unknown())),
+  holdings: z.array(z.record(z.string(), z.unknown())),
+  /** Every image the data references — the irreplaceable half of a backup. */
+  imageKeys: z.array(z.string()),
+});
+export type BackupManifest = z.infer<typeof backupManifestSchema>;
+
+export const restoreResultSchema = z.object({
+  restored: z.object({
+    epics: z.int(),
+    tasks: z.int(),
+    occurrences: z.int(),
+    ledger: z.int(),
+    albums: z.int(),
+    stickers: z.int(),
+    holdings: z.int(),
+  }),
+});
+export type RestoreResult = z.infer<typeof restoreResultSchema>;
+
 // ── Wallet ───────────────────────────────────────────────────────────────────
 
 export const ledgerReasonSchema = z.enum([

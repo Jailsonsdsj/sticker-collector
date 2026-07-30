@@ -3,6 +3,7 @@ import { requireAuth } from "./middleware/require-auth";
 import { albumListRoutes } from "./routes/albumList";
 import { albumRoutes } from "./routes/albums";
 import { authRoutes } from "./routes/auth";
+import { backupRoutes } from "./routes/backup";
 import { epicRoutes } from "./routes/epics";
 import { imageRoutes } from "./routes/images";
 import { occurrenceRoutes } from "./routes/occurrences";
@@ -23,6 +24,7 @@ app.route("/api/occurrences", occurrenceRoutes);
 app.route("/api/epics", epicRoutes);
 app.route("/api/wallet", walletRoutes);
 app.route("/api/reports", reportRoutes);
+app.route("/api/backup", backupRoutes);
 app.route("/api/images", imageRoutes);
 app.route("/api/albums", albumRoutes);
 // Same prefix, separate router: albums.ts owns creation, purchases.ts owns spending.

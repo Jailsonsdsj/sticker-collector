@@ -1,6 +1,6 @@
 import { addDays, type Epic, type Task, todayIn } from "@sticker-collector/shared";
 import { useMemo, useState } from "react";
-import { Navigate } from "react-router";
+import { Link, Navigate } from "react-router";
 import { QuickAdd } from "../components/QuickAdd";
 import { SectionHeading, type SectionTone } from "../components/SectionHeading";
 import { SelectionBar } from "../components/SelectionBar";
@@ -132,6 +132,17 @@ export function Tasks() {
 
   return (
     <>
+      {/* Settings is not a primary destination — five tabs already fill a phone
+          bar — so it lives here, where the app opens. */}
+      <div className="mb-2 flex justify-end">
+        <Link
+          to="/settings"
+          className="font-body text-2xs tracking-kicker text-ink-muted uppercase"
+        >
+          Settings
+        </Link>
+      </div>
+
       <WalletCard
         balance={wallet.data?.balance}
         loading={wallet.isLoading}
