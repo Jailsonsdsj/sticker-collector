@@ -1,0 +1,13 @@
+# Local development variables. Copy to `.dev.vars`, which is gitignored:
+#
+#   cp .dev.vars.example .dev.vars
+#
+# `wrangler dev` reads .dev.vars; the vitest Workers pool binds its own value in
+# packages/api/vitest.config.ts. Production does NOT use this file — the real key
+# is a Cloudflare secret:
+#
+#   wrangler secret put TOKEN_SIGNING_KEY
+#
+# Signs the HS256 session JWT (architecture.md §0.2). The value below is a
+# throwaway for local use and CI; it is deliberately not a secret.
+TOKEN_SIGNING_KEY=local-dev-signing-key-not-secret

@@ -73,6 +73,13 @@ jobs:
       # cross-browser matrix, and every extra engine is download time on every PR.
       - run: pnpm exec playwright install --with-deps chromium
 
+      # `wrangler dev` reads .dev.vars, which is gitignored — so it exists on every
+      # developer machine and on none of the runners. Its absence surfaced as a
+      # 500 from inside hono's JWT signer, nowhere near its cause. The unit tests
+      # bind the same stand-in value in packages/api/vitest.config.ts; this is the
+      # e2e equivalent, and the value is a throwaway, not a secret.
+      - run: cp .dev.vars.example .dev.vars
+
       # Playwright transpiles rather than typechecks, so a broken e2e type would
       # otherwise surface as a runtime failure with a worse error.
       - run: pnpm typecheck:e2e
