@@ -46,8 +46,20 @@ echo "Loading sample data..."
 # the bytes, so it is only knowable once the bytes exist. Without it the print
 # export has nothing to embed.
 echo "Generating images and pointing rows at them..."
-IMAGE_SQL="$(mktemp -t sticker-seed-images)"
-trap 'rm -f "$IMAGE_SQL"' EXIT
+# A fixed path under .wrangler/ (already gitignored) rather than `mktemp`.
+#
+# This started life as `mktemp -t sticker-seed-images`, which is the BSD
+# spelling: macOS appends random characters, GNU coreutils reads the argument as
+# a template and rejects it — "too few X's". It passed on every developer
+# machine and failed on the Linux runner, at the first command of the e2e job.
+#
+# Getting the portable template right is possible, but the temp file buys
+# nothing here: it is one deterministic file in a directory that is already
+# ignored, on a script whose whole job is to reset local state. Not depending on
+# mktemp at all is the fix that cannot differ between platforms — and the file
+# is still there to read when a seed goes wrong.
+IMAGE_SQL=".wrangler/seed-images.sql"
+mkdir -p "$(dirname "$IMAGE_SQL")"
 node scripts/seed-images.mjs > "$IMAGE_SQL"
 "$WRANGLER" d1 execute "$DB" --local --file "$IMAGE_SQL" >/dev/null
 

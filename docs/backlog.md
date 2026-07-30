@@ -178,11 +178,46 @@ Ship this whole phase before touching albums. At the end of it you can use the a
 
 ---
 
+## Phase 6.5 — Go-Live
+
+The gap between "61/61, deployed" and "I can actually use this". None of these
+were in a phase because they're not features — they're the operational steps
+that turn a healthy deploy into a running product. **`G-01` is a hard blocker:
+until it ships, the production app cannot be logged into by anyone.**
+
+| ID | Task | Size | Model | Load | Done when |
+|---|---|---|---|---|---|
+| **G-00** | **Ship what's built.** Commit H-06b's 3 files, merge `developer` → `main`, watch `deploy.yml` run: migrations `--remote`, deploy, health curl. This is the first time the full suite runs on a clean CI checkout of everything since the last merge | S | sonnet | `architecture.md` §8 | `deploy.yml` green; `/api/health` returns healthy; `git status` clean on `main` |
+| **G-01** | **Provision the production user** (this is `A-W2`, pulled forward — it is a launch blocker, not post-MVP). One-time local script: derive `auth_key_hash`/`kdf_salt`/`kdf_iterations` with the **exact** KDF params `packages/shared` uses, insert via `wrangler d1 execute --remote`. **No provisioning endpoint** — it would be a permanent unauthenticated write path to the only account | S | **opus** | `architecture.md` §0.2, `packages/shared` KDF constants | Login succeeds against **production** with a passphrase you chose; the seed user is gone or disabled; no provisioning route exists in the router |
+| **G-02** | **Prove the install path on a real iPhone.** H-01 and H-02 both flag "needs a phone, could not be verified here" — this is that verification. Install to home screen, launch standalone, confirm the app shell loads offline and a previously-seen image renders with the network off | S | sonnet | H-01, H-02 output | Installs standalone; offline launch shows today's list; a cached image renders offline. Any failure becomes a bug row, not a silent gap |
+| **G-03** | **Provision the preview D1/R2 and run `verify-triggers.sh --remote` against preview** — never production (it seeds ledger rows, and the ledger is append-only, so fixtures corrupt the balance forever). Confirms the five invariants are actually live on Cloudflare's D1, not just in CI's local one | S | sonnet | `architecture.md` §4.1, `scripts/verify-triggers.sh` | Every forbidden statement is rejected against the **preview** remote database |
+| **G-04** | **First real backup, kept off-device.** Export via the H-03b flow, verify the zip opens and holds the images, store it somewhere that isn't this browser. The spec calls originals irreplaceable (imports discard them); a backup that lives only in the browser it's insuring is not a backup | S | haiku | H-03b output | A restorable archive exists outside the app's own storage |
+
+> After G-04 the app is genuinely live: reachable, loginable, installed on your
+> phone, invariants proven on real infrastructure, and recoverable. **That** is
+> the moment to open Phase 7 — and to start dogfooding, which is what surfaces
+> which post-MVP items actually matter versus which just looked important.
+
+---
+
 ## Phase 7 — After go-live
 
 From the spec's own list, plus what I've deferred. Do not start these until Phase 6 ships.
 
 `P-01` Strong sticker-purchase animation · `P-02` Strong album-purchase animation · `P-03` Strong album-completion animation · `P-04` Print/export preview · `P-05` Settings screen · `P-06` Onboarding · `P-07` **Offline outbox** (queue completions in IndexedDB, replay via existing idempotency keys) · `P-08` Web Push reminders (VAPID + one Cron Trigger; iOS requires installed PWA) · `P-09` Export spec doc as PDF
+
+### Recommended order after go-live
+
+Not the spec's order — the order dogfooding will actually demand. Rationale is that you should fix what you'll *hit*, in the sequence you'll hit it.
+
+1. **`A-W1` Logout + `A-W4` session-expiry UX.** The first things you'll want that don't exist. Both small, both about not being trapped in or dumped out of a session rudely. Do them first because they cost almost nothing and remove daily friction.
+2. **`TD-23` last-export date → server, and `A-W5` prune the growing tables.** The two items that quietly rot with use. `TD-23` is a one-column migration; `A-W5` is the Cron Trigger you'll want anyway for `P-08`. Pair them — both are "state that shouldn't live where it currently lives".
+3. **`TD-18` + `TD-12` — the two `Field`-wiring defects.** Unlabelled controls and focus-loss-on-error are accessibility and daily-use bugs, small fixes, and they compound every form you touch afterward. Clear them before building `P-05`/`P-06`, which are form-heavy.
+4. **`P-05` Settings + `A-W3` change passphrase.** Settings is where logout, export date, and passphrase change all naturally live — build the screen once and land its residents together.
+5. **`P-06` Onboarding** (the self-service side of the old `A-W2`), then **`P-07` Offline outbox** — the genuinely valuable feature for a habit app on a phone, and cheap now because every mutation already carries an idempotency key (that was the point of building it in F-06).
+6. **`P-08` Web Push**, once `G-02` has proven the PWA installs — Push on iOS requires it. Then the animation polish (`P-01`–`P-03`) and `P-04` preview, which are the things that make it *feel* finished but change nothing about whether it works.
+
+The remaining TD items are correctly ordered where they are — pull one forward only when a P-task is about to touch the same code (e.g. `TD-13` multi-select-in-epics when you next open the epic card, `TD-17` orphaned-R2-objects if you rework the wizard). The register's "where it came from / cost of leaving" columns are how you make that call in the moment.
 
 ---
 
@@ -203,7 +238,7 @@ That is the whole of it. Everything below is missing.
 | ID | Task | Size | Why it was left out |
 |---|---|---|---|
 | **A-W1** | **Logout.** Clear the token and the `sc_session` cookie, return to `/login` | S | Nothing in the MVP flow needs it on a single-user device. But there is currently *no way* to sign out — a session lasts 90 days or until localStorage is cleared by hand |
-| **A-W2** | **Passphrase provisioning.** A first-run flow that sets `auth_key_hash`, `kdf_salt`, `kdf_iterations` for a user who does not exist yet | M | Today the only user is created by `pnpm seed`. **Production has no way to onboard.** Pairs with `P-06 Onboarding` |
+| ~~**A-W2**~~ | ~~**Passphrase provisioning**~~ → **pulled forward to `G-01`** as a launch blocker. What remains post-MVP is only the richer *self-service* first-run flow (`P-06 Onboarding`); provisioning the single production user is `G-01`, done at go-live | — | Split: `G-01` unblocks launch for the one user; multi-user onboarding stays deferred with `P-06` |
 | **A-W3** | **Change passphrase.** Re-derive with a fresh salt and rotate the stored hash | S | Belongs with `P-05 Settings` |
 | **A-W4** | **Session-expiry UX.** A 401 currently drops the user on `/login` with no explanation | S | Correct behaviour, unfriendly presentation |
 | **A-W5** | **Prune `mutation` and `auth_attempt`.** Both tables grow forever — one row per mutation, one per login attempt window | S | Harmless for months at single-user volume, unbounded in principle. A Cron Trigger deleting rows older than ~7 days. Pairs with `P-08`, which needs a Cron Trigger anyway |
@@ -271,7 +306,8 @@ Keep this table updated — it is the first thing a new session reads, and it co
 | 4 Export | 2 | 2 | ✅ complete — a finished album prints to a true-size PDF |
 | 5 Reports | 4 | 4 | ✅ complete — momentum on screen, nothing economic |
 | 6 Hardening | 9 | 9 | ✅ Complete |
-| **MVP total** | **61** | **61** | |
+| **MVP total** | **61** | **61** | ✅ built |
+| 6.5 Go-Live | 0 | 5 | ⏳ **next** — `G-00` ships, `G-01` unblocks login, `G-02`–`G-04` prove it live |
 
 Post-MVP is tracked separately and deliberately excluded from the total: 5 auth
 follow-ups (`A-W1`–`A-W5`) and 23 technical-debt items (`TD-01`–`TD-23`). See
