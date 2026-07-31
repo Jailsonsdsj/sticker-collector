@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Skeleton } from "./ui";
 
 /** One minute of effort is one coin, so the balance doubles as hours invested. */
@@ -17,9 +18,16 @@ export interface WalletCardProps {
    * told yet, and they come straight back off if the completion is undone.
    */
   pendingCoins?: number;
+  /**
+   * The corner slot, above the hours-equivalent line.
+   *
+   * A slot rather than a hard-coded link: the wallet is presentational and has
+   * no business importing the router. The caller decides what belongs here.
+   */
+  action?: ReactNode;
 }
 
-export function WalletCard({ balance, loading, pendingCoins = 0 }: WalletCardProps) {
+export function WalletCard({ balance, loading, pendingCoins = 0, action }: WalletCardProps) {
   const shown = (balance ?? 0) + pendingCoins;
 
   return (
@@ -36,7 +44,7 @@ export function WalletCard({ balance, loading, pendingCoins = 0 }: WalletCardPro
           <div className="relative mt-1 flex items-baseline gap-2">
             <span
               aria-hidden
-              className="inline-flex size-7 items-center justify-center rounded-full font-numeric text-sm text-coin-ink shadow-coin-sm [background:var(--gradient-coin)]"
+              className="animate-coin-spin inline-flex size-7 items-center justify-center rounded-full font-numeric text-sm text-coin-ink shadow-coin-sm [background:var(--gradient-coin)]"
             >
               ¢
             </span>
@@ -64,9 +72,12 @@ export function WalletCard({ balance, loading, pendingCoins = 0 }: WalletCardPro
             )}
           </div>
         </div>
-        {!loading && (
-          <div className="text-right font-numeric text-xs text-ink-muted">≈ {hoursOf(shown)}</div>
-        )}
+        <div className="flex flex-col items-end gap-1">
+          {action}
+          {!loading && (
+            <div className="text-right font-numeric text-xs text-ink-muted">≈ {hoursOf(shown)}</div>
+          )}
+        </div>
       </div>
     </section>
   );

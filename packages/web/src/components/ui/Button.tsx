@@ -7,7 +7,20 @@ export type ButtonSize = "sm" | "md" | "lg";
 
 /** The arcade lip: a hard offset with no blur, halved on press. Only solid and
  *  holo carry one — outline and ghost sit flat, as in the design. */
-const TONE: Record<ButtonTone, { accent: string; on?: string; lip?: string; gradient?: string }> = {
+/**
+ * `accent` is the tone's colour as a *surface*; `ink` is its colour as *text*.
+ *
+ * For every accent tone those are the same thing, so `ink` is omitted. Neutral
+ * is the exception and the reason this field exists: its accent is
+ * `--color-surface-2` — 6% white — which is correct behind a solid button and
+ * invisible as type. `ghost` and `outline` render the tone as text, so every
+ * Cancel in the app and the Edit button on an epic card were being drawn at 6%
+ * opacity on a dark panel. Neutral now stays quiet without disappearing.
+ */
+const TONE: Record<
+  ButtonTone,
+  { accent: string; ink?: string; on?: string; lip?: string; gradient?: string }
+> = {
   coin: { accent: "--color-coin", lip: "--shadow-lip-coin", gradient: "--gradient-cta" },
   lime: { accent: "--color-lime", lip: "--shadow-lip-lime", gradient: "--gradient-cta" },
   magenta: {
@@ -18,7 +31,7 @@ const TONE: Record<ButtonTone, { accent: string; on?: string; lip?: string; grad
   },
   violet: { accent: "--color-violet", lip: "--shadow-lip-violet", gradient: "--gradient-holo" },
   cyan: { accent: "--color-cyan", lip: "--shadow-lip-cta", gradient: "--gradient-cool" },
-  neutral: { accent: "--color-surface-2", on: "--color-ink" },
+  neutral: { accent: "--color-surface-2", ink: "--color-ink-secondary", on: "--color-ink" },
 };
 
 const SIZE: Record<ButtonSize, string> = {
@@ -36,10 +49,10 @@ const BASE =
 const VARIANT: Record<ButtonVariant, string> = {
   solid: "[background:var(--ui-accent)] [color:var(--ui-on)]",
   outline:
-    "[background:var(--ui-tint)] [border-color:var(--ui-tint-border)] [color:var(--ui-accent)] " +
+    "[background:var(--ui-tint)] [border-color:var(--ui-tint-border)] [color:var(--ui-ink)] " +
     "not-disabled:hover:[background:var(--ui-tint-hover)]",
   ghost:
-    "[color:var(--ui-accent)] not-disabled:hover:[background:var(--ui-tint)] " +
+    "[color:var(--ui-ink)] not-disabled:hover:[background:var(--ui-tint)] " +
     "not-disabled:active:[background:var(--ui-tint-hover)]",
   holo: "[background:var(--ui-gradient)] [color:var(--ui-on)]",
 };
@@ -77,6 +90,8 @@ export function Button({
 
   const vars = {
     ...toneVars(t.accent, { on: t.on, gradient: t.gradient }),
+    // Defaults to the accent, so nothing but neutral changes.
+    "--ui-ink": `var(${t.ink ?? t.accent})`,
     ...(t.lip ? { "--ui-lip": `var(${t.lip})`, "--ui-lip-pressed": `var(${t.lip}-pressed)` } : {}),
     ...style,
   } as CSSProperties;

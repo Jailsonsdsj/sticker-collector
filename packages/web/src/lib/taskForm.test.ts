@@ -22,9 +22,15 @@ import {
 
 const run = (actions: TaskFormAction[], from = initialState()) => actions.reduce(reduce, from);
 
+/**
+ * A complete ROUTINE. The type action is explicit because a blank form is now a
+ * one-off — the first tab and the default agree, and quick-add already creates
+ * one-offs.
+ */
 const valid = (extra: TaskFormAction[] = []) =>
   run([
     { kind: "title", value: "Stretch" },
+    { kind: "type", value: "routine" },
     { kind: "effort", value: "15" },
     { kind: "weekday", value: 0 as Weekday },
     ...extra,
@@ -216,6 +222,7 @@ describe("validation", () => {
   it("requires at least one weekday for a routine, but not for a one-off", () => {
     const noDays = run([
       { kind: "title", value: "Stretch" },
+      { kind: "type", value: "routine" },
       { kind: "effort", value: "15" },
     ]);
     expect(message(noDays)).toMatch(/weekday/i);

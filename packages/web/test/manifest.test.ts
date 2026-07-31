@@ -125,3 +125,22 @@ describe("what iOS reads instead of the manifest", () => {
     }
   });
 });
+
+describe("the viewport", () => {
+  const viewport = html.match(/<meta[^>]*name="viewport"[^>]*>/s)?.[0] ?? "";
+  const content = viewport.match(/content="([^"]+)"/s)?.[1]?.replace(/\s+/g, " ") ?? "";
+
+  it("turns pinch zoom off, so the app does not slide under a stray gesture", () => {
+    expect(content).toContain("maximum-scale=1.0");
+    expect(content).toContain("user-scalable=no");
+  });
+
+  it("still opts into the safe area", () => {
+    // The regression this guards: `viewport-fit=cover` is what makes
+    // env(safe-area-inset-*) non-zero on iOS, and it lives in the same string
+    // as the zoom flags. Editing one is how the other silently disappears and
+    // the tab bar ends up under the home indicator.
+    expect(content).toContain("viewport-fit=cover");
+    expect(content).toContain("width=device-width");
+  });
+});

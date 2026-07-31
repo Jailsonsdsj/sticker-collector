@@ -3,19 +3,19 @@ import { expect, type Locator, type Page } from "@playwright/test";
 /** The local-only passphrase baked into `packages/api/seed.sql`. */
 export const DEV_PASSPHRASE = "sticker-dev";
 
+/** Where `auth.setup.ts` parks the signed-in session for the suite to reuse. */
+export const STORAGE_STATE = "e2e/.auth/user.json";
+
 /**
- * Sign in for real.
+ * Open the app already signed in.
  *
- * No storage-state shortcut and no injected token: the PBKDF2 derivation runs
- * in the browser (600k iterations, because the Worker has a 10 ms CPU budget),
- * and that is exactly the kind of arrangement a smoke test should be proving
- * still works end to end.
+ * The session comes from `auth.setup.ts`, which does the real passphrase login
+ * once for the whole run. Signing in per test would trip the auth rate limiter
+ * — 10 attempts per 15 minutes per IP — which is what happened when the suite
+ * reached twelve tests.
  */
 export async function login(page: Page): Promise<void> {
   await page.goto("/");
-  await page.getByLabel("Passphrase").fill(DEV_PASSPHRASE);
-  await page.getByRole("button", { name: "Unlock" }).click();
-
   await expect(page.getByRole("region", { name: "Wallet" })).toBeVisible();
 }
 
@@ -48,7 +48,7 @@ export async function balance(page: Page): Promise<number> {
 /**
  * Waits for the balance to settle on an exact value.
  *
- * Completing a task does not pay immediately — `UNDO_WINDOW_MS` is five seconds
+ * Completing a task does not pay immediately — `UNDO_WINDOW_MS` is a few seconds
  * of grace during which the coins are shown as pending and nothing has been
  * written. Polling for the settled figure is what makes the assertion about the
  * *ledger* rather than about the animation.

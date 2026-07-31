@@ -2,9 +2,11 @@ import { maskHasDay, WEEKDAYS, type Weekday } from "@sticker-collector/shared";
 import type { TaskFormAction, TaskFormState } from "../../lib/taskForm";
 import { Chip, Field, Input, Tabs } from "../ui";
 
+// One-off first, and it is also `initialState`'s default — the first tab being
+// the selected one is the whole point of the order.
 const TYPES = [
-  { value: "routine" as const, label: "↻ Routine", tone: "violet" as const },
   { value: "oneoff" as const, label: "· One-off", tone: "cyan" as const },
+  { value: "routine" as const, label: "↻ Routine", tone: "violet" as const },
 ];
 
 /**

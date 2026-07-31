@@ -21,6 +21,7 @@ import {
   useUpdateTask,
 } from "../lib/mutations";
 import { useEpics, useOccurrences, useTasks, useWallet } from "../lib/queries";
+import { useCollapsibleSections } from "../lib/sectionState";
 import { useSelection } from "../lib/selection";
 
 /**
@@ -51,6 +52,7 @@ export function Tasks() {
   const deleteTask = useDeleteTask();
   const uncomplete = useUncompleteOccurrence();
   const queue = usePendingCompletions();
+  const folds = useCollapsibleSections();
 
   const [selecting, setSelecting] = useState(false);
   const [confirmingBulkDelete, setConfirmingBulkDelete] = useState(false);
@@ -137,21 +139,26 @@ export function Tasks() {
 
   return (
     <>
-      {/* Settings is not a primary destination — five tabs already fill a phone
-          bar — so it lives here, where the app opens. */}
-      <div className="mb-2 flex justify-end">
-        <Link
-          to="/settings"
-          className="font-body text-2xs tracking-kicker text-ink-muted uppercase"
-        >
-          Settings
-        </Link>
-      </div>
-
       <WalletCard
         balance={wallet.data?.balance}
         loading={wallet.isLoading}
         pendingCoins={queue.pendingCoins}
+        action={
+          /* Settings is not a primary destination — five tabs already fill a
+             phone bar — so it rides in the wallet's corner, where the app
+             opens. A glyph, like every other icon in the system, with a real
+             accessible name and 44px to aim at (TD-24). */
+          <Link
+            to="/settings"
+            aria-label="Settings"
+            className="-mt-2 -mr-2 flex min-h-11 min-w-11 items-center justify-center text-xl text-ink-secondary no-underline"
+          >
+            {/* U+FE0E forces TEXT presentation. Without it iOS renders U+2699 as
+                a full-colour emoji gear, which is the one thing this monochrome
+                glyph set has nowhere to put. */}
+            <span aria-hidden>{"\u2699\uFE0E"}</span>
+          </Link>
+        }
       />
 
       {selecting ? (
@@ -261,15 +268,31 @@ export function Tasks() {
 
       {!loading && !failed && !empty && (
         <div className="flex flex-col gap-6">
-          <Section tone="missed" title="Missed" items={sections.missed} render={renderRow} />
+          <Section
+            tone="missed"
+            title="Missed"
+            items={sections.missed}
+            render={renderRow}
+            open={folds.isOpen("missed")}
+            onToggle={() => folds.toggle("missed")}
+          />
           <Section
             tone="today"
             title="Today"
             items={sections.today}
             count={`${sections.today.filter((i) => i.done).length}/${sections.today.length}`}
             render={renderRow}
+            open={folds.isOpen("today")}
+            onToggle={() => folds.toggle("today")}
           />
-          <Section tone="backlog" title="Backlog" items={sections.backlog} render={renderRow} />
+          <Section
+            tone="backlog"
+            title="Backlog"
+            items={sections.backlog}
+            render={renderRow}
+            open={folds.isOpen("backlog")}
+            onToggle={() => folds.toggle("backlog")}
+          />
         </div>
       )}
     </>
@@ -282,20 +305,26 @@ function Section({
   items,
   count,
   render,
+  open,
+  onToggle,
 }: {
   tone: SectionTone;
   title: string;
   items: HomeItem[];
   count?: string;
   render: (item: HomeItem) => React.ReactNode;
+  open: boolean;
+  onToggle: () => void;
 }) {
   if (items.length === 0) return null;
   return (
     <section>
-      <SectionHeading tone={tone} count={count ?? items.length}>
+      <SectionHeading tone={tone} count={count ?? items.length} open={open} onToggle={onToggle}>
         {title}
       </SectionHeading>
-      <div className="flex flex-col gap-2">{items.map(render)}</div>
+      {/* The count stays visible while collapsed — folding a section away
+          should not also hide how much is in it. */}
+      {open && <div className="flex flex-col gap-2">{items.map(render)}</div>}
     </section>
   );
 }

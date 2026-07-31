@@ -30,12 +30,16 @@ export function EffortFields({
           value={state.effortMinutes}
           onChange={(e) => dispatch({ kind: "effort", value: e.target.value })}
         />
-        <div className="flex gap-2">
+        {/* Scrolls sideways instead of wrapping. Seven chips cannot share one
+            phone-width row without dropping under a comfortable tap target, and
+            a second row pushes Reward off the first screenful. `shrink-0` is
+            what stops flex compressing them back down to fit. */}
+        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
           {EFFORT_PRESETS.map((minutes) => (
             <Chip
               key={minutes}
               tone="lime"
-              className="flex-1"
+              className="shrink-0"
               selected={state.effortMinutes === String(minutes)}
               onClick={() => dispatch({ kind: "effort", value: String(minutes) })}
             >

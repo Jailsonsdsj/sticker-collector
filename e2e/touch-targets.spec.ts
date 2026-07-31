@@ -63,3 +63,43 @@ test("weekly grid cells still stretch to fill their column", async ({ page }) =>
   expect(visible.width).toBeCloseTo(label.width, 0);
   expect(visible.width).toBeGreaterThan(visible.height);
 });
+
+test("settings is an icon in the wallet, and still big enough to hit", async ({ page }) => {
+  // It moved out of the header and into the wallet's corner, above the hours
+  // line. An icon is smaller than the words it replaced, so the 44px rule
+  // matters more here than it did before, not less.
+  await login(page);
+
+  const gear = page.getByRole("link", { name: "Settings" });
+  const wallet = page.getByRole("region", { name: "Wallet" });
+
+  await expect(wallet.getByRole("link", { name: "Settings" })).toBeVisible();
+
+  const target = await size(gear);
+  expect(target.width).toBeGreaterThanOrEqual(44);
+  expect(target.height).toBeGreaterThanOrEqual(44);
+
+  // An icon with no accessible name is a mystery button; this is the only
+  // thing telling a screen reader what the glyph means.
+  await gear.click();
+  await page.waitForURL("**/settings");
+});
+
+test("double-tap zoom is off, and the viewport says so", async ({ page }) => {
+  // `touch-action: manipulation` is the half iOS honours in Safari as well as
+  // in the installed app — the viewport flags below only bind once installed.
+  await login(page);
+
+  const touchAction = await page.evaluate(
+    () => getComputedStyle(document.documentElement).touchAction,
+  );
+  expect(touchAction).toBe("manipulation");
+
+  const viewport = await page.evaluate(
+    () => document.querySelector('meta[name="viewport"]')?.getAttribute("content") ?? "",
+  );
+  expect(viewport).toContain("user-scalable=no");
+  // Shipped together, so they are asserted together: dropping viewport-fit
+  // silently zeroes every safe-area inset.
+  expect(viewport).toContain("viewport-fit=cover");
+});

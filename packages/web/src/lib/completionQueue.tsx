@@ -27,7 +27,17 @@ import { Button, Toast, ToastViewport } from "../components/ui";
  * pending completion, and it flushes on unmount rather than discarding, because
  * silently losing someone's coins is worse than sending slightly early.
  */
-export const UNDO_WINDOW_MS = 5000;
+/**
+ * How long a completion stays reversible — and, because the toast IS the
+ * window, how long the toast is on screen. There is one timer, not two.
+ *
+ * Shortened from 5s: five seconds of a banner sitting over the tab bar after
+ * every single tick is a long time when you are completing several tasks in a
+ * row, and the toasts stack. Three is still comfortably long enough to catch
+ * the tap you did not mean — the case the window exists for — without the
+ * reward turning into something you wait out.
+ */
+export const UNDO_WINDOW_MS = 3000;
 
 export interface CompletionRef {
   taskId: string;
