@@ -499,3 +499,45 @@ describe("deleting an album", () => {
     expect((await get(`/api/albums/${sealed.album.id}`)).status).toBe(200);
   });
 });
+
+describe("the order a grid and a printed sheet share", () => {
+  it("groups by rarity, commonest first", async () => {
+    // Supersedes the shuffle §Creating 10 used to describe. One order, so the
+    // printed sheet matches the screen.
+    const { album } = await seal({
+      stickers: [
+        { imageKey: key(1), tier: "legendary" },
+        { imageKey: key(2), tier: "common" },
+        { imageKey: key(3), tier: "epic" },
+        { imageKey: key(4), tier: "rare" },
+        { imageKey: key(5), tier: "common" },
+      ],
+    });
+
+    const detail = (await (await get(`/api/albums/${album.id}`)).json()) as AlbumDetail;
+
+    expect(detail.stickers.map((s) => s.tier)).toEqual([
+      "common",
+      "common",
+      "rare",
+      "epic",
+      "legendary",
+    ]);
+  });
+
+  it("keeps the stored slot order as the tie-break inside a tier", async () => {
+    // The shuffle is still drawn once and stored; it is no longer what the
+    // album is laid out by, but it is what makes the order deterministic.
+    const { album } = await seal({
+      stickers: Array.from({ length: 6 }, (_, i) => ({
+        imageKey: key(i + 1),
+        tier: "common" as const,
+      })),
+    });
+
+    const detail = (await (await get(`/api/albums/${album.id}`)).json()) as AlbumDetail;
+    const slots = detail.stickers.map((s) => s.slotIndex);
+
+    expect(slots).toEqual([...slots].sort((a, b) => a - b));
+  });
+});

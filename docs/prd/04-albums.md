@@ -42,7 +42,14 @@
 7. **A sticker has no price of its own.** Its price is the price of its tier, in its album.
 8. Drop odds must sum to 100%, and must decrease from common to legendary. The creation screen pre-fills a sensible default — 60 / 25 / 12 / 3 — so the user starts from a working economy rather than four empty fields.
 9. The user sets the price of a **random sticker** — a single price for the whole album, paid regardless of what the roll returns.
-10. **Slot order.** On sealing, the stickers are shuffled into the album grid at random and that order is stored. It is not re-shuffled on every view, and the print export uses the same order.
+10. **Slot order.** On sealing, the stickers are shuffled at random and that
+    order is stored. It is **no longer what the album is laid out by**: both the
+    grid and the print export order stickers **by rarity, commonest first**, and
+    the stored slot order breaks ties inside a tier. One order, so a printed
+    sheet matches the screen. The shuffle is still drawn once and stored — it is
+    what makes the order deterministic — and it is still immutable. Note this
+    changed after the first albums were sealed: an album printed before the
+    change comes out in a different arrangement now.
 11. **Sealing.** On creation, the album is sealed. Its sticker set, its unlock price, its tier prices, its drop odds, every rarity assignment, the random-sticker price, and the slot order all become immutable. The seal is a commitment device, not a security boundary — the user may always supersede or delete the album, at a cost.
 
 **Geometry**
@@ -85,3 +92,38 @@ Neither figure blocks sealing. They exist so the user cannot design an incoheren
 ---
 
 *Part of the Sticker Collector spec. Index: [`docs/prd/README.md`](./README.md)*
+
+**Hiding locked slots**
+
+An album may be created with **hide locked images**. With it set, a slot that has
+not been collected shows a single **locked cover** — one image per album, like
+the back of a card — instead of its own art under the grayscale filter. With no
+cover chosen, the slot shows a `?`. The rarity frame still reads on a hidden
+slot: that is how a locked slot announces its tier.
+
+This does not create a second asset. Grayscale remains a CSS filter over one
+colour master; the locked cover is a different picture the author supplied, and
+it is stored once for the whole album.
+
+**A sticker's own words**
+
+Each sticker may carry an optional **title** and **description**, written during
+creation and frozen by the seal along with its tier. Both are carried into a new
+edition — re-typing a hundred names to reprint an album would be absurd. An
+empty box is stored as `null`, not `""`: "no title" and "a deliberately blank
+title" must not be the same row.
+
+**Looking at a sticker**
+
+Tapping a **collected** sticker opens it full size, with whatever the author
+wrote about it in a single scrolling block beneath the picture — a title above a
+separately scrolling description reads as two panels rather than one caption.
+Swiping moves between collected stickers **without closing**: the point is to
+look through a collection, and a viewer that shut on every step would make that
+a tap per sticker. The ends stop rather than wrap, so reaching the end of an
+album is something you can tell. Arrow keys do the same as a swipe, because a
+swipe cannot be performed with a keyboard and this is the only way to read a
+description.
+
+A locked sticker cannot be opened. Its art is the thing being earned, and in an
+album that hides locked slots it is not downloaded at all.

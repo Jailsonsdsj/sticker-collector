@@ -92,6 +92,8 @@ albumListRoutes.get("/:id", async (c) => {
       id: sticker.id,
       albumId: sticker.albumId,
       imageKey: sticker.imageKey,
+      title: sticker.title,
+      description: sticker.description,
       tier: sticker.tier,
       slotIndex: sticker.slotIndex,
       quantity: holding.quantity,
@@ -99,12 +101,29 @@ albumListRoutes.get("/:id", async (c) => {
     .from(sticker)
     .leftJoin(holding, eq(holding.stickerId, sticker.id))
     .where(eq(sticker.albumId, albumId))
-    .orderBy(sticker.slotIndex);
+    // Rarity order, commonest first, then the stored slot order inside a tier.
+    //
+    // This is the one order both the grid and the print export read, so a
+    // printed sheet matches the screen. It supersedes the shuffle that
+    // `prd/04-albums.md` §Creating 10 used to describe: the slot order is still
+    // drawn once and stored — it is what breaks ties here — but it is no longer
+    // what the album is laid out by.
+    .orderBy(
+      sql`case ${sticker.tier}
+            when 'common' then 0
+            when 'rare' then 1
+            when 'epic' then 2
+            else 3
+          end`,
+      sticker.slotIndex,
+    );
 
   const stickers: OwnedSticker[] = slots.map((slot) => ({
     id: slot.id,
     albumId: slot.albumId,
     imageKey: slot.imageKey,
+    title: slot.title,
+    description: slot.description,
     tier: slot.tier,
     slotIndex: slot.slotIndex,
     quantity: slot.quantity ?? 0,

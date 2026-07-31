@@ -33,6 +33,7 @@ Defaults are in **bold**.
 | `ProgressBar` | `ui/ProgressBar.tsx` | `value` 0–100 (clamped) · `size` xs·sm·**md**·lg · `fill` **gradient**·accent · `tone` **cyan**·lime·coin·violet·magenta · `label` · `aria-label` | any value; label stays legible at 0 % and 100 % | `--gradient-progress` · accent colours · `--color-surface-3` · `--color-ink`/`-inverse` · `--radius-full/md/lg` |
 | `Tabs<T>` | `ui/Tabs.tsx` | `items: {value, label, tone?, disabled?}[]` · `value` · `onChange` · `tone` **violet**·cyan·coin·lime·magenta · `size` sm·**md** · `label` | selected, unselected, hover, focus-visible, disabled | accent colours · `--color-panel` · `--color-surface-4` · `--color-ink-secondary` · `--radius-lg/xl/md` |
 | `EmptyState` | `ui/EmptyState.tsx` | `icon` · `title` · `description` · `action` | with/without icon, description, action | `--color-border` (dashed) · `--color-surface-1` · `--color-ink-muted`/`-dim`/`-faint` · `--radius-3xl` · `--font-display` |
+| `ImageTile` | `ui/ImageTile.tsx` | `src` · `alt` **""** · `className` · `style` · `loading` **lazy**·eager | shimmering, loaded, failed | `--color-surface-2/4` · `.animate-image-shimmer` (app.css) |
 | `Skeleton` | `ui/Skeleton.tsx` | `variant` **text**·block·card · `lines` **1** | pulsing; static under `prefers-reduced-motion` | `--color-surface-3` · `--animate-skeleton` · `--aspect-card` · `--radius-sm/xl/lg` |
 
 **Helpers, not components:** `cx()` joins class names; `toneVars()` builds a tone's custom properties; `useModal()` drives a native `<dialog>` from an `open` prop.
@@ -88,9 +89,9 @@ All in `packages/web/src/styles/tokens.css`. Generated from the bundle — **do 
 
 **`Toast` is presentational.** The queue, the timers and the undo window are T-11's. Do not grow a provider inside the component.
 
-**Grayscale is a CSS filter over one colour master** — `--filter-locked`. There is never a second asset, and the reveal is a transition on that filter (`--animate-reveal-flood`).
+**Grayscale is a CSS filter over one colour master** — `--filter-locked`. There is never a second asset, and the reveal is a transition on that filter (`--animate-reveal-flood`). A hidden slot is the exception that proves it: it shows a *different* picture the author supplied, stored once per album, and does not request the sticker's art at all — otherwise the answer would be readable from the network tab.
 
-**Rarity frames must read on an empty slot.** The frame is the bezel *behind* the art, so a locked or unowned sticker still announces its tier.
+**Rarity frames must read on an empty slot.** The frame is the bezel *behind* the art, so a locked or unowned sticker still announces its tier — including a **hidden** one. An album with `hideLocked` replaces an unowned slot's art with the album's stand-in image (or a `?`), and keeps the frame: which slot holds the legendary is not the secret.
 
 **Focus rings are deliberate.** The design prototype sets `outline: none` everywhere with nothing in its place; every primitive here adds a token-driven `:focus-visible` ring instead. Keep it.
 
@@ -99,5 +100,7 @@ All in `packages/web/src/styles/tokens.css`. Generated from the bundle — **do 
 **A `<dialog>` gets none of `AppShell`'s safe-area padding.** `Sheet` and `Dialog` render in the browser's top layer, outside the shell entirely, so `env(safe-area-inset-*)` has to be reapplied on the sheet's own header and scroll area. With `apple-mobile-web-app-status-bar-style: black-translucent` the alternative is Cancel and Save sitting under the clock and battery. `--space-7` does not exist — the token scale skips 7 — so a `pb-7` equivalent is `var(--spacing)*7`.
 
 **A checkbox is 44px of label around a 28px box.** The visible square is `size-6`/`size-7`; the `<label>` wrapping it carries `min-h-11 min-w-11` so the finger has Apple's minimum to aim at. `fill` opts out of both — the weekly grids render wide cells, and seven 44px targets do not fit across a phone. `fill` is also the *only* thing that may put `w-full` on the box: it overrides the width half of the size class, and on a label with no width of its own that collapses to the borders alone. That shipped, and rendered the home screen's completion control four pixels wide.
+
+**A shimmer is not a skeleton.** `Skeleton` pulses opacity and says "this box is a placeholder"; `ImageTile` sweeps a highlight and says "a picture is on its way". An album grid of pulsing rectangles reads as broken where a grid of sweeping ones reads as loading. `ImageTile` is driven by the image's own `load`/`error` events, never a timer, so it cannot claim to still be loading after the picture arrived — or shimmer forever over one that is never coming.
 
 **Three components were invented, not transcribed.** `Toast`, `EmptyState` and `Skeleton` do not appear anywhere in the design bundle. They follow the system's language but have had no design review — treat them as the most likely to need adjustment.

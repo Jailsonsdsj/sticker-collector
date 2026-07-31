@@ -18,6 +18,8 @@ function album(over: Partial<AlbumSummary> = {}): AlbumSummary {
     randomPrice: 40,
     prices: { common: 10, rare: 20, epic: 30, legendary: 40 },
     odds: { common: 60, rare: 25, epic: 12, legendary: 3 },
+    hideLocked: false,
+    lockedCoverKey: null,
     unlockedAt: null,
     completedAt: null,
     sealedAt: "2026-07-01T00:00:00Z",
@@ -164,5 +166,12 @@ describe("opening an album", () => {
       "href",
       "/albums/alb1",
     );
+  });
+});
+
+describe("the title", () => {
+  it("is centred under the cover", () => {
+    renderCard();
+    expect(screen.getByRole("heading", { level: 3 }).className).toContain("text-center");
   });
 });

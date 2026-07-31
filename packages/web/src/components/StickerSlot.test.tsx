@@ -11,6 +11,8 @@ function sticker(over: Partial<OwnedSticker> = {}): OwnedSticker {
     id: "stk1",
     albumId: "alb1",
     imageKey: key(1),
+    title: null,
+    description: null,
     tier: "common",
     slotIndex: 0,
     quantity: 0,
@@ -157,5 +159,116 @@ describe("buying from the slot", () => {
   it("goes quiet while a purchase is in flight", () => {
     renderSlot({ quantity: 0 }, { pending: true });
     expect(screen.getByRole("button", { name: /Buy/ })).toBeDisabled();
+  });
+});
+
+describe("an album that hides its locked slots", () => {
+  const cover = key(77);
+  const hiding = { hideLocked: true, lockedCoverKey: cover };
+
+  const imageOf = (name: RegExp) =>
+    screen.getByRole("img", { name }).querySelector("img") as HTMLImageElement | null;
+
+  it("shows the album's stand-in instead of the sticker's own art", () => {
+    // Not a filtered copy of the art: the sticker's image is never requested,
+    // so the answer cannot be read out of the network tab either.
+    renderSlot({ quantity: 0 }, hiding);
+
+    expect(imageOf(/hidden/)?.getAttribute("src")).toContain(cover);
+    expect(imageOf(/hidden/)?.getAttribute("src")).not.toContain(key(1));
+  });
+
+  it("shows a ? when the author supplied no stand-in", () => {
+    renderSlot({ quantity: 0 }, { hideLocked: true, lockedCoverKey: null });
+
+    const slot = screen.getByRole("img", { name: /hidden/ });
+    expect(slot).toHaveTextContent("?");
+    expect(slot.querySelector("img")).toBeNull();
+  });
+
+  it("still announces the tier — that is what a locked slot is for", () => {
+    renderSlot({ quantity: 0, tier: "legendary" }, hiding);
+
+    expect(screen.getByRole("img", { name: "legendary slot, hidden" })).toBeInTheDocument();
+  });
+
+  it("keeps the rarity frame, so the grid still says where the legendary is", () => {
+    renderSlot({ quantity: 0, tier: "legendary" }, { hideLocked: true, lockedCoverKey: null });
+
+    expect(screen.getByRole("img", { name: /hidden/ })).toHaveAttribute("data-tier", "legendary");
+  });
+
+  it("shows the real art the moment the sticker is owned", () => {
+    renderSlot({ quantity: 1 }, hiding);
+
+    expect(imageOf(/collected/)?.getAttribute("src")).toContain(key(1));
+    expect(imageOf(/collected/)?.getAttribute("src")).not.toContain(cover);
+  });
+
+  it("does not gray the stand-in — it is shown as itself", () => {
+    // The author picked that picture *because* it reads as a hidden slot;
+    // dimming it would undo the choice.
+    renderSlot({ quantity: 0 }, hiding);
+
+    expect(imageOf(/hidden/)?.getAttribute("style")).toContain("var(--filter-unlocked)");
+  });
+
+  it("leaves an album that hides nothing exactly as it was", () => {
+    renderSlot({ quantity: 0 });
+
+    expect(imageOf(/empty/)?.getAttribute("src")).toContain(key(1));
+    expect(imageOf(/empty/)?.getAttribute("style")).toContain("locked-deep");
+  });
+});
+
+describe("a slot is a picture, not prose", () => {
+  it("refuses the context menu on the whole slot", () => {
+    // Not only the <img>: a control-click or long press anywhere on the tile
+    // would otherwise raise a menu over a tap target.
+    renderSlot({ quantity: 0 });
+
+    const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+    screen.getByRole("img", { name: /empty/ }).dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it("cannot be selected or long-pressed into a callout", () => {
+    renderSlot({ quantity: 0 });
+
+    const slot = screen.getByRole("img", { name: /empty/ });
+    expect(slot.className).toContain("select-none");
+    expect(slot.className).toContain("[-webkit-touch-callout:none]");
+  });
+});
+
+describe("locked art recedes", () => {
+  it("is dimmed as well as filtered, so collected stickers lead the eye", () => {
+    renderSlot({ quantity: 0 });
+
+    const style = screen.getByRole("img", { name: /empty/ }).querySelector("img")?.style;
+    expect(Number(style?.opacity)).toBeLessThan(1);
+  });
+
+  it("is at full strength the moment it is owned", () => {
+    renderSlot({ quantity: 1 });
+
+    const style = screen.getByRole("img", { name: /collected/ }).querySelector("img")?.style;
+    expect(style?.opacity).toBe("1");
+  });
+
+  it("does not dim a stand-in — it was chosen to be seen", () => {
+    renderSlot({ quantity: 0 }, { hideLocked: true, lockedCoverKey: key(77) });
+
+    const style = screen.getByRole("img", { name: /hidden/ }).querySelector("img")?.style;
+    expect(style?.opacity).toBe("1");
+  });
+});
+
+describe("the price says what it costs in", () => {
+  it("carries a coin beside the number", () => {
+    renderSlot({ quantity: 0 }, { albumUnlocked: true, affordable: true });
+
+    expect(screen.getByRole("button", { name: /Buy/ })).toHaveTextContent("¢");
   });
 });

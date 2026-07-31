@@ -41,11 +41,24 @@ export function claimsGesture(dx: number, dy: number): boolean {
   return Math.abs(dx) > SWIPE_CLAIM_PX && Math.abs(dx) > Math.abs(dy);
 }
 
-/** What a released gesture means, or null if it was not far enough. */
+/**
+ * Which way a released gesture went: -1 left, 1 right, 0 not far enough.
+ *
+ * The direction and the meaning are separate on purpose. A row reads right as
+ * "pin" and left as "delete"; the sticker viewer reads the same gesture as
+ * previous and next. Both agree on when a swipe counts, because both ask this.
+ */
+export function swipeDirection(dx: number, dy: number): -1 | 0 | 1 {
+  if (!claimsGesture(dx, dy)) return 0;
+  if (Math.abs(dx) < SWIPE_COMMIT_PX) return 0;
+  return dx > 0 ? 1 : -1;
+}
+
+/** What a released gesture means to a task row, or null if it was not far enough. */
 export function swipeIntent(dx: number, dy: number): SwipeIntent {
-  if (!claimsGesture(dx, dy)) return null;
-  if (Math.abs(dx) < SWIPE_COMMIT_PX) return null;
-  return dx > 0 ? "pin" : "delete";
+  const direction = swipeDirection(dx, dy);
+  if (direction === 0) return null;
+  return direction > 0 ? "pin" : "delete";
 }
 
 /**

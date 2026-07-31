@@ -1,3 +1,4 @@
+import type { Task } from "@sticker-collector/shared";
 import { todayIn } from "@sticker-collector/shared";
 import { useMemo, useState } from "react";
 import { Navigate } from "react-router";
@@ -8,7 +9,7 @@ import { WeeklyGrid } from "../components/WeeklyGrid";
 import { ApiError } from "../lib/api";
 import { usePendingCompletions } from "../lib/completionQueue";
 import { useUncompleteOccurrence, useUpdateTask } from "../lib/mutations";
-import { useOccurrences, useTasks } from "../lib/queries";
+import { useEpics, useOccurrences, useTasks } from "../lib/queries";
 import { weekDates } from "../lib/week";
 
 /**
@@ -26,21 +27,34 @@ import { weekDates } from "../lib/week";
  * screen wrote immediately, the identical misclick would be reversible in one
  * place and would silently pay coins in the other.
  */
+// Complete first, and selected by default: ticking a day is what you come back
+// to daily, where re-planning a routine is occasional. T-12's five-tap flow is
+// now five taps plus one to reach Schedule — a deliberate trade, and the reason
+// the order changed too.
 const VIEWS = [
-  { value: "schedule" as const, label: "Schedule", tone: "violet" as const },
   { value: "complete" as const, label: "Complete", tone: "lime" as const },
+  { value: "schedule" as const, label: "Schedule", tone: "violet" as const },
 ];
 
 export function Week() {
   const today = todayIn(Intl.DateTimeFormat().resolvedOptions().timeZone);
   const dates = useMemo(() => weekDates(today), [today]);
-  const [view, setView] = useState<"schedule" | "complete">("schedule");
+  const [view, setView] = useState<"schedule" | "complete">("complete");
 
   const tasks = useTasks();
+  const epics = useEpics();
   const occurrences = useOccurrences(dates[0] as string, dates[6] as string);
   const update = useUpdateTask();
   const uncomplete = useUncompleteOccurrence();
   const queue = usePendingCompletions();
+
+  // A row wears its epic's colour, the same accent the home screen uses, so an
+  // epic reads as one colour wherever its tasks appear.
+  const accentById = useMemo(
+    () => new Map((epics.data ?? []).map((epic) => [epic.id, epic.accent])),
+    [epics.data],
+  );
+  const accentOf = (task: Task) => (task.epicId ? (accentById.get(task.epicId) ?? null) : null);
 
   const routines = useMemo(
     () => (tasks.data ?? []).filter((task) => task.type === "routine" && !task.deletedAt),
@@ -71,6 +85,7 @@ export function Week() {
         <>
           <WeeklyGrid
             routines={routines}
+            accentOf={accentOf}
             today={today}
             onChangeMask={(id, weekdays) => update.mutate({ id, patch: { weekdays } })}
           />
@@ -81,6 +96,7 @@ export function Week() {
       ) : (
         <WeeklyCompletionGrid
           routines={routines}
+          accentOf={accentOf}
           occurrences={occurrences.data ?? []}
           dates={dates}
           today={today}

@@ -15,6 +15,8 @@ const stickers = (spec: Partial<Record<AlbumDraft["stickers"][number]["tier"], n
     Array.from({ length: count as number }, () => ({
       imageKey: key(++n),
       tier: tier as AlbumDraft["stickers"][number]["tier"],
+      title: "",
+      description: "",
     })),
   );
 };

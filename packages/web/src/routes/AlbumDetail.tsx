@@ -7,7 +7,9 @@ import { ExportPanel } from "../components/ExportPanel";
 import { AppHeader, StickerGrid } from "../components/layout";
 import { RevealDialog } from "../components/RevealDialog";
 import { StickerSlot } from "../components/StickerSlot";
+import { StickerViewer } from "../components/StickerViewer";
 import { Button, Chip, EmptyState, ErrorState, ProgressBar, Skeleton } from "../components/ui";
+import { cx } from "../components/ui/cx";
 import { ApiError } from "../lib/api";
 import { useBuySticker, useDeleteAlbum, usePullSticker, useSellDuplicate } from "../lib/mutations";
 import { useAlbum, useWallet } from "../lib/queries";
@@ -19,10 +21,38 @@ import { useAlbum, useWallet } from "../lib/queries";
  * hold, in black and white, with its rarity frames intact. Buying is what the
  * lock forbids (`prd/04-albums.md` §5, §Locked 4).
  */
+const SHOWN_FILTERS = [
+  { value: "all" as const, label: "All" },
+  { value: "unlocked" as const, label: "Unlocked" },
+  { value: "locked" as const, label: "Locked" },
+];
+
+/**
+ * The coin, wherever a price is. Same glyph and gradient as the wallet, so a
+ * number that costs coins never looks like a number that means anything else.
+ */
+function CoinIcon({ size = "sm" }: { size?: "sm" | "md" }) {
+  return (
+    <span
+      aria-hidden
+      className={cx(
+        "inline-flex items-center justify-center rounded-full font-numeric text-coin-ink [background:var(--gradient-coin)]",
+        // Matched to the number it sits beside: a 16px coin next to a 20px
+        // figure reads as a bullet point rather than as currency.
+        size === "md" ? "size-6 text-2xs" : "size-4 text-3xs",
+      )}
+    >
+      ¢
+    </span>
+  );
+}
+
 export function AlbumDetail() {
   const { id = "" } = useParams();
-  const [missingOnly, setMissingOnly] = useState(false);
+  /** All / Unlocked / Locked. "Locked" is what "Missing only" used to mean. */
+  const [shown, setShown] = useState<"all" | "unlocked" | "locked">("all");
   const [reveal, setReveal] = useState<PullResult | null>(null);
+  const [viewing, setViewing] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
   const navigate = useNavigate();
 
@@ -77,8 +107,15 @@ export function AlbumDetail() {
   const { album: summary, stickers } = album.data;
   const balance = wallet.data?.balance ?? 0;
   const unlocked = summary.status !== "locked";
-  const visible = missingOnly ? stickers.filter((s) => s.quantity === 0) : stickers;
+  const visible = stickers.filter((sticker) =>
+    shown === "all" ? true : shown === "unlocked" ? sticker.quantity > 0 : sticker.quantity === 0,
+  );
   const refund = duplicateRefund(summary.randomPrice);
+
+  // The viewer moves between COLLECTED stickers only, and it walks the list the
+  // grid is showing — so paging through it follows the order on screen rather
+  // than a second one the user cannot see.
+  const viewable = visible.filter((sticker) => sticker.quantity > 0);
 
   // Reachability, decided by the same function the Worker uses. The API is
   // still the authority — it 409s — but the button should not offer a roll that
@@ -89,21 +126,31 @@ export function AlbumDetail() {
 
   return (
     <>
-      <AppHeader
-        title={summary.title}
-        trailing={
+      <AppHeader title={summary.title} />
+
+      {/* The album's own words, straight under its name — what it is, before
+          how far through it you are. */}
+      {summary.description && (
+        <p className="mb-3 font-body text-md text-ink-secondary">{summary.description}</p>
+      )}
+
+      <div className="mb-3 flex items-center gap-2 overflow-x-auto">
+        <span className="font-body text-2xs tracking-kicker text-ink-muted uppercase">Show</span>
+        {SHOWN_FILTERS.map((option) => (
           <Chip
+            key={option.value}
             size="sm"
             tone="cyan"
             fill="tint"
             font="body"
-            selected={missingOnly}
-            onClick={() => setMissingOnly((on) => !on)}
+            className="shrink-0"
+            selected={shown === option.value}
+            onClick={() => setShown(option.value)}
           >
-            Missing only
+            {option.label}
           </Chip>
-        }
-      />
+        ))}
+      </div>
 
       <div className="mb-4 flex flex-col gap-2">
         <ProgressBar
@@ -133,14 +180,23 @@ export function AlbumDetail() {
             loading={pull.isPending}
             onClick={async () => setReveal(await pull.mutateAsync())}
           >
-            Random sticker · {summary.randomPrice}
+            Random sticker · <CoinIcon /> {summary.randomPrice}
           </Button>
-          {!rollable && (
-            <p className="font-body text-sm text-ink-dim">
-              Nothing left that a roll can reach — the rest is direct purchase only.
-            </p>
-          )}
+
+          {/* What you have to spend, on the line where spending happens. */}
+          {/* Larger than the prices around it: this is the number you check
+              before deciding, not one of the several you are choosing between. */}
+          <span className="ml-auto flex shrink-0 items-center gap-1 font-numeric text-2xl font-bold text-coin">
+            <CoinIcon size="md" />
+            {balance.toLocaleString()}
+          </span>
         </div>
+      )}
+
+      {unlocked && !rollable && (
+        <p className="mb-4 font-body text-sm text-ink-dim">
+          Nothing left that a roll can reach — the rest is direct purchase only.
+        </p>
       )}
 
       {visible.length === 0 ? (
@@ -149,7 +205,7 @@ export function AlbumDetail() {
           title="Nothing missing"
           description="Every slot in this album is filled."
           action={
-            <Button variant="outline" tone="cyan" onClick={() => setMissingOnly(false)}>
+            <Button variant="outline" tone="cyan" onClick={() => setShown("all")}>
               Show the whole album
             </Button>
           }
@@ -167,6 +223,9 @@ export function AlbumDetail() {
               onBuy={() => buy.mutate(sticker.id)}
               refund={refund}
               onSell={() => sell.mutate(sticker.id)}
+              hideLocked={summary.hideLocked}
+              lockedCoverKey={summary.lockedCoverKey}
+              onOpen={() => setViewing(viewable.findIndex((s) => s.id === sticker.id))}
             />
           ))}
         </StickerGrid>
@@ -179,6 +238,13 @@ export function AlbumDetail() {
           Delete this album
         </Button>
       </div>
+
+      <StickerViewer
+        stickers={viewable}
+        index={viewing}
+        onIndex={setViewing}
+        onClose={() => setViewing(null)}
+      />
 
       <DeleteAlbumDialog
         open={deleting}
