@@ -1,6 +1,7 @@
 import type { AlbumDetail } from "@sticker-collector/shared";
-import { useEffect, useReducer, useState } from "react";
-import { useNavigate } from "react-router";
+import { useEffect, useReducer, useRef, useState } from "react";
+import { useBlocker, useNavigate } from "react-router";
+import { DiscardDraftDialog } from "../components/DiscardDraftDialog";
 import { AppHeader } from "../components/layout";
 import { Button, Skeleton, Tabs } from "../components/ui";
 import { DetailsStep } from "../components/wizard/DetailsStep";
@@ -51,6 +52,10 @@ export function AlbumNew() {
   const [choosing, setChoosing] = useState(true);
   const [seeding, setSeeding] = useState(false);
   const create = useCreateAlbum();
+  // Sealing navigates too, and it must not be asked whether to discard the
+  // album it just created. A ref rather than state: the blocker reads it at
+  // navigation time, and a re-render would arrive too late.
+  const leaving = useRef(false);
   const albums = useAlbums({ sort: "created" });
 
   // A draft left behind by an earlier visit is the whole arrangement — restore
@@ -77,6 +82,24 @@ export function AlbumNew() {
     void saveDraft(draft);
   }, [draft, restored]);
 
+  /**
+   * Leaving with work in it asks first — and then discards.
+   *
+   * The blocker covers **every** in-app exit, not just the Close button: the
+   * tab bar and the browser's back button leave this screen too, and a guard
+   * that only one of the three respects is a guard the user cannot trust.
+   */
+  const dirty = restored && !isPristine(draft);
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) =>
+      dirty && !leaving.current && currentLocation.pathname !== nextLocation.pathname,
+  );
+
+  const discard = async () => {
+    await clearDraft();
+    blocker.proceed?.();
+  };
+
   const problems = validate(draft);
   const sealable = isSealable(draft);
 
@@ -84,6 +107,7 @@ export function AlbumNew() {
     setFailure(null);
     try {
       const sealed = await create.mutateAsync(toPayload(draft));
+      leaving.current = true;
       // Cleared only after the album exists. The reverse order would drop the
       // draft on a failed request and lose everything.
       await clearDraft();
@@ -150,6 +174,12 @@ export function AlbumNew() {
           {step === "seal" && <SealStep {...stepProps} />}
         </>
       )}
+
+      <DiscardDraftDialog
+        open={blocker.state === "blocked"}
+        onKeep={() => blocker.reset?.()}
+        onDiscard={() => void discard()}
+      />
 
       {failure && (
         <p role="alert" className="mt-4 font-body text-sm text-magenta">

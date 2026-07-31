@@ -10,6 +10,7 @@
 **Enhancements (MVP)**
 
 - **"Almost there" surfacing.** The listing sorts an album within one or two stickers of completion to the top, or badges it. The last slot is the hardest and the most motivating; the app should point at it.
+- **The creation draft is kept, but a deliberate exit discards it.** Everything typed into the wizard is persisted as it is entered, so a refresh, a crash or a closed tab loses nothing. **Leaving on purpose** — Close, the tab bar, the browser's back button — asks "Discard this album?" first, and clears the draft when confirmed. Without that, backing out and starting again silently reopened the last attempt's title, cover and stickers, which looked like a fresh album's defaults rather than leftovers.
 - **Affordability cue.** An album the current balance could unlock is subtly marked. It answers "what can I afford right now" without arithmetic.
 
 **Locked albums**
