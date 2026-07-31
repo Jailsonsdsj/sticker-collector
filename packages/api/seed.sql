@@ -62,11 +62,16 @@ INSERT INTO task (
 -- however long from now the seed is run. A future-dated `done` row would be a
 -- lie the whole occurrence model is built to avoid.
 --
+-- History starts TWO days back, not one. `date('now')` is UTC, while the app
+-- reads "today" in the user's timezone — so with a westward offset the seed's
+-- "yesterday" IS the user's today, and a fixture quietly becomes today's work.
+-- Skipping a day puts every seeded completion beyond the reach of any offset.
+--
 -- The coin snapshot is 30 — the task's reward at the time — and the ledger is
 -- the only place the balance exists (SUM(ledger)); there is no balance column
 -- to keep in step.
 INSERT INTO occurrence (id, task_id, scheduled_on, status, completed_at, reward_snapshot_coins)
-WITH RECURSIVE day(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM day WHERE n < 50)
+WITH RECURSIVE day(n) AS (SELECT 2 UNION ALL SELECT n + 1 FROM day WHERE n < 51)
 SELECT
   'occ_seed_' || n,
   'task_read',

@@ -4,6 +4,7 @@ import { Link, Navigate } from "react-router";
 import { QuickAdd } from "../components/QuickAdd";
 import { SectionHeading, type SectionTone } from "../components/SectionHeading";
 import { SelectionBar } from "../components/SelectionBar";
+import { SwipeRow } from "../components/SwipeRow";
 import { TaskForm } from "../components/TaskForm";
 import { TaskRow } from "../components/TaskRow";
 import { Button, Dialog, EmptyState, ErrorState, Skeleton } from "../components/ui";
@@ -35,7 +36,10 @@ import { useSelection } from "../lib/selection";
 export function Tasks() {
   // The user's own timezone decides which day this is. The browser knows it;
   // the API resolves the same thing from `user.timezone` for its own answers.
-  const today = todayIn(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  // Resolved once and reused: `buildHome` needs the zone as well as the date,
+  // because "completed today" is a UTC instant read in the user's own day.
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const today = todayIn(timeZone);
   const from = addDays(today, -HOME_WINDOW_BACK);
   const to = addDays(today, HOME_WINDOW_FORWARD);
 
@@ -73,8 +77,8 @@ export function Tasks() {
   );
 
   const sections = useMemo(
-    () => buildHome(occurrences.data ?? [], tasks.data ?? [], today),
-    [occurrences.data, tasks.data, today],
+    () => buildHome(occurrences.data ?? [], tasks.data ?? [], today, timeZone),
+    [occurrences.data, tasks.data, today, timeZone],
   );
 
   const epicById = useMemo(
@@ -90,11 +94,7 @@ export function Tasks() {
   // "Nothing to do yet" to someone with a full day ahead of them.
   const failed = !loading && (occurrences.isError || tasks.isError);
   const empty =
-    !loading &&
-    !failed &&
-    sections.missed.length === 0 &&
-    sections.today.length === 0 &&
-    sections.backlog.length === 0;
+    !loading && !failed && Object.values(sections).every((section) => section.length === 0);
 
   const renderRow = (item: HomeItem) => {
     const epic = item.task.epicId ? epicById.get(item.task.epicId) : undefined;
@@ -109,31 +109,48 @@ export function Tasks() {
     const future = item.scheduledOn !== null && item.scheduledOn > today;
     const waiting = queue.isPending(ref);
 
+    // Only an undated one-off can be pinned: a fresh completion is validated
+    // against the schedule, and that is its single exception. The swipe still
+    // responds on the others and says why, rather than reading as broken.
+    const pinBlocked =
+      item.task.type === "routine"
+        ? "Routines follow their own schedule."
+        : item.task.dueAt
+          ? "This one already has a due date."
+          : undefined;
+
     return (
-      <TaskRow
+      <SwipeRow
         key={item.key}
-        title={item.task.title}
-        priority={item.task.priority}
-        rewardCoins={coins}
-        epicAccent={epic?.accent ?? null}
-        epicTitle={epic?.title ?? null}
-        typeLabel={item.task.type === "routine" ? "↻ routine" : "· one-off"}
-        done={item.done || waiting}
-        disabled={future}
-        selecting={selecting}
-        selected={selection.has(item.task.id)}
-        onSelect={() => selection.toggle(item.task.id)}
-        onEdit={() => setEditing({ task: item.task, nonce: Date.now() })}
-        onToggle={(next) => {
-          if (next) {
-            queue.complete(ref, { title: item.task.title, coins });
-          } else if (waiting) {
-            queue.cancel(ref); // still inside the window: nothing was ever sent
-          } else {
-            void uncomplete.mutateAsync(ref); // past the window: re-open it
-          }
-        }}
-      />
+        disabled={selecting}
+        pinBlockedReason={pinBlocked}
+        onPin={() => updateTask.mutate({ id: item.task.id, patch: { pinnedOn: today } })}
+        onDelete={() => deleteTask.mutate(item.task.id)}
+      >
+        <TaskRow
+          title={item.task.title}
+          priority={item.task.priority}
+          rewardCoins={coins}
+          epicAccent={epic?.accent ?? null}
+          epicTitle={epic?.title ?? null}
+          typeLabel={item.task.type === "routine" ? "↻ routine" : "· one-off"}
+          done={item.done || waiting}
+          disabled={future}
+          selecting={selecting}
+          selected={selection.has(item.task.id)}
+          onSelect={() => selection.toggle(item.task.id)}
+          onEdit={() => setEditing({ task: item.task, nonce: Date.now() })}
+          onToggle={(next) => {
+            if (next) {
+              queue.complete(ref, { title: item.task.title, coins });
+            } else if (waiting) {
+              queue.cancel(ref); // still inside the window: nothing was ever sent
+            } else {
+              void uncomplete.mutateAsync(ref); // past the window: re-open it
+            }
+          }}
+        />
+      </SwipeRow>
     );
   };
 
@@ -151,7 +168,7 @@ export function Tasks() {
           <Link
             to="/settings"
             aria-label="Settings"
-            className="-mt-2 -mr-2 flex min-h-11 min-w-11 items-center justify-center text-xl text-ink-secondary no-underline"
+            className="-mt-2 -mr-2 flex min-h-11 min-w-11 items-center justify-center text-3xl text-ink-secondary no-underline"
           >
             {/* U+FE0E forces TEXT presentation. Without it iOS renders U+2699 as
                 a full-colour emoji gear, which is the one thing this monochrome
@@ -268,6 +285,25 @@ export function Tasks() {
 
       {!loading && !failed && !empty && (
         <div className="flex flex-col gap-6">
+          {/* Order is what you act on first: today's work, then the loose
+              captures, then what slipped. Completed today sits below them as a
+              record, and the fortnight ahead is reference material. */}
+          <Section
+            tone="today"
+            title="For today"
+            items={sections.forToday}
+            render={renderRow}
+            open={folds.isOpen("today")}
+            onToggle={() => folds.toggle("today")}
+          />
+          <Section
+            tone="general"
+            title="General"
+            items={sections.general}
+            render={renderRow}
+            open={folds.isOpen("general")}
+            onToggle={() => folds.toggle("general")}
+          />
           <Section
             tone="missed"
             title="Missed"
@@ -277,18 +313,17 @@ export function Tasks() {
             onToggle={() => folds.toggle("missed")}
           />
           <Section
-            tone="today"
-            title="Today"
-            items={sections.today}
-            count={`${sections.today.filter((i) => i.done).length}/${sections.today.length}`}
+            tone="completed"
+            title="Completed today"
+            items={sections.completedToday}
             render={renderRow}
-            open={folds.isOpen("today")}
-            onToggle={() => folds.toggle("today")}
+            open={folds.isOpen("completed")}
+            onToggle={() => folds.toggle("completed")}
           />
           <Section
             tone="backlog"
-            title="Backlog"
-            items={sections.backlog}
+            title="Routine backlog"
+            items={sections.routineBacklog}
             render={renderRow}
             open={folds.isOpen("backlog")}
             onToggle={() => folds.toggle("backlog")}

@@ -106,6 +106,7 @@ describe("useUpdateTask — optimistic, with rollback", () => {
     startsOn: null,
     endsOn: null,
     dueAt: null,
+    pinnedOn: null,
     createdAt: "2026-07-01T00:00:00Z",
     deletedAt: null,
     lastCompletedOn: null,

@@ -1,6 +1,6 @@
 import { maskHasDay, WEEKDAYS, type Weekday } from "@sticker-collector/shared";
 import type { TaskFormAction, TaskFormState } from "../../lib/taskForm";
-import { Chip, Field, Input, Tabs } from "../ui";
+import { Checkbox, Chip, Field, Input, Tabs } from "../ui";
 
 // One-off first, and it is also `initialState`'s default — the first tab being
 // the selected one is the whole point of the order.
@@ -75,6 +75,21 @@ export function ScheduleFields({
             onChange={(e) => dispatch({ kind: "dueTime", value: e.target.value })}
           />
         </div>
+      )}
+
+      {/* Offered for an UNDATED one-off only, and that is not a UI preference.
+          The API validates a fresh completion against the schedule, and an
+          undated one-off is its single exception — anything else pinned to
+          today would be a row in today's list that the server refuses to tick.
+          Giving a date to a pinned task therefore takes the pin away with it. */}
+      {state.type === "oneoff" && !state.dueDate && (
+        <Field label="Today">
+          <Checkbox
+            label="Do this today"
+            checked={state.pinnedToday}
+            onChange={(value) => dispatch({ kind: "pinToday", value })}
+          />
+        </Field>
       )}
     </>
   );

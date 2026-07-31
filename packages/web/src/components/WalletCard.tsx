@@ -75,7 +75,9 @@ export function WalletCard({ balance, loading, pendingCoins = 0, action }: Walle
         <div className="flex flex-col items-end gap-1">
           {action}
           {!loading && (
-            <div className="text-right font-numeric text-xs text-ink-muted">≈ {hoursOf(shown)}</div>
+            <div className="text-right font-numeric text-base text-ink-secondary">
+              ≈ {hoursOf(shown)}
+            </div>
           )}
         </div>
       </div>

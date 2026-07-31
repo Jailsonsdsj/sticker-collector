@@ -33,6 +33,7 @@ const task = (over: Partial<Task>): Task => ({
   startsOn: null,
   endsOn: null,
   dueAt: null,
+  pinnedOn: null,
   createdAt: "2026-07-01T00:00:00Z",
   deletedAt: null,
   lastCompletedOn: null,
@@ -99,6 +100,12 @@ async function enterSelection() {
   const user = userEvent.setup();
   render(<Tasks />, { wrapper });
   await waitFor(() => expect(screen.getByText("Buy milk")).toBeInTheDocument());
+
+  // Missed starts folded — it is reference, not work in hand — and these tests
+  // are about a routine spanning several days, most of which are missed ones.
+  const missed = screen.queryByRole("button", { name: /Missed/ });
+  if (missed && missed.getAttribute("aria-expanded") === "false") await user.click(missed);
+
   await user.click(screen.getByRole("button", { name: "Select" }));
   return user;
 }
