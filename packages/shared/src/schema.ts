@@ -36,7 +36,31 @@ export type OccurrenceStatusValue = z.infer<typeof occurrenceStatusSchema>;
  * would put a literal colour in the database and defeat the token guard the
  * moment a component rendered it. These map to `--color-epic-*` in tokens.css.
  */
-export const epicAccentSchema = z.enum(["epic-1", "epic-2", "epic-3", "epic-4", "epic-5"]);
+/**
+ * The palette an epic picks from.
+ *
+ * Every value here must have a `--color-epic-N` in `tokens.css`, or an epic
+ * validates fine and then renders with no colour at all.
+ */
+export const EPIC_ACCENTS = [
+  "epic-1",
+  "epic-2",
+  "epic-3",
+  "epic-4",
+  "epic-5",
+  "epic-6",
+  "epic-7",
+  "epic-8",
+  "epic-9",
+  "epic-10",
+  "epic-11",
+  "epic-12",
+  "epic-13",
+  "epic-14",
+  "epic-15",
+] as const;
+
+export const epicAccentSchema = z.enum(EPIC_ACCENTS);
 export type EpicAccent = z.infer<typeof epicAccentSchema>;
 
 /** 7-bit weekday mask, bit 0 = Monday. A routine with no days is not a routine. */
@@ -222,6 +246,8 @@ export type Occurrence = z.infer<typeof occurrenceSchema>;
 
 export const createEpicSchema = z.strictObject({
   title: titleSchema,
+  /** Optional, author-written. Empty means "none", not an empty description. */
+  description: z.string().max(2000).nullish(),
   accent: epicAccentSchema.default("epic-1"),
   /** "Finish this epic to afford the Travel album" — informational only. */
   coinGoalAlbumId: idSchema.nullish(),
@@ -232,6 +258,7 @@ export type CreateEpic = z.output<typeof createEpicSchema>;
 export const updateEpicSchema = z
   .strictObject({
     title: titleSchema,
+    description: z.string().max(2000).nullish(),
     accent: epicAccentSchema,
     coinGoalAlbumId: idSchema.nullish(),
   })
@@ -249,6 +276,7 @@ export type DeleteEpic = z.infer<typeof deleteEpicSchema>;
 export const epicSchema = z.object({
   id: idSchema,
   title: z.string(),
+  description: z.string().nullable(),
   accent: epicAccentSchema,
   coinGoalAlbumId: idSchema.nullable(),
   createdAt: instantSchema,

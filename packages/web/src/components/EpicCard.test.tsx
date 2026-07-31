@@ -7,6 +7,7 @@ import { EpicCard } from "./EpicCard";
 const epic = (over: Partial<Epic> = {}): Epic => ({
   id: "e1",
   title: "Sticker App",
+  description: null,
   accent: "epic-1",
   coinGoalAlbumId: null,
   createdAt: "2026-07-01T00:00:00Z",

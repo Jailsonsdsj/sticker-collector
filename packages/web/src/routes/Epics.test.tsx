@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { CompletionQueueProvider } from "../lib/completionQueue";
 import { Epics } from "./Epics";
 
 /**
@@ -17,6 +18,7 @@ const EPICS: Epic[] = [
   {
     id: "e1",
     title: "Sticker App",
+    description: null,
     accent: "epic-1",
     coinGoalAlbumId: null,
     createdAt: "2026-07-01T00:00:00Z",
@@ -26,6 +28,7 @@ const EPICS: Epic[] = [
   {
     id: "e2",
     title: "Health",
+    description: null,
     accent: "epic-2",
     coinGoalAlbumId: null,
     createdAt: "2026-07-01T00:00:00Z",
@@ -55,6 +58,17 @@ const TASKS: Task[] = [
     lastCompletedOn: null,
   },
   { ...({} as Task), id: "t2", epicId: "e2", title: "Stretch", type: "routine" } as Task,
+  // Already done. It keeps a checkbox — a ticked, inert one — because a row
+  // that loses its box on completion reads as a row that vanished.
+  {
+    ...({} as Task),
+    id: "t3",
+    epicId: "e1",
+    title: "Shipped it",
+    type: "oneoff",
+    rewardCoins: 20,
+    lastCompletedOn: "2026-07-20",
+  } as Task,
 ];
 
 let fetchMock: ReturnType<typeof vi.fn>;
@@ -67,10 +81,15 @@ function json(body: unknown, status = 200) {
   });
 }
 
+/** Every completion the queue actually committed, in order. */
+const completions = vi.fn(async (_ref: { taskId: string; scheduledOn: string }) => undefined);
+
 function wrapper({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={["/epics"]}>{children}</MemoryRouter>
+      <CompletionQueueProvider onCommit={(ref) => completions(ref)}>
+        <MemoryRouter initialEntries={["/epics"]}>{children}</MemoryRouter>
+      </CompletionQueueProvider>
     </QueryClientProvider>
   );
 }
@@ -204,7 +223,11 @@ describe("epic CRUD", () => {
       const post = fetchMock.mock.calls.find(
         ([url, init]) => url === "/api/epics" && init?.method === "POST",
       );
-      expect(JSON.parse(post?.[1].body as string)).toEqual({ title: "Travel", accent: "epic-3" });
+      expect(JSON.parse(post?.[1].body as string)).toEqual({
+        title: "Travel",
+        description: null,
+        accent: "epic-3",
+      });
     });
   });
 
@@ -246,5 +269,65 @@ describe("epic CRUD", () => {
       const del = fetchMock.mock.calls.find(([, init]) => init?.method === "DELETE");
       expect(del?.[0]).toBe("/api/epics/e1?mode=unlink");
     });
+  });
+});
+
+describe("finishing a task from inside the epic", () => {
+  it("gives a one-off a checkbox and the routine beside it none", async () => {
+    const user = userEvent.setup();
+    renderScreen();
+    await waitFor(() => expect(epicHeader("Sticker App")).toBeInTheDocument());
+    await user.click(epicHeader("Sticker App"));
+
+    expect(screen.getByRole("checkbox", { name: /complete ship it$/i })).toBeInTheDocument();
+
+    const done = screen.getByRole("checkbox", { name: /complete shipped it/i });
+    expect(done).toBeChecked();
+    expect(done).toBeDisabled();
+
+    await user.click(epicHeader("Health"));
+    // "Stretch" is a routine: it belongs to a day, and the API refuses a
+    // completion on a date its schedule does not cover. No checkbox at all is
+    // honest; a checkbox that 400s is not.
+    expect(screen.queryByRole("checkbox", { name: /complete stretch/i })).toBeNull();
+  });
+
+  it("queues the completion rather than posting it, so it can still be undone", async () => {
+    const user = userEvent.setup();
+    renderScreen();
+    await waitFor(() => expect(epicHeader("Sticker App")).toBeInTheDocument());
+    await user.click(epicHeader("Sticker App"));
+
+    await user.click(screen.getByRole("checkbox", { name: /complete ship it/i }));
+
+    expect(screen.getByRole("checkbox", { name: /complete ship it/i })).toBeChecked();
+    // Still nothing on the wire — the undo window has not closed.
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/complete"))).toBe(false);
+  });
+
+  it("opens the task's own form when its title is clicked", async () => {
+    const user = userEvent.setup();
+    renderScreen();
+    await waitFor(() => expect(epicHeader("Sticker App")).toBeInTheDocument());
+    await user.click(epicHeader("Sticker App"));
+
+    await user.click(screen.getByRole("button", { name: "Ship it" }));
+
+    // Editing, not creating: the sheet is seeded with the task.
+    expect(sheet().getByDisplayValue("Ship it")).toBeInTheDocument();
+  });
+});
+
+describe("the epic description", () => {
+  it("shows it on the card", async () => {
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.startsWith("/api/epics"))
+        return json([{ ...EPICS[0], description: "Everything for the sticker app." }]);
+      if (url.startsWith("/api/tasks")) return json([]);
+      return json({});
+    });
+
+    renderScreen();
+    expect(await screen.findByText("Everything for the sticker app.")).toBeInTheDocument();
   });
 });

@@ -4,7 +4,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { IDBFactory } from "fake-indexeddb";
 import type { ReactNode } from "react";
-import { MemoryRouter, Route, Routes } from "react-router";
+import { createMemoryRouter, RouterProvider } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initialDraft } from "../lib/albumDraft";
 import { loadDraft, saveDraft } from "../lib/draftStore";
@@ -46,16 +46,25 @@ let queryClient: QueryClient;
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
+/**
+ * A DATA router, not `MemoryRouter`. The wizard blocks navigation while it
+ * holds unsaved work, and `useBlocker` only exists on a data router — under
+ * `MemoryRouter` every test here throws. `App` uses `createBrowserRouter`, so
+ * this is also the closer environment.
+ */
 function wrapper({ children }: { children: ReactNode }) {
+  const router = createMemoryRouter(
+    [
+      { path: "/albums/new", element: children },
+      { path: "/albums/:id", element: <p>the sealed album</p> },
+      { path: "/albums", element: <p>the shelf</p> },
+    ],
+    { initialEntries: ["/albums/new"] },
+  );
+
   return (
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={["/albums/new"]}>
-        <Routes>
-          <Route path="/albums/new" element={children} />
-          <Route path="/albums/:id" element={<p>the sealed album</p>} />
-          <Route path="/albums" element={<p>the shelf</p>} />
-        </Routes>
-      </MemoryRouter>
+      <RouterProvider router={router} />
     </QueryClientProvider>
   );
 }
@@ -530,5 +539,61 @@ describe("starting from an existing album", () => {
 
     expect(((await screen.findByLabelText(/title/i)) as HTMLInputElement).value).toBe("");
     expect((await loadDraft())?.derivedFromAlbumId ?? null).toBeNull();
+  });
+});
+
+describe("leaving the wizard", () => {
+  it("asks before dropping work, and stays put when told to keep editing", async () => {
+    await sealedDraft();
+    const user = await open();
+    await screen.findByDisplayValue("Kitchen heroes");
+
+    await user.click(screen.getByRole("button", { name: "Close" }));
+
+    expect(await screen.findByText("Discard this album?")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Keep editing" }));
+
+    // Still in the wizard, and the draft is untouched.
+    expect(screen.getByDisplayValue("Kitchen heroes")).toBeInTheDocument();
+    expect((await loadDraft())?.title).toBe("Kitchen heroes");
+  });
+
+  it("clears the stored draft on discard, so the next visit starts empty", async () => {
+    // The bug: back out of a new album, tap New album again, and last time's
+    // title and stickers were already filled in.
+    await sealedDraft();
+    const user = await open();
+    await screen.findByDisplayValue("Kitchen heroes");
+
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    await user.click(await screen.findByRole("button", { name: "Discard" }));
+
+    expect(await screen.findByText("the shelf")).toBeInTheDocument();
+    expect(await loadDraft()).toBeNull();
+  });
+
+  it("does not ask when there is nothing to lose", async () => {
+    const user = await open();
+
+    await user.click(screen.getByRole("button", { name: "Close" }));
+
+    // An empty wizard has no work in it; a confirmation would be a speed bump
+    // in front of nothing.
+    expect(await screen.findByText("the shelf")).toBeInTheDocument();
+    expect(screen.queryByText("Discard this album?")).toBeNull();
+  });
+
+  it("does not ask when the album was just sealed", async () => {
+    await sealedDraft();
+    const user = await open();
+    await screen.findByDisplayValue("Kitchen heroes");
+    await user.click(screen.getByRole("tab", { name: "Seal" }));
+
+    await user.click(screen.getByRole("button", { name: "Seal album" }));
+
+    // Sealing navigates to the new album. Asking "discard?" about the album it
+    // just created would be nonsense.
+    expect(await screen.findByText("the sealed album")).toBeInTheDocument();
+    expect(screen.queryByText("Discard this album?")).toBeNull();
   });
 });
