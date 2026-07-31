@@ -1,14 +1,19 @@
 import type { CSSProperties, ReactNode } from "react";
 import { cx } from "./ui/cx";
 
-export type SectionTone = "missed" | "today" | "backlog";
+export type SectionTone = "missed" | "general" | "today" | "backlog" | "completed";
 
 /** Each section wears its own accent, per the design: Missed magenta, Today
  *  cyan, Backlog muted — so the eye finds the urgent one first. */
 const TONE: Record<SectionTone, string> = {
   missed: "--color-missed",
+  // General is capture, not urgency — it wears the same muted accent as the
+  // backlog so the eye still lands on Missed and For today first.
+  general: "--color-backlog",
   today: "--color-today",
   backlog: "--color-backlog",
+  // Done work reads as earned, which is the same green the wallet pays in.
+  completed: "--color-earn",
 };
 
 export function SectionHeading({

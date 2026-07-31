@@ -394,6 +394,12 @@ describe("lastCompletedOn", () => {
     // Daily: these offsets are relative to the real current date, so a weekday
     // mask would refuse whichever of them lands on a weekend.
     const created = await createRoutine({ weekdays: 0b1111111 });
+    // A routine is not scheduled before it existed, so a task created a second
+    // ago has no earlier days to complete.
+    await env.DB.prepare("UPDATE task SET created_at = ? WHERE id = ?")
+      .bind("2026-01-01T00:00:00Z", created.id)
+      .run();
+
     const today = todayIn("America/Sao_Paulo");
     for (const day of [addDays(today, -3), addDays(today, -1)]) {
       await call("POST", "/api/occurrences/complete", { taskId: created.id, scheduledOn: day });

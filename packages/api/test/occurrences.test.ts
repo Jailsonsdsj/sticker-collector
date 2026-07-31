@@ -2,12 +2,15 @@ import { env } from "cloudflare:test";
 import {
   addDays,
   maskFromDays,
+  occurrencesInWindow,
   todayIn,
+  WEEKDAYS_MASK_ALL,
   WEEKDAYS_MASK_WEEKDAYS,
   type Weekday,
 } from "@sticker-collector/shared";
 import { beforeEach, describe, expect, it } from "vitest";
 import app from "../src/index";
+import { scheduleOf } from "../src/lib/occurrences";
 
 // Real router, real D1, real session. The zero-writes claim is checked by
 // counting rows before and after — not by trusting the handler.
@@ -62,6 +65,22 @@ async function createTask(body: Record<string, unknown>): Promise<{ id: string }
   const res = await call("POST", "/api/tasks", body);
   expect(res.status).toBe(201);
   return (await res.json()) as { id: string };
+}
+
+/**
+ * Creates the task as though it had existed for a while.
+ *
+ * A routine's schedule starts no earlier than the day it was created — you
+ * cannot have missed something that did not exist — so any test about a *past*
+ * day needs a task that was actually around then. Without this the window is
+ * simply empty, which is correct behaviour and a useless fixture.
+ */
+async function createOldTask(body: Record<string, unknown>, daysAgo = 60) {
+  const task = await createTask(body);
+  await env.DB.prepare("UPDATE task SET created_at = ? WHERE id = ?")
+    .bind(`${addDays(today, -daysAgo)}T00:00:00Z`, task.id)
+    .run();
+  return task;
 }
 
 const monFri = (extra: Record<string, unknown> = {}) => ({
@@ -204,9 +223,86 @@ describe("the join with stored rows", () => {
   });
 });
 
+describe("a routine does not exist before it was created", () => {
+  it("skips the earlier days of the week it was added in", () => {
+    // The reported bug, at the exact shape it was reported: a Mon–Sun routine
+    // added on a THURSDAY showed Monday, Tuesday and Wednesday of that same
+    // week as missed — three failures against a task that did not exist yet.
+    //
+    // Asserted against scheduleOf rather than the route because the weekday has
+    // to be fixed: "today" comes from the clock, and this scenario is only
+    // reproducible on a Thursday.
+    const thursday = "2026-08-06"; // a Thursday
+    const task = {
+      type: "routine",
+      weekdays: WEEKDAYS_MASK_ALL,
+      startsOn: null,
+      endsOn: null,
+      dueAt: null,
+      createdAt: `${thursday}T09:00:00Z`,
+    } as unknown as Parameters<typeof scheduleOf>[0];
+
+    const week = occurrencesInWindow(scheduleOf(task, "UTC"), "2026-08-03", "2026-08-09");
+
+    // Monday the 3rd through Wednesday the 5th are simply not scheduled.
+    expect(week).toEqual(["2026-08-06", "2026-08-07", "2026-08-08", "2026-08-09"]);
+  });
+
+  it("generates nothing before its creation day", async () => {
+    await createTask(monFri({ weekdays: 0b1111111 })); // every day
+
+    const got = await fetchWindow(addDays(today, -7), today);
+
+    expect(got.map((o) => o.scheduledOn)).toEqual([today]);
+  });
+
+  it("still starts today, so the day you add it counts", async () => {
+    await createTask(monFri({ weekdays: 0b1111111 }));
+
+    const got = await fetchWindow(addDays(today, -7), addDays(today, 2));
+
+    expect(got.find((o) => o.scheduledOn === today)?.status).toBe("pending");
+    expect(got.some((o) => o.status === "missed")).toBe(false);
+  });
+
+  it("honours a startsOn in the future — that is a real intention", async () => {
+    const later = addDays(today, 3);
+    await createTask(monFri({ weekdays: 0b1111111, startsOn: later }));
+
+    const got = await fetchWindow(addDays(today, -7), addDays(today, 7));
+
+    expect(got.every((o) => o.scheduledOn >= later)).toBe(true);
+  });
+
+  it("clamps a startsOn in the past — backdating cannot invent failures", async () => {
+    await createTask(monFri({ weekdays: 0b1111111, startsOn: addDays(today, -30) }));
+
+    const got = await fetchWindow(addDays(today, -7), today);
+
+    expect(got.map((o) => o.scheduledOn)).toEqual([today]);
+  });
+
+  it("keeps a stored row from before creation, so history is never dropped", async () => {
+    // Seeded and restored history predates the row's created_at. The window is
+    // scheduled days UNION days that actually have a row, and this is why.
+    const task = await createTask(monFri({ weekdays: 0b1111111 }));
+    const earlier = addDays(today, -3);
+    await env.DB.prepare(
+      `INSERT INTO occurrence (id, task_id, scheduled_on, status, completed_at, reward_snapshot_coins)
+       VALUES (?, ?, ?, 'done', ?, 15)`,
+    )
+      .bind(crypto.randomUUID(), task.id, earlier, `${earlier}T12:00:00Z`)
+      .run();
+
+    const got = await fetchWindow(addDays(today, -7), today);
+
+    expect(got.find((o) => o.scheduledOn === earlier)?.status).toBe("done");
+  });
+});
+
 describe("status derivation, end to end", () => {
   it("is pending today and in the future, missed at day 1 and 7", async () => {
-    await createTask(monFri({ weekdays: 0b1111111 })); // daily, so every offset lands
+    await createOldTask(monFri({ weekdays: 0b1111111 })); // daily, so every offset lands
     const got = await fetchWindow(addDays(today, -8), addDays(today, 2));
     const at = (offset: number) =>
       got.find((o) => o.scheduledOn === addDays(today, offset))?.status;
@@ -258,7 +354,9 @@ describe("timezone", () => {
     for (const zone of ["Pacific/Kiritimati", "Pacific/Niue"]) {
       const u = await makeUser(zone);
       token = u.token;
-      await createTask(monFri({ weekdays: 0b1111111 }));
+      // Old enough that yesterday is inside the routine's schedule — a task
+      // created today has no yesterday to be missed on.
+      await createOldTask(monFri({ weekdays: 0b1111111 }));
 
       const theirToday = todayIn(zone);
       const yesterday = addDays(theirToday, -1);

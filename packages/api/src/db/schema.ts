@@ -110,6 +110,11 @@ export const task = sqliteTable(
     startsOn: text("starts_on"),
     endsOn: text("ends_on"),
     dueAt: text("due_at"),
+    // The local day this task was pinned to, or null. A DATE rather than a
+    // boolean so the pin expires by itself: pinned for today is a statement
+    // about today, and tomorrow it should stop being true without anyone
+    // having to remember to clear it.
+    pinnedOn: text("pinned_on"),
     createdAt: text("created_at").notNull(),
     deletedAt: text("deleted_at"),
   },

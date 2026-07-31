@@ -20,6 +20,7 @@ export const PATCHABLE = [
   "startsOn",
   "endsOn",
   "dueAt",
+  "pinnedOn",
 ] as const;
 
 export type PatchField = (typeof PATCHABLE)[number];
@@ -42,6 +43,8 @@ export function newTaskRow(userId: string, input: CreateTask): TaskInsert {
     startsOn: input.type === "routine" ? (input.startsOn ?? null) : null,
     endsOn: input.type === "routine" ? (input.endsOn ?? null) : null,
     dueAt: input.type === "oneoff" ? (input.dueAt ?? null) : null,
+    // Only an undated one-off may carry a pin — see `buildTaskPatch`.
+    pinnedOn: input.type === "oneoff" && !input.dueAt ? (input.pinnedOn ?? null) : null,
     createdAt: new Date().toISOString(),
     deletedAt: null,
   };
@@ -89,6 +92,22 @@ export function buildTaskPatch(
     return { error: "a one-off has no weekday schedule" };
   }
 
+  /**
+   * Only an UNDATED one-off can be pinned to a day.
+   *
+   * Not a policy choice — `validateDate` lets a fresh completion through only
+   * on a day the schedule yields, and the undated one-off is its single
+   * exception ("completed on the day you tick it"). Pinning anything else would
+   * put a row in today's list that this same API then refuses to complete, so
+   * the refusal belongs here, where the cause is still legible.
+   */
+  if (data.pinnedOn != null) {
+    const dated = "dueAt" in data ? data.dueAt != null : current.dueAt != null;
+    if (current.type !== "oneoff" || dated) {
+      return { error: "only an undated one-off can be pinned to a day" };
+    }
+  }
+
   const patch: Record<string, unknown> = {};
   for (const field of PATCHABLE) {
     if (field in data && data[field] !== undefined) patch[field] = data[field];
@@ -129,6 +148,7 @@ export function toTask(row: TaskRow, lastCompletedOn: string | null = null): Tas
     startsOn: row.startsOn,
     endsOn: row.endsOn,
     dueAt: row.dueAt,
+    pinnedOn: row.pinnedOn,
     createdAt: row.createdAt,
     deletedAt: row.deletedAt,
     lastCompletedOn,

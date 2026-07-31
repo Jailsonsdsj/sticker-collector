@@ -57,11 +57,21 @@ export function QuickAdd({ onAdd, pending = false }: QuickAddProps) {
         <Button
           type="submit"
           tone="lime"
+          // The glyph is 30px tall, so the size's own `py-3` pushes the button
+          // taller than the input beside it. Trimmed inline rather than by
+          // class: both are plain padding utilities, so which one wins is
+          // decided by Tailwind's stylesheet order, not by the class attribute.
+          style={{ paddingBlock: "var(--space-2)" }}
           aria-label="Add task"
           disabled={!trimmed || pending}
           loading={pending}
         >
-          +
+          {/* The glyph carries the button, not the padding: a "+" at body size
+              reads as a small control however wide the button is. `leading-none`
+              keeps the taller glyph from growing the button around it. */}
+          <span aria-hidden className="text-3xl leading-none">
+            +
+          </span>
         </Button>
       </div>
       {failed && (

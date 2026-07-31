@@ -4,6 +4,7 @@ import {
   type Priority,
   type Task,
   type TaskType,
+  todayIn,
   type UpdateTask,
   WEEKDAYS_MASK_NONE,
   type Weekday,
@@ -39,6 +40,8 @@ export interface TaskFormState {
   rewardCoins: string;
   /** Set the moment the user edits reward; from then on it stops tracking effort. */
   rewardLocked: boolean;
+  /** "Do this today" — lifts an undated capture into the For today section. */
+  pinnedToday: boolean;
   priority: Priority;
   epicId: string | null;
 }
@@ -50,6 +53,7 @@ export type TaskFormAction =
   | { kind: "dueDate" | "dueTime"; value: string }
   | { kind: "effort"; value: string }
   | { kind: "reward"; value: string }
+  | { kind: "pinToday"; value: boolean }
   | { kind: "priority"; value: Priority }
   | { kind: "epic"; value: string | null };
 
@@ -80,6 +84,7 @@ export function initialState(options: { epicId?: string | null } = {}): TaskForm
     effortMinutes: "",
     rewardCoins: "",
     rewardLocked: false,
+    pinnedToday: false,
     priority: "medium",
     epicId: options.epicId ?? null,
   };
@@ -98,6 +103,9 @@ export function reduce(state: TaskFormState, action: TaskFormAction): TaskFormSt
       return action.value === "routine"
         ? { ...state, type: "routine", dueDate: "", dueTime: "" }
         : { ...state, type: "oneoff", weekdays: WEEKDAYS_MASK_NONE };
+
+    case "pinToday":
+      return { ...state, pinnedToday: action.value };
 
     case "weekday":
       return { ...state, weekdays: maskToggleDay(state.weekdays, action.value) };
@@ -178,7 +186,17 @@ export function toPayload(state: TaskFormState): CreateTaskInput | null {
 
   return state.type === "routine"
     ? { ...common, type: "routine", weekdays: state.weekdays }
-    : { ...common, type: "oneoff", dueAt: toDueAt(state.dueDate, state.dueTime) };
+    : {
+        ...common,
+        type: "oneoff",
+        dueAt: toDueAt(state.dueDate, state.dueTime),
+        // Only an UNDATED one-off may be pinned: the API validates a fresh
+        // completion against the schedule, and that is its single exception.
+        pinnedOn:
+          state.pinnedToday && !state.dueDate
+            ? todayIn(Intl.DateTimeFormat().resolvedOptions().timeZone)
+            : null,
+      };
 }
 
 /** What the reward field's hint should say — the design's `rewardHint`. */
@@ -218,6 +236,9 @@ export function stateFromTask(task: Task): TaskFormState {
     // tracking. One that differs stays pinned — editing effort must not quietly
     // rewrite a number the user chose deliberately.
     rewardLocked: task.rewardCoins !== task.effortMinutes,
+    // Pinned yesterday is not pinned today — the date is the whole reason the
+    // flag is a date, so a stale pin reads as unpinned rather than as a choice.
+    pinnedToday: task.pinnedOn === todayIn(Intl.DateTimeFormat().resolvedOptions().timeZone),
     priority: task.priority,
     epicId: task.epicId,
   };
@@ -250,6 +271,13 @@ export function toPatch(state: TaskFormState, original: Task): UpdateTask | null
     original.rewardCoins,
   );
   set("priority", state.priority, original.priority);
+
+  // Pin/unpin, but only where it can mean anything: the completion guard lets
+  // an arbitrary "today" through for undated one-offs alone.
+  if (original.type === "oneoff" && !state.dueDate) {
+    const today = todayIn(Intl.DateTimeFormat().resolvedOptions().timeZone);
+    set("pinnedOn", state.pinnedToday ? today : null, original.pinnedOn);
+  }
 
   // The task's own type decides which schedule may be sent, not the form's.
   if (original.type === "routine") {

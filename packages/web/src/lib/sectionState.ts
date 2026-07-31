@@ -1,43 +1,62 @@
 import { useCallback, useState } from "react";
 
 /**
- * Which home-screen sections are collapsed, remembered across visits.
+ * Which home-screen sections are folded, remembered across visits.
  *
- * Persisted on purpose. A toggle that resets on every load is busywork: you
- * collapse the Backlog to get it out of the way, and it is back the next time
- * you open the app. `localStorage` is the right home here precisely because it
- * is per-device — which sections you want folded on a phone is not a fact about
- * your account, and it should not follow you to another screen or ride along in
- * a backup.
+ * Storage holds only the sections the user has actually **toggled**, not the
+ * full picture. The rest come from `SECTION_DEFAULTS` below, which means a
+ * default can be changed later and will reach everyone who never expressed a
+ * preference — storing the resolved state instead would freeze today's defaults
+ * into every existing install.
  *
- * Stored as the collapsed set rather than the open one, so **open is the
- * default**: a section that has never been touched — and any section added
- * later — shows its contents rather than hiding work behind a caret.
+ * `localStorage` is the right home: which sections you keep folded on a phone is
+ * not a fact about your account, and it should not follow you to another screen
+ * or ride along in a backup.
  */
-const KEY = "sc_collapsed_sections";
+const KEY = "sc_section_open";
 
-function read(): string[] {
+/**
+ * Open unless there is a reason not to be.
+ *
+ * Missed and the routine backlog start folded because they are reference, not
+ * work in hand: one is what already slipped, the other is a fortnight that has
+ * not happened yet. Putting either above the fold pushes today's actual list
+ * off the first screenful.
+ */
+export const SECTION_DEFAULTS: Record<string, boolean> = {
+  today: true,
+  general: true,
+  missed: false,
+  completed: true,
+  backlog: false,
+};
+
+function read(): Record<string, boolean> {
   try {
-    const raw = JSON.parse(localStorage.getItem(KEY) ?? "[]");
-    return Array.isArray(raw) ? raw.filter((v): v is string => typeof v === "string") : [];
+    const raw: unknown = JSON.parse(localStorage.getItem(KEY) ?? "{}");
+    // An array is the previous format (a list of collapsed ids). Rejecting it
+    // here means an old value is simply forgotten rather than misread.
+    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return {};
+    return Object.fromEntries(
+      Object.entries(raw as Record<string, unknown>).filter(([, v]) => typeof v === "boolean"),
+    ) as Record<string, boolean>;
   } catch {
     // A corrupted value must not take the home screen down with it.
-    return [];
+    return {};
   }
 }
 
-export function collapsedSections(): string[] {
-  return read();
+/** Whether a section shows its contents, given what the user has chosen. */
+export function sectionIsOpen(chosen: Record<string, boolean>, id: string): boolean {
+  return chosen[id] ?? SECTION_DEFAULTS[id] ?? true;
 }
 
 export function useCollapsibleSections() {
-  const [collapsed, setCollapsed] = useState<string[]>(read);
+  const [chosen, setChosen] = useState<Record<string, boolean>>(read);
 
   const toggle = useCallback((id: string) => {
-    setCollapsed((current) => {
-      const next = current.includes(id)
-        ? current.filter((entry) => entry !== id)
-        : [...current, id];
+    setChosen((current) => {
+      const next = { ...current, [id]: !sectionIsOpen(current, id) };
       try {
         localStorage.setItem(KEY, JSON.stringify(next));
       } catch {
@@ -49,7 +68,7 @@ export function useCollapsibleSections() {
   }, []);
 
   return {
-    isOpen: (id: string) => !collapsed.includes(id),
+    isOpen: (id: string) => sectionIsOpen(chosen, id),
     toggle,
   };
 }

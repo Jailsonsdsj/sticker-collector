@@ -39,6 +39,21 @@ export default defineConfig({
 
   use: {
     baseURL: `http://localhost:${PORT}`,
+
+    /**
+     * The browser runs in the seeded user's timezone.
+     *
+     * The app decides "today" in two places — the client, for the date it sends
+     * and renders, and the Worker, which validates against `user.timezone`. The
+     * client currently reads the *device* zone, so when the two disagree the
+     * app misbehaves for an hour or so around midnight (TD-31). CI runs in UTC
+     * and developer machines do not, which made this suite fail by time of day
+     * and location rather than by anything in the code.
+     *
+     * Pinning the browser to the seed user's zone removes that variable from
+     * the tests. It does not fix the underlying skew — see TD-31.
+     */
+    timezoneId: "Europe/Lisbon",
     trace: "on-first-retry",
     screenshot: "only-on-failure",
   },

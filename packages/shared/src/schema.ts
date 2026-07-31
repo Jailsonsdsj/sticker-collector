@@ -84,8 +84,10 @@ const createRoutineSchema = z
 const createOneOffSchema = z.strictObject({
   ...taskCommonFields,
   type: z.literal("oneoff"),
-  /** Null or absent means undated: backlog only, and it never archives. */
+  /** Null or absent means undated: General only, and it never archives. */
   dueAt: instantSchema.nullish(),
+  /** Capture it and do it today, without a second round trip. */
+  pinnedOn: localDateSchema.nullish(),
 });
 
 /**
@@ -122,6 +124,8 @@ export const updateTaskSchema = z
     startsOn: localDateSchema.nullish(),
     endsOn: localDateSchema.nullish(),
     dueAt: instantSchema.nullish(),
+    /** Set to today to pin, null to unpin. */
+    pinnedOn: localDateSchema.nullish(),
   })
   .partial()
   .refine((t) => Object.keys(t).length > 0, { message: "no fields to update" })
@@ -155,6 +159,14 @@ export const taskSchema = z.object({
   startsOn: localDateSchema.nullable(),
   endsOn: localDateSchema.nullable(),
   dueAt: instantSchema.nullable(),
+  /**
+   * The local day this task is pinned to, or null.
+   *
+   * A date, not a boolean, so the pin expires on its own — "do this today" is a
+   * claim about today, and a boolean would still be true next week with no way
+   * to tell a deliberate pin from a forgotten one.
+   */
+  pinnedOn: localDateSchema.nullable(),
   createdAt: instantSchema,
   deletedAt: instantSchema.nullable(),
   /**

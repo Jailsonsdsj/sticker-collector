@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { login } from "./helpers";
+import { login, tick } from "./helpers";
 
 /**
  * The two things a desktop viewport cannot show you: safe-area insets, and a
@@ -57,10 +57,30 @@ test("Cancel is actually legible, not 6% white", async ({ page }) => {
   expect(colour).not.toContain("0.06");
 });
 
+test("sections open or fold according to what they are for", async ({ page }) => {
+  // Work in hand is open; reference is folded. Missed is what already slipped
+  // and the backlog is a fortnight that has not happened — either one open
+  // pushes today's actual list off the first screenful.
+  await login(page);
+
+  await expect(page.getByRole("button", { name: /For today/ })).toHaveAttribute(
+    "aria-expanded",
+    "true",
+  );
+  await expect(page.getByRole("button", { name: /General/ })).toHaveAttribute(
+    "aria-expanded",
+    "true",
+  );
+  await expect(page.getByRole("button", { name: /Missed/ })).toHaveAttribute(
+    "aria-expanded",
+    "false",
+  );
+});
+
 test("a section folds away and stays folded", async ({ page }) => {
   await login(page);
 
-  const heading = page.getByRole("button", { name: /Missed/ });
+  const heading = page.getByRole("button", { name: /General/ });
   await expect(heading).toHaveAttribute("aria-expanded", "true");
   const before = await page.getByRole("checkbox").count();
   expect(before).toBeGreaterThan(0);
@@ -71,9 +91,26 @@ test("a section folds away and stays folded", async ({ page }) => {
 
   // Remembered: a toggle that resets on reload is busywork.
   await page.reload();
-  await expect(page.getByRole("button", { name: /Missed/ })).toHaveAttribute(
+  await expect(page.getByRole("button", { name: /General/ })).toHaveAttribute(
     "aria-expanded",
     "false",
+  );
+});
+
+test("unfolding a section that starts closed is remembered too", async ({ page }) => {
+  // Storage records only what was toggled, so an override has to work in the
+  // opening direction as well — otherwise "closed by default" would be a
+  // sentence the user cannot answer back to.
+  await login(page);
+
+  const missed = page.getByRole("button", { name: /Missed/ });
+  await missed.click();
+  await expect(missed).toHaveAttribute("aria-expanded", "true");
+
+  await page.reload();
+  await expect(page.getByRole("button", { name: /Missed/ })).toHaveAttribute(
+    "aria-expanded",
+    "true",
   );
 });
 
@@ -106,4 +143,42 @@ test("the effort presets scroll sideways instead of shrinking", async ({ page })
       .boundingBox();
     expect(box!.width, label).toBeGreaterThan(30);
   }
+});
+
+test("ticking a task moves it into Completed today", async ({ page }) => {
+  // The headline of the section rework: a done row leaves the list it was in
+  // rather than sitting there dimmed. Only a real render shows this — the
+  // sectioning is pure, but the moving is what the user actually sees.
+  //
+  // The task is created here rather than borrowed from the seed. The suite
+  // shares one database and runs in file order, so anything the earlier
+  // journeys tick is already in Completed today by the time this runs — an
+  // assertion about what that section holds beforehand is really an assertion
+  // about the other tests.
+  await login(page);
+
+  // A daily ROUTINE, not a quick-add capture. An undated one-off is validated
+  // as "completable today only", against `user.timezone` — while the browser
+  // computes the date it sends from the *device* zone. When those disagree
+  // across midnight the completion is refused (TD-31). A mask covering every
+  // weekday is valid on whichever day either clock believes it is, so this
+  // test measures the row moving rather than that skew.
+  const title = `Move me ${Date.now()}`;
+  const created = await page.request.post("/api/tasks", {
+    data: { type: "routine", title, effortMinutes: 15, weekdays: 0b1111111 },
+  });
+  expect(created.status()).toBe(201);
+  await page.reload();
+
+  const sectionFor = (name: RegExp) => page.getByRole("button", { name }).locator("xpath=../..");
+
+  // A routine is never scheduled before the day it was created, so a daily one
+  // starts today.
+  await expect(sectionFor(/For today/).getByText(title)).toBeVisible();
+
+  await tick(page, title);
+
+  await expect(sectionFor(/Completed today/).getByText(title)).toBeVisible();
+  // ...and it is no longer offered as work to do.
+  await expect(sectionFor(/For today/).getByText(title)).toHaveCount(0);
 });
