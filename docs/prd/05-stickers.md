@@ -11,6 +11,8 @@
 
 - **The reveal.** A random pull animates the black-and-white slot flooding into color, held a beat longer for higher tiers. This is the app's single most rewarding moment; it earns real attention.
 - **Duplicate, then decide.** A duplicate surfaces its "sell for X" action inline, so a pull that returns a dupe still ends in a choice rather than a dead end.
+- **The sticker viewer.** Tapping a collected sticker opens it full-size with its title and description. Swiping — or the arrow keys — moves through the **collected** stickers only, without closing, and the next one **slides in from the side the last one left towards**, so "back" never feels like "next". A locked slot has nothing to show: its art is the thing being earned.
+- **Saving a sticker to the device.** The viewer offers a download icon (no label — the glyph is the whole control, with an accessible name behind it). On a device that can share files it opens the share sheet, which is the only route to an iOS camera roll; everywhere else it downloads, named after the sticker's title rather than its content address.
 - **Missing-only view.** A toggle inside an album that dims owned slots and highlights what's left. It turns "what do I still need" into a glance.
 
 **Rarity**
