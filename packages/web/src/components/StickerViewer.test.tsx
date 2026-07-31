@@ -1,9 +1,13 @@
 import type { OwnedSticker } from "@sticker-collector/shared";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import gsap from "gsap";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { saveSticker } from "../lib/saveImage";
 import { SWIPE_COMMIT_PX } from "../lib/swipe";
 import { StickerViewer } from "./StickerViewer";
+
+vi.mock("../lib/saveImage", () => ({ saveSticker: vi.fn() }));
 
 const key = (n: number) => `img/${n.toString(16).padStart(64, "0")}.jpg`;
 
@@ -140,5 +144,97 @@ describe("moving through the collection", () => {
   it("says where you are", () => {
     setup(1);
     expect(screen.getByText("2 of 3")).toBeInTheDocument();
+  });
+});
+
+/** The viewer only animates when motion is welcome; jsdom answers "no" to every
+ *  media query unless told otherwise. */
+const withMotion = () =>
+  vi.stubGlobal("matchMedia", (query: string) => ({
+    matches: query.includes("no-preference"),
+    media: query,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    onchange: null,
+    dispatchEvent: () => false,
+  }));
+
+describe("sliding between stickers", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  const renderAt = (index: number) => {
+    const view = render(
+      <StickerViewer stickers={three} index={index} onIndex={vi.fn()} onClose={vi.fn()} />,
+    );
+    return (next: number) =>
+      view.rerender(
+        <StickerViewer stickers={three} index={next} onIndex={vi.fn()} onClose={vi.fn()} />,
+      );
+  };
+
+  it("enters from the side the last one left towards", async () => {
+    withMotion();
+    const fromTo = vi.spyOn(gsap, "fromTo").mockReturnValue({} as ReturnType<typeof gsap.fromTo>);
+    const user = userEvent.setup();
+
+    const go = renderAt(0);
+    // Opening is not a step: the sheet is already animating itself in.
+    expect(fromTo).not.toHaveBeenCalled();
+
+    // Forward: the new sticker comes in from the right.
+    await user.keyboard("{ArrowRight}");
+    go(1);
+    expect(fromTo.mock.calls[0]?.[1]).toMatchObject({ xPercent: 60 });
+
+    // Back: from the left, or "previous" would feel identical to "next".
+    await user.keyboard("{ArrowLeft}");
+    go(0);
+    expect(fromTo.mock.calls[1]?.[1]).toMatchObject({ xPercent: -60 });
+
+    fromTo.mockRestore();
+  });
+
+  it("changes the sticker without animating when motion is unwelcome", () => {
+    const fromTo = vi.spyOn(gsap, "fromTo");
+
+    const go = renderAt(0);
+    go(1);
+
+    expect(fromTo).not.toHaveBeenCalled();
+    expect(screen.getByText("2 of 3")).toBeInTheDocument();
+    fromTo.mockRestore();
+  });
+});
+
+describe("saving a sticker to the device", () => {
+  it("saves the one being looked at, under a name taken from its title", async () => {
+    const user = userEvent.setup();
+    setup(1);
+
+    await user.click(screen.getByRole("button", { name: /save image/i }));
+
+    expect(saveSticker).toHaveBeenCalledWith(key(2), "Grey Wolf");
+  });
+
+  it("says so when it fails, instead of failing silently", async () => {
+    vi.mocked(saveSticker).mockRejectedValueOnce(new Error("nope"));
+    const user = userEvent.setup();
+    setup(0);
+
+    await user.click(screen.getByRole("button", { name: /save image/i }));
+
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/could not be saved/i));
+  });
+
+  it("labels the button rather than writing the word Download", () => {
+    setup(0);
+
+    const button = screen.getByRole("button", { name: /save image/i });
+    // Icon only, by request — but an icon with no accessible name is a button
+    // nobody who cannot see it can use.
+    expect(button).toHaveTextContent("");
+    expect(button).toHaveAccessibleName();
   });
 });
