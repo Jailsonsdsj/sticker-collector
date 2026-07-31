@@ -11,6 +11,12 @@
 html {
   background: var(--color-void);
   color-scheme: dark;
+  /* Kills the double-tap-to-zoom gesture (and with it the 300ms tap delay that
+     waiting for a possible second tap used to cost). `manipulation` keeps
+     panning and pinch-zoom available to the browser; it only drops the
+     double-tap. Unlike the viewport flags below it, iOS honours this in Safari
+     as well as in the installed app. */
+  touch-action: manipulation;
 }
 
 body {
@@ -23,4 +29,37 @@ body {
   font-weight: var(--font-weight-body);
   line-height: var(--leading-normal);
   -webkit-font-smoothing: antialiased;
+}
+
+/* The wallet coin turns on the spot, left to right.
+ *
+ * Defined here rather than in tokens.css: that file is generated from the
+ * design bundle and says so at the top ("do not hand-edit"), so an animation
+ * invented in code belongs in the stylesheet that is hand-written.
+ *
+ * rotateY needs a perspective to read as a coin rather than a squash — without
+ * one the face just narrows to a line and springs back. The perspective lives
+ * on the transform itself so no parent has to cooperate.
+ */
+@keyframes coin-spin {
+  from {
+    transform: perspective(120px) rotateY(0deg);
+  }
+  to {
+    transform: perspective(120px) rotateY(360deg);
+  }
+}
+
+.animate-coin-spin {
+  animation: coin-spin 3.6s linear infinite;
+  /* The coin keeps its own lighting while it turns; without this the gradient
+     face flips to its back half and reads as a hole. */
+  backface-visibility: visible;
+}
+
+/* A permanently turning object is exactly what this setting is for. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-coin-spin {
+    animation: none;
+  }
 }

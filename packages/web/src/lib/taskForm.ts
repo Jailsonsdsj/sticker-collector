@@ -53,7 +53,12 @@ export type TaskFormAction =
   | { kind: "priority"; value: Priority }
   | { kind: "epic"; value: string | null };
 
-export const EFFORT_PRESETS = [15, 30, 60, 90] as const;
+/**
+ * Effort presets, shortest first. Seven of them no longer fit across a phone,
+ * so `EffortFields` scrolls the row sideways rather than wrapping or shrinking
+ * each chip below a comfortable tap target.
+ */
+export const EFFORT_PRESETS = [5, 10, 15, 30, 60, 90, 120] as const;
 
 /**
  * A blank form, except for an epic when the form was opened from one.
@@ -66,7 +71,9 @@ export function initialState(options: { epicId?: string | null } = {}): TaskForm
     title: "",
     description: "",
     url: "",
-    type: "routine",
+    // One-off is both the first tab and the default: quick-add already creates
+    // one-offs, so the full form starting anywhere else made the two disagree.
+    type: "oneoff",
     weekdays: WEEKDAYS_MASK_NONE,
     dueDate: "",
     dueTime: "",

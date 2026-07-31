@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import { STORAGE_STATE } from "./helpers";
 
 /**
  * End-to-end smoke tests: the two journeys the whole app exists to deliver.
@@ -42,7 +43,23 @@ export default defineConfig({
     screenshot: "only-on-failure",
   },
 
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  // One engine by default. WebKit is the engine that actually matters for an
+  // installed iOS PWA, and adding it as a second project is a two-line change —
+  // but the suite cannot currently run twice in one go: every test logs in, and
+  // the auth rate limiter allows 10 attempts per 15 minutes per IP, so the
+  // second project fails with "Too many attempts". The journeys also share one
+  // seeded database and spend it. Both are fixable (a shared storageState, a
+  // per-project reseed) and neither is fixed today — see TD-26.
+  projects: [
+    // Signs in once and parks the session; everything else reuses it. See
+    // auth.setup.ts for why (the auth rate limiter is real, and correct).
+    { name: "setup", testMatch: /auth\.setup\.ts/ },
+    {
+      name: "chromium",
+      use: { ...devices["Desktop Chrome"], storageState: STORAGE_STATE },
+      dependencies: ["setup"],
+    },
+  ],
 
   webServer: {
     // Seed first: the journeys assume the Forest Friends album, its twelve

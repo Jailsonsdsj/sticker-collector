@@ -23,3 +23,6 @@ docs/design/**/*.webp
 /playwright-report/
 /test-results/
 /blob-report/
+
+# Playwright signed-in session, recreated on every run.
+/e2e/.auth/

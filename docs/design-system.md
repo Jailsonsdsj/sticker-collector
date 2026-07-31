@@ -94,6 +94,10 @@ All in `packages/web/src/styles/tokens.css`. Generated from the bundle — **do 
 
 **Focus rings are deliberate.** The design prototype sets `outline: none` everywhere with nothing in its place; every primitive here adds a token-driven `:focus-visible` ring instead. Keep it.
 
+**A tone's surface colour is not its text colour.** `Button`'s tone map carries `accent` (the colour as a fill) and an optional `ink` (the colour as type). They are the same for every accent tone, which is why `ink` is usually absent — but `neutral`'s accent is `--color-surface-2`, 6% white, correct behind a solid button and invisible as text. `ghost` and `outline` render the tone *as text*, so every Cancel and the epic-card Edit shipped at 6% opacity. Never point `ghost`/`outline` at a `--color-surface-*` token.
+
+**A `<dialog>` gets none of `AppShell`'s safe-area padding.** `Sheet` and `Dialog` render in the browser's top layer, outside the shell entirely, so `env(safe-area-inset-*)` has to be reapplied on the sheet's own header and scroll area. With `apple-mobile-web-app-status-bar-style: black-translucent` the alternative is Cancel and Save sitting under the clock and battery. `--space-7` does not exist — the token scale skips 7 — so a `pb-7` equivalent is `var(--spacing)*7`.
+
 **A checkbox is 44px of label around a 28px box.** The visible square is `size-6`/`size-7`; the `<label>` wrapping it carries `min-h-11 min-w-11` so the finger has Apple's minimum to aim at. `fill` opts out of both — the weekly grids render wide cells, and seven 44px targets do not fit across a phone. `fill` is also the *only* thing that may put `w-full` on the box: it overrides the width half of the size class, and on a label with no width of its own that collapses to the borders alone. That shipped, and rendered the home screen's completion control four pixels wide.
 
 **Three components were invented, not transcribed.** `Toast`, `EmptyState` and `Skeleton` do not appear anywhere in the design bundle. They follow the system's language but have had no design review — treat them as the most likely to need adjustment.

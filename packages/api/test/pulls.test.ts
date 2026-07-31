@@ -227,11 +227,20 @@ describe("the roll", () => {
   });
 
   it("increments the copy instead of writing a second row", async () => {
+    // Five rares, not one — and that is load-bearing. `canPullRandom` needs a
+    // tier with odds AND unowned stock, so with a single rare a 1-in-100 first
+    // pull could take it, complete the album, and leave the remaining pulls
+    // refused with the quantity still at 1. That is a test that fails once every
+    // hundred CI runs for no reason anyone can reproduce.
     const { album, stickers } = await playable({
       odds: { common: 99, rare: 1, epic: 0, legendary: 0 },
       stickers: [
         { imageKey: key(1), tier: "common" },
         { imageKey: key(2), tier: "rare" },
+        { imageKey: key(3), tier: "rare" },
+        { imageKey: key(4), tier: "rare" },
+        { imageKey: key(5), tier: "rare" },
+        { imageKey: key(6), tier: "rare" },
       ],
     });
     const common = stickers.find((s) => s.tier === "common") as { id: string };

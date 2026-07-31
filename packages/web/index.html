@@ -3,8 +3,17 @@
   <head>
     <meta charset="UTF-8" />
     <!-- viewport-fit=cover is what makes env(safe-area-inset-*) non-zero on
-         iOS. Without it the shell's insets silently resolve to 0. -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+         iOS. Without it the shell's insets silently resolve to 0.
+
+         maximum-scale/user-scalable turn off pinch zoom, so the app does not
+         slide around under a stray two-finger gesture the way a web page does.
+         Note iOS Safari deliberately IGNORES both when browsing, to protect
+         zoom as an accessibility affordance — they take effect in the installed
+         standalone PWA, which is where this app is meant to live. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no"
+    />
     <title>Sticker Collector</title>
 
     <!-- Installable. `theme_color` and `background_color` both match

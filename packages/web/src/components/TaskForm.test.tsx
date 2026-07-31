@@ -45,9 +45,15 @@ function setup(props: Partial<Parameters<typeof TaskForm>[0]> = {}) {
   };
 }
 
-/** The minimum a routine needs before Save turns on. */
+/**
+ * The minimum a routine needs before Save turns on.
+ *
+ * The type is chosen explicitly: a blank form now opens as a ONE-OFF, so the
+ * weekday picker is not on screen until Routine is picked.
+ */
 async function fillValidRoutine(u: ReturnType<typeof userEvent.setup>) {
   await u.type(screen.getByLabelText(/title/i), "Stretch");
+  await u.click(screen.getByRole("tab", { name: "↻ Routine" }));
   await u.type(screen.getByLabelText(/^effort/i), "15");
   await u.click(screen.getByRole("button", { name: "Mon" }));
 }
@@ -77,9 +83,9 @@ describe("the done-when — epic pre-fill", () => {
     expect(screen.getByLabelText(/^effort/i)).toHaveValue("");
     expect(screen.getByLabelText(/reward/i)).toHaveValue("");
     expect(screen.getByRole("button", { name: "None" })).toHaveAttribute("aria-pressed", "true");
-    for (const day of ["Mon", "Sat", "Sun"]) {
-      expect(screen.getByRole("button", { name: day })).toHaveAttribute("aria-pressed", "false");
-    }
+    // A blank form is a one-off, so there is no weekday picker to be blank.
+    expect(screen.getByRole("tab", { name: "· One-off" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.queryByRole("button", { name: "Mon" })).not.toBeInTheDocument();
 
     await fillValidRoutine(u);
     await u.click(save());
@@ -117,17 +123,26 @@ describe("effort and reward", () => {
 });
 
 describe("the type switch changes which schedule is asked for", () => {
-  it("shows the weekday picker for a routine and the due date for a one-off", async () => {
+  it("shows the due date for a one-off and the weekday picker for a routine", async () => {
     const u = userEvent.setup();
     setup();
 
+    // One-off is where the form starts, so this is the first thing seen.
+    expect(screen.getByLabelText(/due date/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Mon" })).not.toBeInTheDocument();
+
+    await u.click(screen.getByRole("tab", { name: "↻ Routine" }));
+
     expect(screen.getByRole("button", { name: "Mon" })).toBeInTheDocument();
     expect(screen.queryByLabelText(/due date/i)).not.toBeInTheDocument();
+  });
 
-    await u.click(screen.getByRole("tab", { name: "· One-off" }));
+  it("opens on One-off, and shows it first", async () => {
+    setup();
 
-    expect(screen.queryByRole("button", { name: "Mon" })).not.toBeInTheDocument();
-    expect(screen.getByLabelText(/due date/i)).toBeInTheDocument();
+    const tabs = screen.getAllByRole("tab").map((tab) => tab.textContent);
+    expect(tabs).toEqual(["· One-off", "↻ Routine"]);
+    expect(screen.getByRole("tab", { name: "· One-off" })).toHaveAttribute("aria-selected", "true");
   });
 
   it("sends a mask for a routine and no due date", async () => {
@@ -167,7 +182,13 @@ describe("saving", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(/effort/i);
 
     await u.type(screen.getByLabelText(/^effort/i), "15");
-    expect(screen.getByRole("alert")).toHaveTextContent(/weekday/i); // routine needs a day
+    // A one-off is complete here: an undated one-off is a legitimate task, and
+    // one-off is where a blank form now starts.
+    expect(save()).toBeEnabled();
+
+    // A routine asks for one more thing, and says so.
+    await u.click(screen.getByRole("tab", { name: "↻ Routine" }));
+    expect(screen.getByRole("alert")).toHaveTextContent(/weekday/i);
     expect(save()).toBeDisabled();
 
     await u.click(screen.getByRole("button", { name: "Mon" }));
