@@ -1,7 +1,7 @@
 import type { AlbumSummary } from "@sticker-collector/shared";
 import { Link } from "react-router";
 import { imageSrc } from "../lib/imageUpload";
-import { Badge, Button, ProgressBar } from "./ui";
+import { Badge, Button, ImageTile, ProgressBar } from "./ui";
 import { cx } from "./ui/cx";
 
 export interface AlbumCardProps {
@@ -32,11 +32,9 @@ export function AlbumCard({ album, onUnlock }: AlbumCardProps) {
         className="relative block overflow-hidden rounded-2xl border border-border focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan"
         style={{ aspectRatio: "var(--aspect-card)" }}
       >
-        <img
+        <ImageTile
           src={imageSrc(album.coverKey)}
-          alt=""
-          loading="lazy"
-          className="h-full w-full object-cover transition-[filter] duration-500"
+          className="object-cover transition-[filter] duration-500"
           style={{ filter: locked ? "var(--filter-locked)" : "var(--filter-unlocked)" }}
         />
 

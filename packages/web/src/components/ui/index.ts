@@ -12,6 +12,7 @@ export { Dialog, type DialogProps, type DialogTone } from "./Dialog";
 export { EmptyState, type EmptyStateProps } from "./EmptyState";
 export { ErrorState, type ErrorStateProps, isOffline } from "./ErrorState";
 export { Field, type FieldProps } from "./Field";
+export { ImageTile, type ImageTileProps } from "./ImageTile";
 export { Input, type InputProps, type InputSize, type InputTone } from "./Input";
 export {
   ProgressBar,

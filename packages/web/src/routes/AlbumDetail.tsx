@@ -167,6 +167,8 @@ export function AlbumDetail() {
               onBuy={() => buy.mutate(sticker.id)}
               refund={refund}
               onSell={() => sell.mutate(sticker.id)}
+              hideLocked={summary.hideLocked}
+              lockedCoverKey={summary.lockedCoverKey}
             />
           ))}
         </StickerGrid>

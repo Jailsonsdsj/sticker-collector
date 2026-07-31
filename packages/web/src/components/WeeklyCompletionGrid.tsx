@@ -1,4 +1,4 @@
-import type { LocalDate, Occurrence, Task } from "@sticker-collector/shared";
+import type { EpicAccent, LocalDate, Occurrence, Task } from "@sticker-collector/shared";
 import { maskHasDay, WEEKDAYS } from "@sticker-collector/shared";
 import { Checkbox, EmptyState } from "./ui";
 import { WEEKDAY_INDICES, WeekGridShell, WeekRowLabel } from "./weekGrid/WeekGridShell";
@@ -20,6 +20,8 @@ import { WEEKDAY_INDICES, WeekGridShell, WeekRowLabel } from "./weekGrid/WeekGri
  */
 export interface WeeklyCompletionGridProps {
   routines: Task[];
+  /** An epic's accent for a task, so a row wears its epic's colour. */
+  accentOf?: (task: Task) => EpicAccent | null;
   /** The week's occurrences, from `GET /api/occurrences`. */
   occurrences: Occurrence[];
   /** Monday…Sunday of the week being shown. */
@@ -34,6 +36,7 @@ const keyOf = (taskId: string, date: LocalDate) => `${taskId} ${date}`;
 
 export function WeeklyCompletionGrid({
   routines,
+  accentOf,
   occurrences,
   dates,
   today,
@@ -85,6 +88,7 @@ export function WeeklyCompletionGrid({
             today={today}
             scheduled={(index) => scheduled(task, index)}
             done={(date) => isDone(task, date)}
+            epicAccent={accentOf?.(task) ?? null}
             onToggle={onToggle}
           />
         ))}
@@ -104,6 +108,7 @@ function Row({
   today,
   scheduled,
   done,
+  epicAccent,
   onToggle,
 }: {
   task: Task;
@@ -111,11 +116,12 @@ function Row({
   today: LocalDate;
   scheduled: (index: number) => boolean;
   done: (date: LocalDate) => boolean;
+  epicAccent: EpicAccent | null;
   onToggle: (taskId: string, date: LocalDate, next: boolean) => void;
 }) {
   return (
     <>
-      <WeekRowLabel title={task.title} rewardCoins={task.rewardCoins} />
+      <WeekRowLabel title={task.title} rewardCoins={task.rewardCoins} epicAccent={epicAccent} />
 
       {dates.map((date, index) => {
         const runs = scheduled(index);

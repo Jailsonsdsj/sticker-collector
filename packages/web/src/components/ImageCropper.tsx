@@ -14,6 +14,10 @@ export interface ImageCropperProps {
   kind: ImageKind;
   onCommit: (bytes: Uint8Array) => void;
   onCancel: () => void;
+  /** "Use this image" alone; "Next"/"Done" when positioning a batch. */
+  commitLabel?: string;
+  /** Offered only mid-batch — step back to re-position the previous image. */
+  onBack?: () => void;
 }
 
 /**
@@ -25,7 +29,14 @@ export interface ImageCropperProps {
  * a second implementation of the same geometry that could drift from it. The
  * canvas appears once, at commit.
  */
-export function ImageCropper({ file, kind, onCommit, onCancel }: ImageCropperProps) {
+export function ImageCropper({
+  file,
+  kind,
+  onCommit,
+  onCancel,
+  commitLabel,
+  onBack,
+}: ImageCropperProps) {
   const [bitmap, setBitmap] = useState<ImageBitmap | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [offset, setOffset] = useState<Offset>(CENTERED);
@@ -138,12 +149,17 @@ export function ImageCropper({ file, kind, onCommit, onCancel }: ImageCropperPro
         </p>
       )}
 
-      <div className="flex justify-end gap-2">
+      <div className="flex items-center justify-end gap-2">
         <Button variant="ghost" tone="neutral" onClick={onCancel}>
           Cancel
         </Button>
+        {onBack && (
+          <Button variant="outline" tone="neutral" disabled={busy} onClick={onBack}>
+            Back
+          </Button>
+        )}
         <Button tone="lime" disabled={!bitmap || busy} onClick={commit}>
-          {busy ? "Preparing…" : "Use this image"}
+          {busy ? "Preparing…" : (commitLabel ?? "Use this image")}
         </Button>
       </div>
     </div>

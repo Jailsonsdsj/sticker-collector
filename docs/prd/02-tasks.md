@@ -102,6 +102,8 @@ left, not what was scheduled.
 
 Routine maintenance does not happen through the task form. It happens on a single screen: tasks as rows, the seven weekdays as columns, a checkbox in every cell. The user sees the whole week at once and toggles cells. Creating a Mon–Fri habit is five taps, not five forms.
 
+The screen has two views. **Complete is the default** — ticking off a day is what you come back to daily, where re-planning a routine is occasional — so the five-tap flow is now five taps plus one to reach *Schedule*. Each row wears its epic's accent on its leading edge, the same colour the home screen gives it, and titles wrap rather than truncate: the label column is narrow, and a cut-off title routinely hid the word that told two routines apart.
+
 The daily list is never assembled by hand. The home screen shows today's occurrences, today's dated tasks, and anything overdue.
 
 ---

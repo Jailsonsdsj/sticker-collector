@@ -44,6 +44,16 @@ export const album = sqliteTable(
     oddsRare: integer("odds_rare").notNull(),
     oddsEpic: integer("odds_epic").notNull(),
     oddsLegendary: integer("odds_legendary").notNull(),
+    /**
+     * Hide what has not been collected yet.
+     *
+     * With this set, an unowned slot shows `lockedCoverKey` (or a "?") instead
+     * of the sticker's own art under a grayscale filter — so the album keeps
+     * its surprises. Stored as 0/1: D1 has no boolean.
+     */
+    hideLocked: integer("hide_locked").notNull().default(0),
+    /** One stand-in image for every locked slot, like the back of a card. */
+    lockedCoverKey: text("locked_cover_key"),
     unlockedAt: text("unlocked_at"),
     completedAt: text("completed_at"),
     sealedAt: text("sealed_at").notNull(),
@@ -73,6 +83,10 @@ export const sticker = sqliteTable(
       .notNull()
       .references(() => album.id),
     imageKey: text("image_key").notNull(),
+    // Optional, author-written, and frozen with the rest of the row by
+    // `sticker_frozen` — a sticker's name and note are part of what was sealed.
+    title: text("title"),
+    description: text("description"),
     tier: text("tier", { enum: ["common", "rare", "epic", "legendary"] }).notNull(),
     slotIndex: integer("slot_index").notNull(),
   },

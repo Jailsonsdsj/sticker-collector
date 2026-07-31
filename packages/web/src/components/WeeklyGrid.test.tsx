@@ -191,3 +191,52 @@ describe("the grid itself", () => {
     expect(onChangeMask).not.toHaveBeenCalled();
   });
 });
+
+describe("the epic colour", () => {
+  it("paints a row's leading edge with its epic's accent", () => {
+    // The same left edge the home screen uses, so an epic reads as one colour
+    // wherever its tasks appear.
+    render(
+      <WeeklyGrid
+        routines={[routine({ id: "t1", title: "Stretch" })]}
+        accentOf={() => "epic-2"}
+        today={MONDAY}
+        onChangeMask={vi.fn()}
+      />,
+    );
+
+    const label = screen.getByText("Stretch").parentElement as HTMLElement;
+    expect(label.style.getPropertyValue("--ui-epic")).toBe("var(--color-epic-2)");
+  });
+
+  it("falls back to the neutral edge when a task has no epic", () => {
+    render(
+      <WeeklyGrid
+        routines={[routine({ id: "t1", title: "Stretch" })]}
+        today={MONDAY}
+        onChangeMask={vi.fn()}
+      />,
+    );
+
+    const label = screen.getByText("Stretch").parentElement as HTMLElement;
+    expect(label.style.getPropertyValue("--ui-epic")).toBe("var(--color-epic-none)");
+  });
+
+  it("shows a long title in full rather than truncating it", () => {
+    // The column is narrow, and a truncated title routinely hid the word that
+    // told two routines apart.
+    const long = "Stretch shoulders, hips and lower back before the run";
+    render(
+      <WeeklyGrid
+        routines={[routine({ id: "t1", title: long })]}
+        today={MONDAY}
+        onChangeMask={vi.fn()}
+      />,
+    );
+
+    const label = screen.getByText(long);
+    expect(label).toBeInTheDocument();
+    expect(label.className).not.toContain("truncate");
+    expect(label.className).toContain("break-words");
+  });
+});

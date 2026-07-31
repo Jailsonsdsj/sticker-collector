@@ -85,3 +85,23 @@ Neither figure blocks sealing. They exist so the user cannot design an incoheren
 ---
 
 *Part of the Sticker Collector spec. Index: [`docs/prd/README.md`](./README.md)*
+
+**Hiding locked slots**
+
+An album may be created with **hide locked images**. With it set, a slot that has
+not been collected shows a single **locked cover** — one image per album, like
+the back of a card — instead of its own art under the grayscale filter. With no
+cover chosen, the slot shows a `?`. The rarity frame still reads on a hidden
+slot: that is how a locked slot announces its tier.
+
+This does not create a second asset. Grayscale remains a CSS filter over one
+colour master; the locked cover is a different picture the author supplied, and
+it is stored once for the whole album.
+
+**A sticker's own words**
+
+Each sticker may carry an optional **title** and **description**, written during
+creation and frozen by the seal along with its tier. Both are carried into a new
+edition — re-typing a hundred names to reprint an album would be absurd. An
+empty box is stored as `null`, not `""`: "no title" and "a deliberately blank
+title" must not be the same row.

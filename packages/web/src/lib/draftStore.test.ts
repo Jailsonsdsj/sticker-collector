@@ -15,7 +15,7 @@ const key = (n: number) => `img/${n.toString(16).padStart(64, "0")}.jpg`;
 const draft = (over: Partial<AlbumDraft> = {}): AlbumDraft => ({
   ...reduce(initialDraft, { type: "field", field: "title", value: "Kitchen heroes" }),
   coverKey: key(999),
-  stickers: [{ imageKey: key(1), tier: "legendary" }],
+  stickers: [{ imageKey: key(1), tier: "legendary", title: "", description: "" }],
   ...over,
 });
 
@@ -45,8 +45,8 @@ describe("keeping a draft across a reload", () => {
     // assignments would be as bad as losing the title.
     const saved = draft({
       stickers: [
-        { imageKey: key(1), tier: "common" },
-        { imageKey: key(2), tier: "legendary" },
+        { imageKey: key(1), tier: "common", title: "", description: "" },
+        { imageKey: key(2), tier: "legendary", title: "", description: "" },
       ],
       odds: { common: 70, rare: 30, epic: 0, legendary: 0 },
       prices: { common: 5, rare: 10, epic: 15, legendary: 20 },

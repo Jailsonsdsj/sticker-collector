@@ -228,6 +228,8 @@ const source = (): AlbumDetail => ({
     randomPrice: 41,
     prices: { common: 11, rare: 22, epic: 33, legendary: 44 },
     odds: { common: 70, rare: 20, epic: 10, legendary: 0 },
+    hideLocked: false,
+    lockedCoverKey: null,
     unlockedAt: "2026-07-02T00:00:00Z",
     completedAt: "2026-07-20T00:00:00Z",
     sealedAt: "2026-07-01T00:00:00Z",
@@ -246,6 +248,8 @@ const source = (): AlbumDetail => ({
       id: "stk-b",
       albumId: "alb-source",
       imageKey: key(2),
+      title: null,
+      description: null,
       tier: "legendary",
       slotIndex: 1,
       quantity: 4,
@@ -254,6 +258,8 @@ const source = (): AlbumDetail => ({
       id: "stk-a",
       albumId: "alb-source",
       imageKey: key(1),
+      title: null,
+      description: null,
       tier: "common",
       slotIndex: 0,
       quantity: 1,
@@ -269,14 +275,16 @@ describe("a new edition of an existing album", () => {
   });
 
   it("carries no ownership — a draft cannot even express it", () => {
-    // The source holds four copies of the legendary. The new edition's sticker
-    // is `{imageKey, tier}` and nothing else, which is what makes "every sticker
-    // starts locked" structural rather than a promise.
+    // The source holds four copies of the legendary. A draft sticker carries
+    // artwork and words and nothing about ownership — no quantity, no id — which
+    // is what makes "every sticker starts locked" structural rather than a
+    // promise.
     const draft = draftFromAlbum(source());
     expect(draft.stickers).toEqual([
-      { imageKey: key(1), tier: "common" },
-      { imageKey: key(2), tier: "legendary" },
+      { imageKey: key(1), tier: "common", title: "", description: "" },
+      { imageKey: key(2), tier: "legendary", title: "", description: "" },
     ]);
+    expect(draft.stickers.every((s) => !("quantity" in s) && !("id" in s))).toBe(true);
   });
 
   it("inherits the title, description and every price as a starting point", () => {
@@ -311,7 +319,9 @@ describe("a new edition of an existing album", () => {
 
   it("keeps the inherited sticker set editable", () => {
     const draft = reduce(draftFromAlbum(source()), { type: "removeSticker", imageKey: key(1) });
-    expect(draft.stickers).toEqual([{ imageKey: key(2), tier: "legendary" }]);
+    expect(draft.stickers).toEqual([
+      { imageKey: key(2), tier: "legendary", title: "", description: "" },
+    ]);
   });
 
   it("produces a body the real request schema accepts", () => {
@@ -332,5 +342,90 @@ describe("the first question", () => {
   it("is answered by a single typed character", () => {
     const started = reduce(initialDraft, { type: "field", field: "title", value: "K" });
     expect(isPristine(started)).toBe(false);
+  });
+});
+
+describe("a sticker's own words", () => {
+  const withSticker = () =>
+    reduce(initialDraft, { type: "addSticker", imageKey: key(1), tier: "rare" });
+
+  it("start empty, and are not required", () => {
+    const draft = withSticker();
+    expect(draft.stickers[0]?.title).toBe("");
+    expect(draft.stickers[0]?.description).toBe("");
+  });
+
+  it("are edited per sticker, not per album", () => {
+    let draft = reduce(withSticker(), { type: "addSticker", imageKey: key(2) });
+    draft = reduce(draft, {
+      type: "describeSticker",
+      imageKey: key(1),
+      field: "title",
+      value: "Red Fox",
+    });
+
+    expect(draft.stickers[0]?.title).toBe("Red Fox");
+    expect(draft.stickers[1]?.title).toBe("");
+  });
+
+  it("leave as null when the author wrote nothing", () => {
+    // "" and null would otherwise be the same row, and "no title" is not the
+    // same thing as "a deliberately blank title".
+    const payload = toPayload(withSticker());
+    expect(payload.stickers[0]).toMatchObject({ title: null, description: null });
+  });
+
+  it("are trimmed on the way out", () => {
+    const draft = reduce(withSticker(), {
+      type: "describeSticker",
+      imageKey: key(1),
+      field: "title",
+      value: "  Red Fox  ",
+    });
+
+    expect(toPayload(draft).stickers[0]?.title).toBe("Red Fox");
+  });
+});
+
+describe("hiding locked slots", () => {
+  it("is off by default", () => {
+    expect(initialDraft.hideLocked).toBe(false);
+    expect(initialDraft.lockedCoverKey).toBeNull();
+  });
+
+  it("accepts a stand-in cover once it is on", () => {
+    let draft = reduce(initialDraft, { type: "hideLocked", value: true });
+    draft = reduce(draft, { type: "lockedCover", imageKey: key(9) });
+
+    expect(toPayload(draft)).toMatchObject({ hideLocked: true, lockedCoverKey: key(9) });
+  });
+
+  it("drops the cover when hiding is turned back off", () => {
+    // A stand-in for slots that are no longer hidden is a key nothing reads —
+    // and the request schema refuses the pair, so carrying it would fail the
+    // seal for a reason never shown on screen.
+    let draft = reduce(initialDraft, { type: "hideLocked", value: true });
+    draft = reduce(draft, { type: "lockedCover", imageKey: key(9) });
+    draft = reduce(draft, { type: "hideLocked", value: false });
+
+    expect(draft.lockedCoverKey).toBeNull();
+    expect(toPayload(draft).lockedCoverKey).toBeNull();
+  });
+
+  it("is carried into a new edition", () => {
+    // Reprinting an album should not silently reveal what the first edition hid.
+    const draft = draftFromAlbum(source());
+    expect(draft.hideLocked).toBe(source().album.hideLocked);
+    expect(draft.lockedCoverKey).toBe(source().album.lockedCoverKey);
+  });
+
+  it("produces a body the real request schema accepts", () => {
+    let draft = reduce(initialDraft, { type: "addSticker", imageKey: key(1) });
+    draft = reduce(draft, { type: "field", field: "title", value: "Kitchen heroes" });
+    draft = reduce(draft, { type: "cover", imageKey: key(8) });
+    draft = reduce(draft, { type: "hideLocked", value: true });
+    draft = reduce(draft, { type: "lockedCover", imageKey: key(9) });
+
+    expect(createAlbumSchema.safeParse(toPayload(draft)).success).toBe(true);
   });
 });

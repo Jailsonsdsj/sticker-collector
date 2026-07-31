@@ -1,7 +1,7 @@
 import { TIERS } from "@sticker-collector/shared";
 import { imageSrc } from "../../lib/imageUpload";
 import { StickerGrid } from "../layout";
-import { Badge, Button, Chip } from "../ui";
+import { Badge, Button, Checkbox, Chip, Field, ImageTile, Input, Textarea } from "../ui";
 import type { StepProps } from "./DetailsStep";
 import { ImagePicker } from "./ImagePicker";
 
@@ -19,31 +19,107 @@ export function StickersStep({ draft, problems, dispatch }: StepProps) {
       <div className="flex flex-col items-start gap-2">
         <ImagePicker
           kind="sticker"
-          label="Add sticker"
+          label="Add stickers"
+          multiple
           onPicked={(imageKey) => dispatch({ type: "addSticker", imageKey })}
         />
         <p className="font-body text-sm text-ink-dim">
-          {draft.stickers.length} added. Every sticker is cropped to the same 5:7 shape.
+          {draft.stickers.length} added. Pick several at once and position them one after another —
+          every sticker is cropped to the same 5:7 shape.
         </p>
         {problems.stickers && <p className="font-body text-sm text-magenta">{problems.stickers}</p>}
       </div>
+
+      <Field
+        label="Locked slots"
+        hint="Optional — keeps the album's surprises until each sticker is earned"
+      >
+        <div className="flex flex-col gap-3">
+          <Checkbox
+            label="Hide locked images"
+            checked={draft.hideLocked}
+            onChange={(value) => dispatch({ type: "hideLocked", value })}
+          />
+
+          {/* Only offered once something is actually hidden. A stand-in for
+              slots that are all visible is an image nothing will ever show, and
+              the request schema refuses the pair. */}
+          {draft.hideLocked && (
+            <div className="flex items-center gap-3">
+              {draft.lockedCoverKey ? (
+                <img
+                  src={imageSrc(draft.lockedCoverKey)}
+                  alt=""
+                  className="w-16 rounded-lg border border-border object-cover"
+                  style={{ aspectRatio: "var(--aspect-card)" }}
+                />
+              ) : (
+                // What a locked slot falls back to with no cover chosen.
+                <span
+                  aria-hidden
+                  className="flex w-16 items-center justify-center rounded-lg border border-border border-dashed font-display text-3xl text-ink-faint"
+                  style={{ aspectRatio: "var(--aspect-card)" }}
+                >
+                  ?
+                </span>
+              )}
+              <ImagePicker
+                kind="sticker"
+                label={draft.lockedCoverKey ? "Replace cover" : "Add locked cover"}
+                onPicked={(imageKey) => dispatch({ type: "lockedCover", imageKey })}
+              />
+            </div>
+          )}
+        </div>
+      </Field>
 
       <StickerGrid>
         {draft.stickers.map((sticker) => (
           <div key={sticker.imageKey} className="flex flex-col gap-1">
             <div className="relative">
-              <img
-                src={imageSrc(sticker.imageKey)}
-                alt=""
-                className="w-full rounded-xl border border-border object-cover"
+              <div
+                className="w-full overflow-hidden rounded-xl border border-border"
                 style={{ aspectRatio: "var(--aspect-card)" }}
-              />
+              >
+                <ImageTile src={imageSrc(sticker.imageKey)} className="object-cover" />
+              </div>
               <span className="absolute top-1 left-1">
                 <Badge tone="neutral" variant="overlay" size="sm">
                   {sticker.tier}
                 </Badge>
               </span>
             </div>
+
+            <Input
+              id={`sticker-title-${sticker.imageKey}`}
+              label="Title"
+              hint="optional"
+              size="sm"
+              value={sticker.title}
+              onChange={(e) =>
+                dispatch({
+                  type: "describeSticker",
+                  imageKey: sticker.imageKey,
+                  field: "title",
+                  value: e.target.value,
+                })
+              }
+            />
+            <Textarea
+              id={`sticker-description-${sticker.imageKey}`}
+              label="Description"
+              hint="optional"
+              size="sm"
+              value={sticker.description}
+              onChange={(e) =>
+                dispatch({
+                  type: "describeSticker",
+                  imageKey: sticker.imageKey,
+                  field: "description",
+                  value: e.target.value,
+                })
+              }
+            />
 
             <div className="flex flex-wrap gap-1">
               {TIERS.map((tier) => (

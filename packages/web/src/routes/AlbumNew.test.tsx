@@ -111,7 +111,7 @@ const sealedDraft = async () => {
     ...initialDraft,
     title: "Kitchen heroes",
     coverKey: key(999),
-    stickers: [{ imageKey: key(1), tier: "legendary" }],
+    stickers: [{ imageKey: key(1), tier: "legendary", title: "", description: "" }],
   });
 };
 
@@ -136,7 +136,9 @@ describe("adding images", () => {
 
     await waitFor(async () => {
       const stored = await loadDraft();
-      expect(stored?.stickers).toEqual([{ imageKey: key(7), tier: "common" }]);
+      expect(stored?.stickers).toEqual([
+        { imageKey: key(7), tier: "common", title: "", description: "" },
+      ]);
     });
   });
 
@@ -183,7 +185,9 @@ describe("abandoning mid-wizard", () => {
 
     await waitFor(async () => {
       const stored = await loadDraft();
-      expect(stored?.stickers).toEqual([{ imageKey: key(1), tier: "rare" }]);
+      expect(stored?.stickers).toEqual([
+        { imageKey: key(1), tier: "rare", title: "", description: "" },
+      ]);
     });
   });
 
@@ -246,7 +250,12 @@ describe("sealing", () => {
       expect(url).toBe("/api/albums");
       const body = JSON.parse(init.body as string);
       expect(body.title).toBe("Kitchen heroes");
-      expect(body.stickers).toEqual([{ imageKey: key(1), tier: "legendary" }]);
+      // Untouched title/description leave as null, not "": an empty box means
+      // the author wrote nothing, and "" would make that indistinguishable from
+      // a deliberately blank name.
+      expect(body.stickers).toEqual([
+        { imageKey: key(1), tier: "legendary", title: null, description: null },
+      ]);
       expect(body.odds).toEqual({ common: 60, rare: 25, epic: 12, legendary: 3 });
     });
   });
@@ -259,7 +268,7 @@ describe("sealing", () => {
       title: "  Kitchen heroes  ",
       description: "   ",
       coverKey: key(999),
-      stickers: [{ imageKey: key(1), tier: "common" }],
+      stickers: [{ imageKey: key(1), tier: "common", title: "", description: "" }],
     });
     const user = await open();
     // RTL normalises whitespace in its matchers, so the padding has to be read
@@ -319,7 +328,7 @@ describe("sealing", () => {
       ...initialDraft,
       title: "Kitchen heroes",
       coverKey: key(999),
-      stickers: [{ imageKey: key(1), tier: "common" }],
+      stickers: [{ imageKey: key(1), tier: "common", title: "", description: "" }],
       odds: { common: 10, rare: 25, epic: 12, legendary: 3 },
     });
     const user = await open();
@@ -335,7 +344,7 @@ describe("sealing", () => {
       ...initialDraft,
       title: "Kitchen heroes",
       coverKey: key(999),
-      stickers: [{ imageKey: key(1), tier: "epic" }],
+      stickers: [{ imageKey: key(1), tier: "epic", title: "", description: "" }],
       odds: { common: 70, rare: 30, epic: 0, legendary: 0 },
     });
     const user = await open();
@@ -359,6 +368,8 @@ describe("starting from an existing album", () => {
       randomPrice: 41,
       prices: { common: 11, rare: 22, epic: 33, legendary: 44 },
       odds: { common: 70, rare: 20, epic: 10, legendary: 0 },
+      hideLocked: false,
+      lockedCoverKey: null,
       unlockedAt: "2026-07-02T00:00:00Z",
       completedAt: "2026-07-20T00:00:00Z",
       sealedAt: "2026-07-01T00:00:00Z",
@@ -377,6 +388,8 @@ describe("starting from an existing album", () => {
         id: "s1",
         albumId: "alb-source",
         imageKey: key(1),
+        title: null,
+        description: null,
         tier: "common",
         slotIndex: 0,
         quantity: 1,
@@ -385,6 +398,8 @@ describe("starting from an existing album", () => {
         id: "s2",
         albumId: "alb-source",
         imageKey: key(2),
+        title: null,
+        description: null,
         tier: "legendary",
         slotIndex: 1,
         quantity: 4,
@@ -441,8 +456,8 @@ describe("starting from an existing album", () => {
       expect(stored?.coverKey).toBe(key(999));
       expect(stored?.unlockPrice).toBe(750);
       expect(stored?.stickers).toEqual([
-        { imageKey: key(1), tier: "common" },
-        { imageKey: key(2), tier: "legendary" },
+        { imageKey: key(1), tier: "common", title: "", description: "" },
+        { imageKey: key(2), tier: "legendary", title: "", description: "" },
       ]);
     });
   });

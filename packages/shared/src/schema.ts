@@ -285,6 +285,9 @@ export const ALBUM_MAX_STICKERS = 200;
 export const createStickerSchema = z.strictObject({
   imageKey: imageKeySchema,
   tier: tierSchema,
+  /** Optional, author-written. Frozen with the row at seal, like the tier. */
+  title: z.string().max(120).nullish(),
+  description: z.string().max(2000).nullish(),
 });
 export type CreateSticker = z.infer<typeof createStickerSchema>;
 
@@ -311,6 +314,10 @@ export const createAlbumSchema = z
     stickers: z.array(createStickerSchema).min(1).max(ALBUM_MAX_STICKERS),
     /** Set when this album is a new edition of an existing one (§Creating from existing). */
     derivedFromAlbumId: idSchema.nullish(),
+    /** Hide slots that have not been collected yet. */
+    hideLocked: z.boolean().default(false),
+    /** One stand-in image for every locked slot. Only meaningful with `hideLocked`. */
+    lockedCoverKey: imageKeySchema.nullish(),
   })
   .superRefine((value, ctx) => {
     // One rule, three consumers: the wizard, this route, and the DB CHECK that
@@ -318,6 +325,17 @@ export const createAlbumSchema = z
     const problem = validateOdds(value.odds);
     if (problem) {
       ctx.addIssue({ code: "custom", path: ["odds"], message: problem });
+    }
+
+    // A cover for locked slots means nothing when nothing is hidden. Refusing
+    // it here keeps the two fields from disagreeing in the database, where the
+    // album is immutable and the disagreement would be permanent.
+    if (value.lockedCoverKey && !value.hideLocked) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["lockedCoverKey"],
+        message: "a locked cover needs hideLocked",
+      });
     }
   });
 export type CreateAlbumInput = z.input<typeof createAlbumSchema>;
@@ -327,6 +345,8 @@ export const stickerSchema = z.object({
   id: idSchema,
   albumId: idSchema,
   imageKey: z.string(),
+  title: z.string().nullable(),
+  description: z.string().nullable(),
   tier: tierSchema,
   slotIndex: z.int().min(0),
 });
@@ -342,6 +362,9 @@ export const albumSchema = z.object({
   randomPrice: z.int().min(0),
   prices: tierPricesSchema,
   odds: tierOddsSchema,
+  /** Slots not yet collected show a stand-in rather than grayscale art. */
+  hideLocked: z.boolean(),
+  lockedCoverKey: z.string().nullable(),
   /** Null until bought. A new album always arrives locked (§Creating from existing 4). */
   unlockedAt: instantSchema.nullable(),
   /** Set exactly once, on first hit of 100% (A-05). */

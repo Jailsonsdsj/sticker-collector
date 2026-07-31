@@ -22,6 +22,9 @@ import {
 export interface DraftSticker {
   imageKey: string;
   tier: Tier;
+  /** Optional, author-written. Empty means "no title", not an empty title. */
+  title: string;
+  description: string;
 }
 
 export interface AlbumDraft {
@@ -39,6 +42,10 @@ export interface AlbumDraft {
    * album is untouched (`prd/04-albums.md` §Creating from existing).
    */
   derivedFromAlbumId: string | null;
+  /** Hide slots that have not been collected yet. */
+  hideLocked: boolean;
+  /** One stand-in image for every locked slot. Only meaningful with `hideLocked`. */
+  lockedCoverKey: string | null;
 }
 
 /**
@@ -56,6 +63,8 @@ export const initialDraft: AlbumDraft = {
   prices: { common: 20, rare: 50, epic: 120, legendary: 400 },
   odds: DEFAULT_ODDS,
   derivedFromAlbumId: null,
+  hideLocked: false,
+  lockedCoverKey: null,
 };
 
 /**
@@ -76,12 +85,21 @@ export function draftFromAlbum(source: AlbumDetail): AlbumDraft {
     coverKey: source.album.coverKey,
     stickers: [...source.stickers]
       .sort((a, b) => a.slotIndex - b.slotIndex)
-      .map((sticker) => ({ imageKey: sticker.imageKey, tier: sticker.tier })),
+      // A new edition carries the artwork and the words with it — re-typing a
+      // hundred sticker names to reprint the same album would be absurd.
+      .map((sticker) => ({
+        imageKey: sticker.imageKey,
+        tier: sticker.tier,
+        title: sticker.title ?? "",
+        description: sticker.description ?? "",
+      })),
     unlockPrice: source.album.unlockPrice,
     randomPrice: source.album.randomPrice,
     prices: { ...source.album.prices },
     odds: { ...source.album.odds },
     derivedFromAlbumId: source.album.id,
+    hideLocked: source.album.hideLocked,
+    lockedCoverKey: source.album.lockedCoverKey,
   };
 }
 
@@ -106,6 +124,9 @@ export type DraftAction =
   | { type: "addSticker"; imageKey: string; tier?: Tier }
   | { type: "removeSticker"; imageKey: string }
   | { type: "retier"; imageKey: string; tier: Tier }
+  | { type: "describeSticker"; imageKey: string; field: "title" | "description"; value: string }
+  | { type: "hideLocked"; value: boolean }
+  | { type: "lockedCover"; imageKey: string | null }
   | { type: "price"; field: "unlockPrice" | "randomPrice"; value: number }
   | { type: "tierPrice"; tier: Tier; value: number }
   | { type: "odds"; tier: Tier; value: number }
@@ -127,7 +148,10 @@ export function reduce(state: AlbumDraft, action: DraftAction): AlbumDraft {
       if (state.stickers.length >= ALBUM_MAX_STICKERS) return state;
       return {
         ...state,
-        stickers: [...state.stickers, { imageKey: action.imageKey, tier: action.tier ?? "common" }],
+        stickers: [
+          ...state.stickers,
+          { imageKey: action.imageKey, tier: action.tier ?? "common", title: "", description: "" },
+        ],
       };
     }
 
@@ -144,6 +168,26 @@ export function reduce(state: AlbumDraft, action: DraftAction): AlbumDraft {
           s.imageKey === action.imageKey ? { ...s, tier: action.tier } : s,
         ),
       };
+
+    case "describeSticker":
+      return {
+        ...state,
+        stickers: state.stickers.map((s) =>
+          s.imageKey === action.imageKey ? { ...s, [action.field]: action.value } : s,
+        ),
+      };
+
+    case "hideLocked":
+      // Turning it off drops the cover with it: a stand-in for slots that are
+      // no longer hidden is a key nothing will ever read.
+      return {
+        ...state,
+        hideLocked: action.value,
+        lockedCoverKey: action.value ? state.lockedCoverKey : null,
+      };
+
+    case "lockedCover":
+      return { ...state, lockedCoverKey: action.imageKey };
 
     case "price":
       return { ...state, [action.field]: clampCoins(action.value) };
@@ -241,8 +285,20 @@ export function toPayload(draft: AlbumDraft): CreateAlbumInput {
     randomPrice: draft.randomPrice,
     prices: draft.prices,
     odds: draft.odds,
-    stickers: draft.stickers.map((s) => ({ imageKey: s.imageKey, tier: s.tier })),
+    stickers: draft.stickers.map((s) => ({
+      imageKey: s.imageKey,
+      tier: s.tier,
+      // Trimmed to null: an empty box means the author wrote nothing, and
+      // storing "" would make "no title" and "a blank title" the same row.
+      title: s.title.trim() || null,
+      description: s.description.trim() || null,
+    })),
     derivedFromAlbumId: draft.derivedFromAlbumId,
+    hideLocked: draft.hideLocked,
+    // Dropped when nothing is hidden — the schema refuses a cover without it,
+    // and carrying a stale key would fail the seal for a reason the user never
+    // sees on screen.
+    lockedCoverKey: draft.hideLocked ? draft.lockedCoverKey : null,
   };
 }
 

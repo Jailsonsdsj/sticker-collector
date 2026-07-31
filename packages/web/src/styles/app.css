@@ -63,3 +63,41 @@ body {
     animation: none;
   }
 }
+
+/* A light sweeping across a placeholder while its image loads.
+ *
+ * Distinct from `--animate-skeleton`, which pulses opacity: a pulse says "this
+ * box is a placeholder", a sweep says "something is on its way". Album grids
+ * load many pictures at once, and a grid of pulsing rectangles reads as broken
+ * where a grid of sweeping ones reads as loading.
+ *
+ * Defined here rather than in tokens.css: that file is generated from the
+ * design bundle and says so at the top.
+ */
+@keyframes image-shimmer {
+  from {
+    background-position: -150% 0;
+  }
+  to {
+    background-position: 250% 0;
+  }
+}
+
+.animate-image-shimmer {
+  background-image: linear-gradient(
+    100deg,
+    transparent 20%,
+    var(--color-surface-4) 45%,
+    transparent 70%
+  );
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: image-shimmer 1.4s linear infinite;
+}
+
+/* A sweep that never stops is exactly what this setting is for. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-image-shimmer {
+    animation: none;
+  }
+}

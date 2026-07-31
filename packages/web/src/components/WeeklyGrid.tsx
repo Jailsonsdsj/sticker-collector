@@ -1,4 +1,4 @@
-import type { LocalDate, Task, Weekday } from "@sticker-collector/shared";
+import type { EpicAccent, LocalDate, Task, Weekday } from "@sticker-collector/shared";
 import {
   daysFromMask,
   maskHasDay,
@@ -21,12 +21,14 @@ import { WEEKDAY_INDICES, WeekGridShell, WeekRowLabel } from "./weekGrid/WeekGri
  */
 export interface WeeklyGridProps {
   routines: Task[];
+  /** An epic's accent for a task, so a row wears its epic's colour. */
+  accentOf?: (task: Task) => EpicAccent | null;
   today: LocalDate;
   onChangeMask: (taskId: string, mask: number) => void;
   disabled?: boolean;
 }
 
-export function WeeklyGrid({ routines, today, onChangeMask, disabled }: WeeklyGridProps) {
+export function WeeklyGrid({ routines, accentOf, today, onChangeMask, disabled }: WeeklyGridProps) {
   const todayIndex = weekdayOf(today);
 
   if (routines.length === 0) {
@@ -56,6 +58,7 @@ export function WeeklyGrid({ routines, today, onChangeMask, disabled }: WeeklyGr
             todayIndex={todayIndex}
             lastRemaining={lastRemaining}
             disabled={disabled}
+            epicAccent={accentOf?.(task) ?? null}
             onChangeMask={onChangeMask}
           />
         );
@@ -70,6 +73,7 @@ function Row({
   todayIndex,
   lastRemaining,
   disabled,
+  epicAccent,
   onChangeMask,
 }: {
   task: Task;
@@ -77,11 +81,12 @@ function Row({
   todayIndex: Weekday;
   lastRemaining: boolean;
   disabled?: boolean;
+  epicAccent: EpicAccent | null;
   onChangeMask: (taskId: string, mask: number) => void;
 }) {
   return (
     <>
-      <WeekRowLabel title={task.title} rewardCoins={task.rewardCoins} />
+      <WeekRowLabel title={task.title} rewardCoins={task.rewardCoins} epicAccent={epicAccent} />
 
       {WEEKDAY_INDICES.map((index) => {
         const on = maskHasDay(mask, index);

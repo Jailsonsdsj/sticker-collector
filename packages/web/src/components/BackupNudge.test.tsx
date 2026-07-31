@@ -21,6 +21,8 @@ function album(createdAt: string, completedAt: string | null = null): AlbumSumma
     randomPrice: 40,
     prices: { common: 10, rare: 20, epic: 30, legendary: 40 },
     odds: { common: 60, rare: 25, epic: 12, legendary: 3 },
+    hideLocked: false,
+    lockedCoverKey: null,
     unlockedAt: null,
     completedAt,
     sealedAt: createdAt,

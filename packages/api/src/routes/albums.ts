@@ -93,6 +93,8 @@ albumRoutes.post("/", idempotency, async (c) => {
     oddsRare: input.odds.rare,
     oddsEpic: input.odds.epic,
     oddsLegendary: input.odds.legendary,
+    hideLocked: input.hideLocked ? 1 : 0,
+    lockedCoverKey: input.lockedCoverKey ?? null,
     // Locked and incomplete: every sticker must be earned and bought, even in a
     // new edition of an album that was already finished (§Creating from existing 5).
     unlockedAt: null,
@@ -109,6 +111,8 @@ albumRoutes.post("/", idempotency, async (c) => {
     id: crypto.randomUUID(),
     albumId,
     imageKey: entry.imageKey,
+    title: entry.title ?? null,
+    description: entry.description ?? null,
     tier: entry.tier,
     slotIndex: order[index] as number,
   }));
@@ -139,10 +143,15 @@ albumRoutes.post("/", idempotency, async (c) => {
 });
 
 /**
- * D1 binds at most 100 parameters per statement; a sticker row binds 5. Twenty
- * rows is therefore the largest INSERT that will run, whatever the album size.
+ * D1 binds at most 100 parameters per statement.
+ *
+ * A sticker row binds **7** — id, albumId, imageKey, title, description, tier,
+ * slotIndex — so fourteen rows is the largest INSERT that will run. This number
+ * is a function of the column count and has to move with it: it was 20 when the
+ * row bound 5, and adding title/description without changing it would have
+ * silently capped an album at 14 stickers and 500d on the 15th (TD-15, again).
  */
-const STICKER_ROWS_PER_STATEMENT = 20;
+const STICKER_ROWS_PER_STATEMENT = 14;
 
 function chunk<T>(items: T[], size: number): T[][] {
   const out: T[][] = [];
@@ -181,6 +190,9 @@ export function toAlbum(row: AlbumRow): Album {
     randomPrice: row.randomPrice,
     prices: perTier(row, "price"),
     odds: perTier(row, "odds"),
+    // D1 has no boolean; the column is 0/1 and the API speaks true/false.
+    hideLocked: row.hideLocked === 1,
+    lockedCoverKey: row.lockedCoverKey,
     unlockedAt: row.unlockedAt,
     completedAt: row.completedAt,
     sealedAt: row.sealedAt,
@@ -194,6 +206,8 @@ export function toSticker(row: StickerRow): Sticker {
     id: row.id,
     albumId: row.albumId,
     imageKey: row.imageKey,
+    title: row.title,
+    description: row.description,
     tier: row.tier,
     slotIndex: row.slotIndex,
   };

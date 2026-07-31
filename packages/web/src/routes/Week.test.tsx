@@ -86,6 +86,7 @@ beforeEach(() => {
     const read = (init?.method ?? "GET") === "GET";
     if (read && url.startsWith("/api/tasks")) return json(ROUTINES);
     if (read && url.startsWith("/api/occurrences")) return json([]);
+    if (read && url.startsWith("/api/epics")) return json([]);
     return json({ ok: true });
   });
   vi.stubGlobal("fetch", fetchMock);
@@ -97,13 +98,18 @@ const renderScreen = () => render(<Week />, { wrapper });
 const scheduleCell = (day: string) => screen.getByRole("checkbox", { name: `Stretch — ${day}` });
 
 describe("the two views", () => {
-  it("opens on Schedule, so the five-tap flow stays five taps", async () => {
+  it("opens on Complete — ticking a day is the daily act, re-planning is not", async () => {
     renderScreen();
-    await waitFor(() => expect(scheduleCell("Mon")).toBeInTheDocument());
 
-    expect(screen.getByRole("tab", { name: "Schedule" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByText(/add or remove that weekday/i)).toBeInTheDocument();
-    expect(screen.queryByText(/tap a cell to complete/i)).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole("tab", { name: "Complete" })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      ),
+    );
+    // Only one grid is mounted at a time, so Schedule's help text is not merely
+    // hidden — it is not there until you switch.
+    expect(screen.queryByText(/add or remove that weekday/i)).not.toBeInTheDocument();
   });
 
   it("switches to Complete, and only one grid is on screen at a time", async () => {
@@ -128,6 +134,9 @@ describe("Schedule still edits the mask", () => {
   it("patches the task when a cell is tapped", async () => {
     const user = userEvent.setup();
     renderScreen();
+
+    // Complete is the default view now; scheduling lives one tab across.
+    await user.click(await screen.findByRole("tab", { name: "Schedule" }));
     await waitFor(() => expect(scheduleCell("Sat")).toBeInTheDocument());
 
     await user.click(scheduleCell("Sat"));

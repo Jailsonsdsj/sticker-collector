@@ -1,6 +1,6 @@
 import type { OwnedSticker, Tier } from "@sticker-collector/shared";
 import { imageSrc } from "../lib/imageUpload";
-import { Badge, Button } from "./ui";
+import { Badge, Button, ImageTile } from "./ui";
 
 export interface StickerSlotProps {
   sticker: OwnedSticker;
@@ -14,6 +14,15 @@ export interface StickerSlotProps {
   /** What a spare copy is worth. Only offered when there is a spare. */
   refund?: number;
   onSell?: () => void;
+  /**
+   * The album hides what has not been collected.
+   *
+   * An unowned slot then shows the album's stand-in rather than its own art
+   * under a filter, so the surprise survives until the sticker is earned.
+   */
+  hideLocked?: boolean;
+  /** One stand-in for every locked slot. Null falls back to a "?". */
+  lockedCoverKey?: string | null;
 }
 
 /**
@@ -26,6 +35,13 @@ export interface StickerSlotProps {
  *
  * Locked art is the same single colour master under `--filter-locked`. There is
  * never a second, grayscale asset.
+ *
+ * When the album hides its locked slots, an unowned slot shows the album's own
+ * stand-in image — or a "?" if the author supplied none — instead of its art.
+ * That is still not a second asset: the cover is a different picture, stored
+ * once for the whole album, and the sticker's own art is simply not requested.
+ * Not requesting it is the point, since a determined user could otherwise read
+ * the answer straight out of the network tab.
  */
 export function StickerSlot({
   sticker,
@@ -36,8 +52,11 @@ export function StickerSlot({
   onBuy,
   refund,
   onSell,
+  hideLocked = false,
+  lockedCoverKey = null,
 }: StickerSlotProps) {
   const owned = sticker.quantity > 0;
+  const hidden = !owned && Boolean(hideLocked);
 
   return (
     <div className="flex flex-col gap-1">
@@ -48,7 +67,9 @@ export function StickerSlot({
         // the art is decorative inside it. A bare `aria-label` on a div is not
         // exposed at all, which is why the role is not optional here.
         role="img"
-        aria-label={`${sticker.tier} slot, ${owned ? "collected" : "empty"}`}
+        // The tier is still announced while hidden — that is what a locked slot
+        // is *for* — but nothing identifies the sticker itself.
+        aria-label={`${sticker.tier} slot, ${owned ? "collected" : hidden ? "hidden" : "empty"}`}
         className="relative overflow-hidden rounded-xl"
         style={{
           // The frame widens with rarity: 4px for a common, 7px for a legendary.
@@ -57,14 +78,24 @@ export function StickerSlot({
           aspectRatio: "var(--aspect-card)",
         }}
       >
-        <div className="h-full w-full overflow-hidden rounded-lg bg-surface-2">
-          <img
-            src={imageSrc(sticker.imageKey)}
-            alt=""
-            loading="lazy"
-            className="h-full w-full object-cover transition-[filter] duration-500"
-            style={{ filter: owned ? "var(--filter-unlocked)" : "var(--filter-locked-deep)" }}
-          />
+        <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-lg bg-surface-2">
+          {hidden && !lockedCoverKey ? (
+            // No stand-in was supplied, so the slot says only that something
+            // belongs here.
+            <span aria-hidden className="font-display text-5xl text-ink-faint">
+              ?
+            </span>
+          ) : (
+            <ImageTile
+              src={imageSrc(hidden ? (lockedCoverKey as string) : sticker.imageKey)}
+              className="object-cover transition-[filter] duration-500"
+              style={{
+                // A stand-in is shown as itself. Graying it would dim a picture
+                // the author chose *because* it reads as a hidden slot.
+                filter: owned || hidden ? "var(--filter-unlocked)" : "var(--filter-locked-deep)",
+              }}
+            />
+          )}
         </div>
 
         {/* Duplicates are counted in the upper-left corner (§4). One copy is not

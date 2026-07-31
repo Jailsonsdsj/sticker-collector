@@ -428,3 +428,95 @@ describe("idempotency", () => {
     expect(await myStickers()).toBe(12);
   });
 });
+
+describe("hiding locked slots and a sticker's own words", () => {
+  it("stores them with the album", async () => {
+    const created = await post({
+      ...album(),
+      hideLocked: true,
+      lockedCoverKey: key(9),
+      stickers: [{ imageKey: key(1), tier: "common", title: "Red Fox", description: "A note" }],
+    });
+    expect(created.status).toBe(201);
+
+    const row = await env.DB.prepare(
+      "SELECT hide_locked, locked_cover_key FROM album ORDER BY rowid DESC LIMIT 1",
+    ).first<{ hide_locked: number; locked_cover_key: string | null }>();
+    // D1 has no boolean: the column is 0/1 and the API speaks true/false.
+    expect(row).toMatchObject({ hide_locked: 1, locked_cover_key: key(9) });
+
+    const sticker = await env.DB.prepare(
+      "SELECT title, description FROM sticker ORDER BY rowid DESC LIMIT 1",
+    ).first<{ title: string | null; description: string | null }>();
+    expect(sticker).toMatchObject({ title: "Red Fox", description: "A note" });
+  });
+
+  it("defaults to showing everything, with no words", async () => {
+    const created = await post(album());
+    expect(created.status).toBe(201);
+
+    const row = await env.DB.prepare(
+      "SELECT hide_locked, locked_cover_key FROM album ORDER BY rowid DESC LIMIT 1",
+    ).first<{ hide_locked: number; locked_cover_key: string | null }>();
+    expect(row).toMatchObject({ hide_locked: 0, locked_cover_key: null });
+  });
+
+  it("refuses a locked cover with nothing hidden", async () => {
+    // The album is immutable once sealed, so two fields that disagree would
+    // disagree forever.
+    const response = await post({
+      ...album(),
+      hideLocked: false,
+      lockedCoverKey: key(9),
+    });
+    expect(response.status).toBe(400);
+  });
+
+  it("reads them back on the detail route", async () => {
+    const created = await post({
+      ...album(),
+      hideLocked: true,
+      lockedCoverKey: key(9),
+      stickers: [{ imageKey: key(1), tier: "common", title: "Red Fox", description: "A note" }],
+    });
+    // Sealing returns the whole album, not a bare id.
+    const { album: sealed } = (await created.json()) as { album: { id: string } };
+
+    const raw = await app.fetch(
+      new Request(`http://localhost/api/albums/${sealed.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+      env,
+    );
+    const detail = (await raw.json()) as {
+      album: { hideLocked: boolean; lockedCoverKey: string | null };
+      stickers: { title: string | null; description: string | null }[];
+    };
+
+    expect(detail.album.hideLocked).toBe(true);
+    expect(detail.album.lockedCoverKey).toBe(key(9));
+    expect(detail.stickers[0]).toMatchObject({ title: "Red Fox", description: "A note" });
+  });
+
+  it("still seals an album larger than one INSERT can carry", async () => {
+    // A sticker row now binds SEVEN parameters against D1's 100-per-statement
+    // limit, so the chunk size had to drop from 20 to 14. Getting that wrong
+    // caps an album silently and 500s on the row after the cap (TD-15).
+    const stickers = Array.from({ length: 40 }, (_, i) => ({
+      imageKey: key(i + 1),
+      tier: "common" as const,
+      title: `Sticker ${i}`,
+      description: "A reasonably long note to make the row bind its full width",
+    }));
+
+    const created = await post({ ...album(), stickers });
+    expect(created.status).toBe(201);
+
+    // Sealing returns the whole album, not a bare id.
+    const { album: sealed } = (await created.json()) as { album: { id: string } };
+    const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM sticker WHERE album_id = ?")
+      .bind(sealed.id)
+      .first<{ n: number }>();
+    expect(count?.n).toBe(40);
+  });
+});
