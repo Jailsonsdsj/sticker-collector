@@ -1,4 +1,5 @@
-import type { Epic } from "@sticker-collector/shared";
+import type { Epic, Task } from "@sticker-collector/shared";
+import { todayIn } from "@sticker-collector/shared";
 import { useMemo, useState } from "react";
 import { Navigate } from "react-router";
 import { DeleteEpicDialog } from "../components/DeleteEpicDialog";
@@ -8,7 +9,15 @@ import { AppHeader } from "../components/layout";
 import { TaskForm } from "../components/TaskForm";
 import { Button, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { ApiError } from "../lib/api";
-import { useCreateEpic, useCreateTask, useDeleteEpic, useUpdateEpic } from "../lib/mutations";
+import { usePendingCompletions } from "../lib/completionQueue";
+import {
+  useCreateEpic,
+  useCreateTask,
+  useDeleteEpic,
+  useDeleteTask,
+  useUpdateEpic,
+  useUpdateTask,
+} from "../lib/mutations";
 import { useEpics, useTasks } from "../lib/queries";
 
 /**
@@ -26,9 +35,18 @@ export function Epics() {
   const updateEpic = useUpdateEpic();
   const deleteEpic = useDeleteEpic();
   const createTask = useCreateTask();
+  const updateTask = useUpdateTask();
+  const deleteTask = useDeleteTask();
+  const queue = usePendingCompletions();
+
+  // Ticking from here goes through the SAME undo queue as the home screen. A
+  // second path that wrote immediately would make the identical action
+  // reversible in one place and not the other.
+  const today = todayIn(Intl.DateTimeFormat().resolvedOptions().timeZone);
 
   const [expanded, setExpanded] = useState<string | null>(null);
   const [editing, setEditing] = useState<{ epic: Epic | null; nonce: number } | null>(null);
+  const [openTask, setOpenTask] = useState<{ task: Task; nonce: number } | null>(null);
   const [deleting, setDeleting] = useState<Epic | null>(null);
   // The nonce remounts TaskForm, whose state is seeded once on mount — without
   // it, opening from a second epic would keep the first one's answers.
@@ -99,6 +117,16 @@ export function Epics() {
             expanded={expanded === epic.id}
             onToggleExpand={() => setExpanded((id) => (id === epic.id ? null : epic.id))}
             onAddTask={() => setAddingTo({ epicId: epic.id, nonce: Date.now() })}
+            onCompleteTask={(task) =>
+              // An undated one-off closes TODAY — the only date the API accepts
+              // for one.
+              queue.complete(
+                { taskId: task.id, scheduledOn: today },
+                { title: task.title, coins: task.rewardCoins },
+              )
+            }
+            onOpenTask={(task) => setOpenTask({ task, nonce: Date.now() })}
+            isCompleting={(task) => queue.isPending({ taskId: task.id, scheduledOn: today })}
             onEdit={() => setEditing({ epic, nonce: Date.now() })}
             onDelete={() => setDeleting(epic)}
           />
@@ -124,6 +152,21 @@ export function Epics() {
         epics={epics.data ?? []}
         onClose={() => setAddingTo(null)}
         onSubmit={(payload) => createTask.mutateAsync(payload)}
+      />
+
+      <TaskForm
+        key={`open-${openTask?.nonce ?? "closed"}`}
+        open={openTask !== null}
+        task={openTask?.task ?? null}
+        // Required by the props, unreachable in edit mode: with a `task` the
+        // sheet always sends a diff through `onUpdate`.
+        onSubmit={(payload) => createTask.mutateAsync(payload)}
+        epics={epics.data ?? []}
+        onClose={() => setOpenTask(null)}
+        onUpdate={(patch) =>
+          openTask ? updateTask.mutateAsync({ id: openTask.task.id, patch }) : Promise.resolve()
+        }
+        onDelete={() => (openTask ? deleteTask.mutateAsync(openTask.task.id) : Promise.resolve())}
       />
 
       <DeleteEpicDialog

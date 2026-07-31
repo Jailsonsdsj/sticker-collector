@@ -104,8 +104,8 @@ beforeEach(() => {
         {
           id: "e1",
           title: "Health",
-          accent: "epic-1",
           description: null,
+          accent: "epic-1",
           createdAt: "2026-07-01T00:00:00Z",
           oneOffTotal: 0,
           oneOffDone: 0,

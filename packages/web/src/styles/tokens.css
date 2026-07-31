@@ -1,7 +1,12 @@
 /* ============================================================================
    Sticker Collector — design tokens
    ----------------------------------------------------------------------------
-   GENERATED FROM THE HANDOFF BUNDLE. DO NOT HAND-EDIT.
+   GENERATED FROM THE HANDOFF BUNDLE — WITH ONE HAND-EDITED SECTION.
+
+   The epic accent palette (--color-epic-6 .. -15) was added by hand and is NOT
+   in the bundle. Re-running D-01 would delete those ten values, and every epic
+   assigned one would lose its colour while `epicAccentSchema` still accepted
+   it. Carry them across, or put them in the bundle first. See backlog TD-32.
 
    Source:  docs/design/project/Sticker Collector Design System.dc.html
             ("Nostalgic 90s Trading Card System")
@@ -188,6 +193,20 @@
   --color-epic-3: #2de2ff;
   --color-epic-4: #ff2d95;
   --color-epic-5: #ffcc33;
+  /* Hand-added (TD-32). Chosen to stay legible as a 3px edge on --color-void
+     and to sit apart from each other at that width — a palette of near-misses
+     is worse than a small one, because two epics you cannot tell apart is the
+     same as no colour at all. */
+  --color-epic-6: #ff7a3d;
+  --color-epic-7: #3dffb0;
+  --color-epic-8: #6d7cff;
+  --color-epic-9: #ff5c7a;
+  --color-epic-10: #8cff5c;
+  --color-epic-11: #00d4c8;
+  --color-epic-12: #d94eff;
+  --color-epic-13: #ffe066;
+  --color-epic-14: #5ab0ff;
+  --color-epic-15: #ff9ecb;
   --color-epic-none: #5a5468;
 
   /* ── Colour · rarity tiers ───────────────────────────────────────────

@@ -1,7 +1,7 @@
-import type { Epic, EpicAccent } from "@sticker-collector/shared";
+import { EPIC_ACCENTS, type Epic, type EpicAccent } from "@sticker-collector/shared";
 import type { CSSProperties } from "react";
 import { useEffect, useState } from "react";
-import { Button, Chip, Field, Input, Sheet } from "./ui";
+import { Button, Chip, Field, Input, Sheet, Textarea } from "./ui";
 
 /**
  * Create or rename an epic. The same sheet does both — an epic is a title and
@@ -10,18 +10,25 @@ import { Button, Chip, Field, Input, Sheet } from "./ui";
  * The accent is a **token name**, never a colour: `epicAccentSchema` rejects a
  * hex, which keeps literal colours out of the database and out of components.
  */
-export const ACCENTS: EpicAccent[] = ["epic-1", "epic-2", "epic-3", "epic-4", "epic-5"];
+/** The whole palette, from the schema — a picker that lists fewer than the
+ *  schema accepts is a colour nobody can choose. */
+export const ACCENTS: EpicAccent[] = [...EPIC_ACCENTS];
 
 export interface EpicFormProps {
   open: boolean;
   onClose: () => void;
-  onSubmit: (values: { title: string; accent: EpicAccent }) => Promise<unknown>;
+  onSubmit: (values: {
+    title: string;
+    description: string | null;
+    accent: EpicAccent;
+  }) => Promise<unknown>;
   /** Present when renaming rather than creating. */
   epic?: Epic | null;
 }
 
 export function EpicForm({ open, onClose, onSubmit, epic }: EpicFormProps) {
   const [title, setTitle] = useState(epic?.title ?? "");
+  const [description, setDescription] = useState(epic?.description ?? "");
   const [accent, setAccent] = useState<EpicAccent>(epic?.accent ?? "epic-1");
   const [saving, setSaving] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -30,6 +37,7 @@ export function EpicForm({ open, onClose, onSubmit, epic }: EpicFormProps) {
   useEffect(() => {
     if (!open) return;
     setTitle(epic?.title ?? "");
+    setDescription(epic?.description ?? "");
     setAccent(epic?.accent ?? "epic-1");
     setFailed(false);
   }, [open, epic]);
@@ -39,7 +47,9 @@ export function EpicForm({ open, onClose, onSubmit, epic }: EpicFormProps) {
     setSaving(true);
     setFailed(false);
     try {
-      await onSubmit({ title: title.trim(), accent });
+      // Trimmed to null: an empty box means the author wrote nothing, and ""
+      // would make "no description" and "a blank one" the same row.
+      await onSubmit({ title: title.trim(), description: description.trim() || null, accent });
       onClose();
     } catch {
       setFailed(true);
@@ -71,6 +81,15 @@ export function EpicForm({ open, onClose, onSubmit, epic }: EpicFormProps) {
         placeholder="What is this group of work?"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
+      />
+
+      <Textarea
+        id="epic-description"
+        label="Description"
+        hint="optional"
+        placeholder="What counts as done, or why this matters"
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
       />
 
       <Field label="Accent">

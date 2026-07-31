@@ -19,6 +19,7 @@ export type EpicRow = typeof epic.$inferSelect;
 const PROGRESS_COLUMNS = {
   id: epic.id,
   title: epic.title,
+  description: epic.description,
   accent: epic.accent,
   coinGoalAlbumId: epic.coinGoalAlbumId,
   createdAt: epic.createdAt,
@@ -29,6 +30,7 @@ const PROGRESS_COLUMNS = {
 function toEpic(row: {
   id: string;
   title: string;
+  description: string | null;
   accent: string;
   coinGoalAlbumId: string | null;
   createdAt: string;
@@ -38,6 +40,7 @@ function toEpic(row: {
   return {
     id: row.id,
     title: row.title,
+    description: row.description,
     accent: row.accent as EpicAccent,
     coinGoalAlbumId: row.coinGoalAlbumId,
     createdAt: row.createdAt,

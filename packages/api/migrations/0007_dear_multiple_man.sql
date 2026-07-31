@@ -1,0 +1,1 @@
+ALTER TABLE `epic` ADD `description` text;

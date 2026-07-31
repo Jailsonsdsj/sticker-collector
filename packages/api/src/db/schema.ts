@@ -99,6 +99,8 @@ export const epic = sqliteTable("epic", {
     .notNull()
     .references(() => user.id),
   title: text("title").notNull(),
+  /** Optional, author-written: what this epic is actually for. */
+  description: text("description"),
   accent: text("accent").notNull(),
   coinGoalAlbumId: text("coin_goal_album_id").references(() => album.id),
   createdAt: text("created_at").notNull(),
