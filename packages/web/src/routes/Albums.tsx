@@ -6,7 +6,7 @@ import { AlbumCard } from "../components/AlbumCard";
 import { BackupNudge } from "../components/BackupNudge";
 import { AlbumGrid, AppHeader } from "../components/layout";
 import { UnlockDialog } from "../components/UnlockDialog";
-import { Chip, EmptyState, ErrorState, Skeleton, Tabs } from "../components/ui";
+import { Button, Chip, EmptyState, ErrorState, Skeleton, Tabs } from "../components/ui";
 import { ApiError } from "../lib/api";
 import { useUnlockAlbum } from "../lib/mutations";
 import { useAlbums, useWallet } from "../lib/queries";
@@ -32,10 +32,34 @@ const SORT_LABELS: Record<(typeof ALBUM_SORTS)[number], string> = {
   created: "Newest",
 };
 
+/** Albums per page. Enough to fill a phone screen without an endless scroll. */
+export const ALBUMS_PER_PAGE = 10;
+
+/**
+ * One page of the shelf.
+ *
+ * Paged on the client: the listing is filtered and sorted server-side and
+ * returns one user's albums — tens of rows, not thousands — so a `limit`/
+ * `offset` round trip would add an API surface and a loading state to save a
+ * payload that is already small. If the shelf outgrows that, this is the
+ * function to change.
+ *
+ * The page is **clamped, not reset**. A refetch can shorten the list under a
+ * page the user is already on — an album deleted on another device, a filter
+ * applied server-side — and an out-of-range page renders an empty grid, which
+ * reads as "you have no albums" rather than "there is no page 3".
+ */
+export function paginate<T>(rows: T[], page: number, perPage = ALBUMS_PER_PAGE) {
+  const pages = Math.max(1, Math.ceil(rows.length / perPage));
+  const current = Math.min(Math.max(0, page), pages - 1);
+  return { pages, current, visible: rows.slice(current * perPage, (current + 1) * perPage) };
+}
+
 export function Albums() {
   const [filter, setFilter] = useState<AlbumStatus | "all">("all");
   const [sort, setSort] = useState<(typeof ALBUM_SORTS)[number]>("status");
   const [unlocking, setUnlocking] = useState<AlbumSummary | null>(null);
+  const [page, setPage] = useState(0);
 
   const albums = useAlbums({ status: filter === "all" ? undefined : filter, sort });
   const wallet = useWallet();
@@ -46,6 +70,8 @@ export function Albums() {
   }
 
   const rows = albums.data ?? [];
+
+  const { pages, current, visible } = paginate(rows, page);
 
   return (
     <>
@@ -68,7 +94,10 @@ export function Albums() {
       <Tabs
         items={FILTERS}
         value={filter}
-        onChange={setFilter}
+        onChange={(next) => {
+          setFilter(next);
+          setPage(0);
+        }}
         label="Album status"
         className="mb-3"
       />
@@ -83,7 +112,10 @@ export function Albums() {
             fill="tint"
             font="body"
             selected={sort === option}
-            onClick={() => setSort(option)}
+            onClick={() => {
+              setSort(option);
+              setPage(0);
+            }}
           >
             {SORT_LABELS[option]}
           </Chip>
@@ -111,11 +143,41 @@ export function Albums() {
           }
         />
       ) : (
-        <AlbumGrid>
-          {rows.map((album) => (
-            <AlbumCard key={album.id} album={album} onUnlock={() => setUnlocking(album)} />
-          ))}
-        </AlbumGrid>
+        <>
+          <AlbumGrid>
+            {visible.map((album) => (
+              <AlbumCard key={album.id} album={album} onUnlock={() => setUnlocking(album)} />
+            ))}
+          </AlbumGrid>
+
+          {/* Absent entirely on a single page: controls that can never do
+              anything are noise on the screen they sit on. */}
+          {pages > 1 && (
+            <nav aria-label="Album pages" className="mt-5 flex items-center justify-center gap-3">
+              <Button
+                size="sm"
+                variant="outline"
+                tone="neutral"
+                disabled={current === 0}
+                onClick={() => setPage(current - 1)}
+              >
+                Previous
+              </Button>
+              <span aria-live="polite" className="font-numeric text-sm text-ink-secondary">
+                {current + 1} of {pages}
+              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                tone="neutral"
+                disabled={current === pages - 1}
+                onClick={() => setPage(current + 1)}
+              >
+                Next
+              </Button>
+            </nav>
+          )}
+        </>
       )}
 
       <UnlockDialog

@@ -55,3 +55,27 @@ describe("an image on its way", () => {
     expect(screen.getByRole("presentation", { hidden: true })).toBeInTheDocument();
   });
 });
+
+describe("the art does not offer itself up", () => {
+  it("refuses the context menu", () => {
+    // Right click on desktop, long press on Android — both raise a menu that
+    // sits on top of a tap target and reads as the app misbehaving.
+    render(<ImageTile src="/img/a.jpg" alt="Fox" />);
+
+    const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+    screen.getByAltText("Fox").dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it("suppresses the iOS long-press callout", () => {
+    // The only thing that stops Safari's "Save Image" sheet.
+    render(<ImageTile src="/img/a.jpg" alt="Fox" />);
+    expect(screen.getByAltText("Fox").className).toContain("[-webkit-touch-callout:none]");
+  });
+
+  it("cannot be dragged out", () => {
+    render(<ImageTile src="/img/a.jpg" alt="Fox" />);
+    expect(screen.getByAltText("Fox")).toHaveAttribute("draggable", "false");
+  });
+});

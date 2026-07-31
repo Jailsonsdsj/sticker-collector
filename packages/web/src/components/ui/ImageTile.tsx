@@ -38,7 +38,17 @@ export function ImageTile({ src, alt = "", className, style, loading = "lazy" }:
         loading={loading}
         onLoad={() => setLoaded(true)}
         onError={() => setFailed(true)}
-        className={cx("relative h-full w-full", className)}
+        // The art is the thing being collected, so it should not offer itself
+        // up for saving: a long press on iOS raises the image callout, and a
+        // right click raises the context menu, both of which sit on top of a
+        // tap target and read as the app misbehaving.
+        //
+        // `-webkit-touch-callout` is the only thing that suppresses the iOS
+        // sheet; `onContextMenu` covers the desktop menu and Android's
+        // long-press; `draggable` stops the picture being dragged out.
+        draggable={false}
+        onContextMenu={(event) => event.preventDefault()}
+        className={cx("relative h-full w-full select-none [-webkit-touch-callout:none]", className)}
         style={style}
       />
     </span>

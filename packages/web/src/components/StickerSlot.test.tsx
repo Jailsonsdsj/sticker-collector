@@ -220,3 +220,55 @@ describe("an album that hides its locked slots", () => {
     expect(imageOf(/empty/)?.getAttribute("style")).toContain("locked-deep");
   });
 });
+
+describe("a slot is a picture, not prose", () => {
+  it("refuses the context menu on the whole slot", () => {
+    // Not only the <img>: a control-click or long press anywhere on the tile
+    // would otherwise raise a menu over a tap target.
+    renderSlot({ quantity: 0 });
+
+    const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+    screen.getByRole("img", { name: /empty/ }).dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it("cannot be selected or long-pressed into a callout", () => {
+    renderSlot({ quantity: 0 });
+
+    const slot = screen.getByRole("img", { name: /empty/ });
+    expect(slot.className).toContain("select-none");
+    expect(slot.className).toContain("[-webkit-touch-callout:none]");
+  });
+});
+
+describe("locked art recedes", () => {
+  it("is dimmed as well as filtered, so collected stickers lead the eye", () => {
+    renderSlot({ quantity: 0 });
+
+    const style = screen.getByRole("img", { name: /empty/ }).querySelector("img")?.style;
+    expect(Number(style?.opacity)).toBeLessThan(1);
+  });
+
+  it("is at full strength the moment it is owned", () => {
+    renderSlot({ quantity: 1 });
+
+    const style = screen.getByRole("img", { name: /collected/ }).querySelector("img")?.style;
+    expect(style?.opacity).toBe("1");
+  });
+
+  it("does not dim a stand-in — it was chosen to be seen", () => {
+    renderSlot({ quantity: 0 }, { hideLocked: true, lockedCoverKey: key(77) });
+
+    const style = screen.getByRole("img", { name: /hidden/ }).querySelector("img")?.style;
+    expect(style?.opacity).toBe("1");
+  });
+});
+
+describe("the price says what it costs in", () => {
+  it("carries a coin beside the number", () => {
+    renderSlot({ quantity: 0 }, { albumUnlocked: true, affordable: true });
+
+    expect(screen.getByRole("button", { name: /Buy/ })).toHaveTextContent("¢");
+  });
+});

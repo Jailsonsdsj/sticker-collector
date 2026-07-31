@@ -5,7 +5,7 @@ import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { Albums } from "./Albums";
+import { ALBUMS_PER_PAGE, Albums, paginate } from "./Albums";
 
 const COVER = `img/${"a".repeat(64)}.jpg`;
 
@@ -245,5 +245,113 @@ describe("an expired session", () => {
     render(<Albums />, { wrapper });
 
     await waitFor(() => expect(screen.queryByText("Albums")).not.toBeInTheDocument());
+  });
+});
+
+describe("pagination", () => {
+  const many = (n: number) =>
+    Array.from({ length: n }, (_, i) =>
+      album({ id: `a${i}`, title: `Album ${String(i).padStart(2, "0")}` }),
+    );
+
+  /** The shared opener waits for the seed album, which these fixtures replace. */
+  const openShelf = async () => {
+    const user = userEvent.setup();
+    render(<Albums />, { wrapper });
+    await waitFor(() => expect(screen.getByText("Album 00")).toBeInTheDocument());
+    return user;
+  };
+
+  it("stays out of the way when everything fits on one page", async () => {
+    albums = many(ALBUMS_PER_PAGE);
+    await openShelf();
+
+    // Controls that can never do anything are noise on the screen they sit on.
+    expect(screen.queryByRole("navigation", { name: "Album pages" })).not.toBeInTheDocument();
+  });
+
+  it("shows ten at a time", async () => {
+    albums = many(23);
+    await openShelf();
+
+    expect(screen.getByText("Album 00")).toBeInTheDocument();
+    expect(screen.getByText("Album 09")).toBeInTheDocument();
+    expect(screen.queryByText("Album 10")).not.toBeInTheDocument();
+    expect(screen.getByText("1 of 3")).toBeInTheDocument();
+  });
+
+  it("walks forward and back", async () => {
+    albums = many(23);
+    const user = await openShelf();
+
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByText("Album 10")).toBeInTheDocument();
+    expect(screen.queryByText("Album 00")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Previous" }));
+    expect(screen.getByText("Album 00")).toBeInTheDocument();
+  });
+
+  it("stops at both ends", async () => {
+    albums = many(23);
+    const user = await openShelf();
+
+    expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await user.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(screen.getByText("3 of 3")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
+  });
+
+  it("leaves the last page short rather than padding it", async () => {
+    albums = many(11);
+    const user = await openShelf();
+
+    await user.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(screen.getByText("Album 10")).toBeInTheDocument();
+    expect(screen.getByText("2 of 2")).toBeInTheDocument();
+  });
+
+  it("returns to the first page when the filter changes", async () => {
+    // Otherwise a narrower list leaves you on a page that no longer exists.
+    albums = many(23);
+    const user = await openShelf();
+
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await user.click(screen.getByRole("tab", { name: "Locked" }));
+
+    await waitFor(() => expect(screen.getByText("Album 00")).toBeInTheDocument());
+  });
+});
+
+describe("paginate", () => {
+  const rows = (n: number) => Array.from({ length: n }, (_, i) => i);
+
+  it("cuts the list into pages of ten", () => {
+    expect(paginate(rows(23), 0).visible).toHaveLength(ALBUMS_PER_PAGE);
+    expect(paginate(rows(23), 0).pages).toBe(3);
+  });
+
+  it("leaves the last page short rather than padding it", () => {
+    expect(paginate(rows(23), 2).visible).toEqual([20, 21, 22]);
+  });
+
+  it("reports one page for an empty shelf, not zero", () => {
+    // Zero pages would render "1 of 0" and disable both controls forever.
+    expect(paginate(rows(0), 0)).toMatchObject({ pages: 1, current: 0, visible: [] });
+  });
+
+  it("clamps a page that no longer exists", () => {
+    // The case a refetch creates: you are on page 3, an album is deleted on
+    // another device, and the list is now one page long. Without the clamp the
+    // grid renders empty, which reads as "you have no albums".
+    expect(paginate(rows(5), 2)).toMatchObject({ current: 0, visible: [0, 1, 2, 3, 4] });
+  });
+
+  it("clamps a negative page too", () => {
+    expect(paginate(rows(5), -3).current).toBe(0);
   });
 });

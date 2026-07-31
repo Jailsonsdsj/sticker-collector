@@ -168,3 +168,10 @@ describe("opening an album", () => {
     );
   });
 });
+
+describe("the title", () => {
+  it("is centred under the cover", () => {
+    renderCard();
+    expect(screen.getByRole("heading", { level: 3 }).className).toContain("text-center");
+  });
+});

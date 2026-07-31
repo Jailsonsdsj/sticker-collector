@@ -23,6 +23,11 @@ export interface StickerSlotProps {
   hideLocked?: boolean;
   /** One stand-in for every locked slot. Null falls back to a "?". */
   lockedCoverKey?: string | null;
+  /**
+   * Open this sticker full size. Offered for collected stickers only — a
+   * locked one has nothing to show.
+   */
+  onOpen?: () => void;
 }
 
 /**
@@ -54,60 +59,88 @@ export function StickerSlot({
   onSell,
   hideLocked = false,
   lockedCoverKey = null,
+  onOpen,
 }: StickerSlotProps) {
   const owned = sticker.quantity > 0;
   const hidden = !owned && Boolean(hideLocked);
+  const openable = owned && Boolean(onOpen);
+
+  // A real button, not a click handler on the tile: the viewer is the only way
+  // to read a sticker's description, and a div cannot be reached with a
+  // keyboard. The tile keeps its `role="img"` inside it, so the slot is still
+  // announced as the picture it is.
+  const tile = (
+    <div
+      data-tier={sticker.tier}
+      data-owned={owned}
+      // The slot as a whole is the picture — the frame carries the rarity and
+      // the art is decorative inside it. A bare `aria-label` on a div is not
+      // exposed at all, which is why the role is not optional here.
+      role="img"
+      // The tier is still announced while hidden — that is what a locked slot
+      // is *for* — but nothing identifies the sticker itself.
+      aria-label={`${sticker.tier} slot, ${owned ? "collected" : hidden ? "hidden" : "empty"}`}
+      // A slot is a picture, not prose: a long press or a control-click
+      // should not start selecting it, and neither should raise a menu over
+      // a tap target.
+      onContextMenu={(event) => event.preventDefault()}
+      className="relative touch-manipulation overflow-hidden rounded-xl select-none [-webkit-touch-callout:none]"
+      style={{
+        // The frame widens with rarity: 4px for a common, 7px for a legendary.
+        background: `var(--gradient-frame-${sticker.tier})`,
+        padding: `var(--frame-pad-${sticker.tier})`,
+        aspectRatio: "var(--aspect-card)",
+      }}
+    >
+      <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-lg bg-surface-2">
+        {hidden && !lockedCoverKey ? (
+          // No stand-in was supplied, so the slot says only that something
+          // belongs here.
+          <span aria-hidden className="font-display text-5xl text-ink-faint">
+            ?
+          </span>
+        ) : (
+          <ImageTile
+            src={imageSrc(hidden ? (lockedCoverKey as string) : sticker.imageKey)}
+            className="object-cover transition-[filter] duration-500"
+            style={{
+              // A stand-in is shown as itself. Graying it would dim a picture
+              // the author chose *because* it reads as a hidden slot.
+              filter: owned || hidden ? "var(--filter-unlocked)" : "var(--filter-locked-deep)",
+              // Locked art sits further back than the filter alone puts it,
+              // so a collected sticker is the thing the eye lands on.
+              opacity: owned || hidden ? 1 : 0.45,
+            }}
+          />
+        )}
+      </div>
+
+      {/* Duplicates are counted in the upper-left corner (§4). One copy is not
+            a duplicate, so the badge stays away until there is something to say. */}
+      {sticker.quantity > 1 && (
+        <span className="absolute top-1 left-1">
+          <Badge tone="coin" variant="solid" size="sm" font="numeric">
+            ×{sticker.quantity}
+          </Badge>
+        </span>
+      )}
+    </div>
+  );
 
   return (
     <div className="flex flex-col gap-1">
-      <div
-        data-tier={sticker.tier}
-        data-owned={owned}
-        // The slot as a whole is the picture — the frame carries the rarity and
-        // the art is decorative inside it. A bare `aria-label` on a div is not
-        // exposed at all, which is why the role is not optional here.
-        role="img"
-        // The tier is still announced while hidden — that is what a locked slot
-        // is *for* — but nothing identifies the sticker itself.
-        aria-label={`${sticker.tier} slot, ${owned ? "collected" : hidden ? "hidden" : "empty"}`}
-        className="relative overflow-hidden rounded-xl"
-        style={{
-          // The frame widens with rarity: 4px for a common, 7px for a legendary.
-          background: `var(--gradient-frame-${sticker.tier})`,
-          padding: `var(--frame-pad-${sticker.tier})`,
-          aspectRatio: "var(--aspect-card)",
-        }}
-      >
-        <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-lg bg-surface-2">
-          {hidden && !lockedCoverKey ? (
-            // No stand-in was supplied, so the slot says only that something
-            // belongs here.
-            <span aria-hidden className="font-display text-5xl text-ink-faint">
-              ?
-            </span>
-          ) : (
-            <ImageTile
-              src={imageSrc(hidden ? (lockedCoverKey as string) : sticker.imageKey)}
-              className="object-cover transition-[filter] duration-500"
-              style={{
-                // A stand-in is shown as itself. Graying it would dim a picture
-                // the author chose *because* it reads as a hidden slot.
-                filter: owned || hidden ? "var(--filter-unlocked)" : "var(--filter-locked-deep)",
-              }}
-            />
-          )}
-        </div>
-
-        {/* Duplicates are counted in the upper-left corner (§4). One copy is not
-            a duplicate, so the badge stays away until there is something to say. */}
-        {sticker.quantity > 1 && (
-          <span className="absolute top-1 left-1">
-            <Badge tone="coin" variant="solid" size="sm" font="numeric">
-              ×{sticker.quantity}
-            </Badge>
-          </span>
-        )}
-      </div>
+      {openable ? (
+        <button
+          type="button"
+          onClick={onOpen}
+          aria-label={`View ${sticker.title ?? `${sticker.tier} sticker`}`}
+          className="block cursor-pointer rounded-xl outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan"
+        >
+          {tile}
+        </button>
+      ) : (
+        tile
+      )}
 
       {/* A duplicate keeps its choice after the reveal has closed. Without this
           the sell action would be reachable for a few seconds per pull, and
@@ -136,6 +169,12 @@ export function StickerSlot({
           onClick={onBuy}
           aria-label={`Buy ${sticker.tier} sticker for ${price}`}
         >
+          <span
+            aria-hidden
+            className="inline-flex size-4 items-center justify-center rounded-full font-numeric text-3xs text-coin-ink [background:var(--gradient-coin)]"
+          >
+            ¢
+          </span>
           {price}
         </Button>
       )}

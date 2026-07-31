@@ -204,22 +204,36 @@ describe("buying a sticker", () => {
   });
 });
 
-describe("missing only", () => {
-  it("hides what is already collected", async () => {
+describe("showing all, unlocked or locked", () => {
+  it("shows only what is still missing", async () => {
+    // "Locked" is what "Missing only" used to mean, in a control that can also
+    // say the opposite.
     const user = await open();
-    await user.click(screen.getByRole("button", { name: "Missing only" }));
+    await user.click(screen.getByRole("button", { name: "Locked" }));
 
     expect(slots()).toHaveLength(2);
     expect(slots().every((el) => el.getAttribute("data-owned") === "false")).toBe(true);
   });
 
+  it("shows only what has been collected", async () => {
+    const user = await open();
+    await user.click(screen.getByRole("button", { name: "Unlocked" }));
+
+    expect(slots()).toHaveLength(2);
+    expect(slots().every((el) => el.getAttribute("data-owned") === "true")).toBe(true);
+  });
+
   it("brings the whole album back", async () => {
     const user = await open();
-    const toggle = screen.getByRole("button", { name: "Missing only" });
 
-    await user.click(toggle);
-    await user.click(toggle);
+    await user.click(screen.getByRole("button", { name: "Locked" }));
+    await user.click(screen.getByRole("button", { name: "All" }));
 
+    expect(slots()).toHaveLength(4);
+  });
+
+  it("starts on All", async () => {
+    await open();
     expect(slots()).toHaveLength(4);
   });
 
@@ -229,7 +243,7 @@ describe("missing only", () => {
       slot({ slotIndex: 1, quantity: 2 }),
     ]);
     const user = await open();
-    await user.click(screen.getByRole("button", { name: "Missing only" }));
+    await user.click(screen.getByRole("button", { name: "Locked" }));
 
     expect(screen.getByText("Nothing missing")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /Show the whole album/ }));
@@ -449,5 +463,78 @@ describe("the print export", () => {
     detail = body({ status: "locked", unlockedAt: null, percent: 100, owned: 4 });
     await open();
     expect(panel()).not.toBeInTheDocument();
+  });
+});
+
+describe("the album's own chrome", () => {
+  it("shows the description under the title", async () => {
+    detail = body({ description: "A starter album of woodland creatures." });
+    await open();
+
+    expect(screen.getByText("A starter album of woodland creatures.")).toBeInTheDocument();
+  });
+
+  it("says nothing where there is no description", async () => {
+    detail = body({ description: null });
+    await open();
+
+    expect(screen.queryByText(/woodland/)).not.toBeInTheDocument();
+  });
+
+  it("puts the balance on the line where spending happens", async () => {
+    // The random-sticker button and what you have to spend, together.
+    detail = body({ status: "in_progress" });
+    await open();
+
+    const roll = screen.getByRole("button", { name: /Random sticker/ });
+    const line = roll.parentElement as HTMLElement;
+    expect(line).toHaveTextContent("1,000");
+  });
+
+  it("shows the balance larger than the prices around it", async () => {
+    // It is the number you check before deciding, not one of the several you
+    // are choosing between.
+    detail = body({ status: "in_progress" });
+    await open();
+
+    const roll = screen.getByRole("button", { name: /Random sticker/ });
+    const balance = screen.getByText("1,000");
+
+    expect(balance.className).toContain("text-2xl");
+    expect(roll.className).not.toContain("text-2xl");
+  });
+
+  it("prices the roll in coins, not bare numbers", async () => {
+    detail = body({ status: "in_progress" });
+    await open();
+
+    expect(screen.getByRole("button", { name: /Random sticker/ })).toHaveTextContent("¢");
+  });
+});
+
+describe("opening a sticker full size", () => {
+  it("opens a collected one", async () => {
+    const user = await open();
+
+    await user.click(screen.getAllByRole("button", { name: /^View / })[0] as HTMLElement);
+
+    expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
+  });
+
+  it("offers nothing to open on a locked slot", async () => {
+    // A locked sticker has nothing to show: its art is the thing being earned,
+    // and in an album that hides locked slots it is not even downloaded.
+    await open();
+
+    const openers = screen.getAllByRole("button", { name: /^View / });
+    expect(openers).toHaveLength(2); // the two collected slots, not all four
+  });
+
+  it("walks only the collected stickers", async () => {
+    const user = await open();
+
+    await user.click(screen.getAllByRole("button", { name: /^View / })[0] as HTMLElement);
+
+    expect(screen.getByText("1 of 2")).toBeInTheDocument();
   });
 });

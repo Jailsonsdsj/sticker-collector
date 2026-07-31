@@ -57,7 +57,7 @@ export function AlbumCard({ album, onUnlock }: AlbumCardProps) {
         )}
       </Link>
 
-      <h3 className="truncate font-body text-sm font-bold text-ink" title={album.title}>
+      <h3 className="truncate text-center font-body text-sm font-bold text-ink" title={album.title}>
         {album.title}
       </h3>
 

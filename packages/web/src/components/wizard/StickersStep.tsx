@@ -35,7 +35,12 @@ export function StickersStep({ draft, problems, dispatch }: StepProps) {
         hint="Optional — keeps the album's surprises until each sticker is earned"
       >
         <div className="flex flex-col gap-3">
+          {/* `self-start`, because the checkbox's own label centres its box
+              inside a 44px tap target — and a stretched flex item makes that
+              target the full width of the column, which parks the box in the
+              middle of the form. */}
           <Checkbox
+            className="self-start"
             label="Hide locked images"
             checked={draft.hideLocked}
             onChange={(value) => dispatch({ type: "hideLocked", value })}
