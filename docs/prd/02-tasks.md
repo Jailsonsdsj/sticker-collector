@@ -52,6 +52,11 @@ Every task is either a **routine** or a **one-off**. The choice is made at creat
 
 **Missed work**
 
+0. **A routine is never scheduled before the day it was created.** Adding a
+   Mon–Sun routine on Thursday must not mark that week's Monday, Tuesday and
+   Wednesday as missed — the task did not exist then. An explicit `startsOn` in
+   the future still wins; one in the past is clamped, because backdating a
+   routine cannot retroactively create days you failed to do it on.
 1. An occurrence not completed by end of day becomes **missed**. It leaves the Today list and moves to a separate section.
 2. A missed occurrence remains completable and pays its snapshotted reward in full.
 3. After **seven days** a missed occurrence is **archived**: no longer completable, still counted in reports.

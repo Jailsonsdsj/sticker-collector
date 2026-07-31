@@ -47,7 +47,16 @@ async function createTask(extra: Record<string, unknown> = {}): Promise<{ id: st
     ...extra,
   });
   expect(res.status).toBe(201);
-  return (await res.json()) as { id: string };
+  const created = (await res.json()) as { id: string };
+
+  // Backdated on purpose. A routine's schedule starts no earlier than the day
+  // the task was created — you cannot have missed something that did not exist
+  // — and almost every test in this file is about completing an EARLIER day.
+  // Without this the fixture has no past to act on.
+  await env.DB.prepare("UPDATE task SET created_at = ? WHERE id = ?")
+    .bind("2026-01-01T00:00:00Z", created.id)
+    .run();
+  return created;
 }
 
 const complete = (taskId: string, scheduledOn: string, headers?: Record<string, string>) =>

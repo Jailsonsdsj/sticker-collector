@@ -149,20 +149,36 @@ test("ticking a task moves it into Completed today", async ({ page }) => {
   // The headline of the section rework: a done row leaves the list it was in
   // rather than sitting there dimmed. Only a real render shows this — the
   // sectioning is pure, but the moving is what the user actually sees.
+  //
+  // The task is created here rather than borrowed from the seed. The suite
+  // shares one database and runs in file order, so anything the earlier
+  // journeys tick is already in Completed today by the time this runs — an
+  // assertion about what that section holds beforehand is really an assertion
+  // about the other tests.
   await login(page);
 
-  const completed = page.getByRole("button", { name: /Completed today/ });
-  await expect(completed).toHaveCount(0); // nothing done yet on a fresh seed
+  // A daily ROUTINE, not a quick-add capture. An undated one-off is validated
+  // as "completable today only", against `user.timezone` — while the browser
+  // computes the date it sends from the *device* zone. When those disagree
+  // across midnight the completion is refused (TD-31). A mask covering every
+  // weekday is valid on whichever day either clock believes it is, so this
+  // test measures the row moving rather than that skew.
+  const title = `Move me ${Date.now()}`;
+  const created = await page.request.post("/api/tasks", {
+    data: { type: "routine", title, effortMinutes: 15, weekdays: 0b1111111 },
+  });
+  expect(created.status()).toBe(201);
+  await page.reload();
 
-  await tick(page, "Read 20 pages");
+  const sectionFor = (name: RegExp) => page.getByRole("button", { name }).locator("xpath=../..");
 
-  await expect(completed).toBeVisible();
-  const section = completed.locator("xpath=../..");
-  await expect(section.getByText("Read 20 pages")).toBeVisible();
+  // A routine is never scheduled before the day it was created, so a daily one
+  // starts today.
+  await expect(sectionFor(/For today/).getByText(title)).toBeVisible();
 
+  await tick(page, title);
+
+  await expect(sectionFor(/Completed today/).getByText(title)).toBeVisible();
   // ...and it is no longer offered as work to do.
-  const forToday = page.getByRole("button", { name: /For today/ });
-  if ((await forToday.count()) > 0) {
-    await expect(forToday.locator("xpath=../..").getByText("Read 20 pages")).toHaveCount(0);
-  }
+  await expect(sectionFor(/For today/).getByText(title)).toHaveCount(0);
 });
