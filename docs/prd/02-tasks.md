@@ -109,3 +109,15 @@ The daily list is never assembled by hand. The home screen shows today's occurre
 ---
 
 *Part of the Sticker Collector spec. Index: [`docs/prd/README.md`](./README.md)*
+
+**Finishing a task**
+
+The tick plays a short flourish on the row itself and the coins climb in the
+wallet. There is **no popup**: the undo toast used to cover the tab bar after
+every single tick, and ticking several things in a row is the normal case.
+
+The three-second window is unchanged, and so is its guarantee — undoing inside
+it means **no ledger row ever existed**. It simply stops advertising itself:
+unticking the row cancels it. The flourish is what tells you the tick landed,
+because a row that merely greys out is indistinguishable from one that failed to
+save.

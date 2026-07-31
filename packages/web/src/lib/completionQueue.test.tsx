@@ -74,17 +74,27 @@ describe("undo inside the window writes nothing — the done-when", () => {
     expect(onCommit).not.toHaveBeenCalled();
   });
 
-  it("undoing from the toast is the same as cancelling", async () => {
+  it("shows no popup at all — the window is quiet now", async () => {
+    // The toast covered the tab bar after every single tick. Undo still writes
+    // nothing; it simply stops announcing itself.
     setup();
 
     fireEvent.click(screen.getByRole("button", { name: "tick t1" }));
-    expect(screen.getByText("+10 coins")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    expect(screen.queryByText("+10 coins")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Undo" })).not.toBeInTheDocument();
+  });
+
+  it("still cancels before anything is written", async () => {
+    // The guarantee the popup used to advertise: inside the window, undoing
+    // means no ledger row ever existed.
+    setup();
+
+    fireEvent.click(screen.getByRole("button", { name: "tick t1" }));
+    fireEvent.click(screen.getByRole("button", { name: "cancel t1" }));
 
     advance(UNDO_WINDOW_MS * 3);
     expect(onCommit).not.toHaveBeenCalled();
-    expect(screen.queryByText("+10 coins")).not.toBeInTheDocument();
   });
 
   it("takes the coins back off the balance", async () => {

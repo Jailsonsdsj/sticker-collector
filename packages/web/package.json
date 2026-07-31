@@ -15,6 +15,7 @@
     "@sticker-collector/shared": "workspace:*",
     "@tanstack/react-query": "^5.101.4",
     "fflate": "^0.8.3",
+    "gsap": "^3.15.0",
     "pdf-lib": "^1.17.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",

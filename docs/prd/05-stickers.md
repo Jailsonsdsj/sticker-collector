@@ -34,3 +34,41 @@
 ---
 
 *Part of the Sticker Collector spec. Index: [`docs/prd/README.md`](./README.md)*
+
+**The reveal**
+
+A pull arrives in a pack that shakes, opens, and lets the sticker out. **How
+much show a tier gets is the point**: a common is a shake and a card; a rare
+adds a ring; an epic adds a bloom; a legendary shakes harder, gets both, and
+keeps shining while you look at it. If they arrived the same way, rarity would
+be a label rather than a feeling.
+
+Nothing dismisses itself. The sticker is held until the user taps it — the
+reward is the looking — and the buttons stay hidden until it is out, so there is
+nothing to dismiss a reveal that has not happened yet. A duplicate still ends in
+a choice: "sell for X" sits beside the sticker.
+
+Tapping answers *where did that go?*. The album clears its filter if one is
+hiding the new sticker, scrolls that slot to the middle of the screen, and
+settles it into place. Clearing the filter is not a courtesy: with "Locked" on,
+the sticker that was just earned is no longer in the grid at all.
+
+Every part of this is an **enhancement over a working result**. Reduced motion —
+or any environment that does not answer the motion query — still gets the
+sticker, still gets the scroll, and still gets a way out.
+
+**Buying one outright**
+
+A direct purchase is not a surprise — you chose that sticker — so there is no
+pack. The slot celebrates **in place**, with the grid still on screen: the art
+floods into colour as its filter lifts, and the tier's own flourishes fire
+around it.
+
+The rarity ladder is the same table the pack uses (`lib/rarity.ts`): a common
+gets the flood and nothing else, a rare adds a ring, an epic a bloom, and a
+legendary keeps shining. "What does a legendary get that a common does not" has
+to be one answer across both paths, or rarity stops meaning anything consistent.
+
+Only the tiers that earn a flourish carry the nodes for it — a grid is mostly
+commons, and dead nodes in every one of them is a cost paid on every render for
+an effect that never fires.

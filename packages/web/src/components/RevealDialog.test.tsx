@@ -1,10 +1,11 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { PullResult, Tier } from "@sticker-collector/shared";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { HOLD_MS, RevealDialog } from "./RevealDialog";
+import { SHAKE_MS } from "./reveal/Envelope";
 
 const key = `img/${"a".repeat(64)}.jpg`;
 
@@ -98,28 +99,29 @@ describe("a first copy", () => {
 });
 
 describe("the reveal itself", () => {
-  it("floods the art from grey to colour, without a second asset", () => {
+  it("shows the sticker's own art, with no second asset", () => {
+    // The card comes out of the pack already in colour: the envelope is the
+    // reveal now, where it used to be a grayscale filter lifting.
     renderReveal();
-    expect(art().className).toContain("animate-reveal-flood");
     expect(art().getAttribute("src")).toBe(`/api/images/${key}`);
   });
 
-  it("only animates when motion is welcome", () => {
-    // A reduced-motion setting should still get the sticker, just not the show.
+  it("gives the sticker without the show when motion is unwelcome", () => {
+    // jsdom matches neither motion query, which is the same path a reduced-
+    // motion setting takes — and the one that must still end with the sticker
+    // on screen and the buttons reachable, or the dialog is a trap.
     renderReveal();
-    expect(art().className).toContain("motion-safe:");
+
+    expect(art()).toBeVisible();
+    expect(screen.getByRole("button", { name: "Nice" })).toBeInTheDocument();
   });
 
   it("holds a rarer tier longer", () => {
-    const seen = new Map<Tier, string>();
-    for (const tier of ["common", "rare", "epic", "legendary"] as Tier[]) {
-      const { view } = renderReveal({ tier });
-      seen.set(tier, frame().style.animationDuration);
-      view.unmount();
-    }
-
-    expect(new Set(seen.values()).size).toBe(4);
-    expect(seen.get("legendary")).not.toBe(seen.get("common"));
+    // The number a timer uses, not a CSS duration: `SHAKE_MS` is what the
+    // envelope's timeline is built from, and it must stay ordered.
+    expect(HOLD_MS.common).toBeLessThan(HOLD_MS.rare);
+    expect(HOLD_MS.rare).toBeLessThan(HOLD_MS.epic);
+    expect(HOLD_MS.epic).toBeLessThan(HOLD_MS.legendary);
   });
 
   it("wears the tier's own frame", () => {
@@ -142,10 +144,11 @@ describe("the reveal itself", () => {
 });
 
 describe("the hold matches the design tokens", () => {
-  it("waits exactly as long as the CSS says the reveal lasts", () => {
+  it("keeps the shake in step with the CSS that names it", () => {
     // A timer cannot read a custom property, so these four numbers are copied
-    // by hand — and a copy that drifts makes the actions appear before or after
-    // the reveal has landed. This reads the tokens and checks them.
+    // by hand, and a copy that drifts makes the choreography disagree with the
+    // tokens it was designed from. Note this pins the SHAKE, not the whole
+    // reveal: the timeline is stretched to `REVEAL_MS` afterwards.
     // `import.meta.url` is not a file: URL under the test transform, so the
     // tokens are found from the working directory instead.
     const candidates = [
@@ -156,10 +159,74 @@ describe("the hold matches the design tokens", () => {
     expect(tokensPath, "tokens.css not found").toBeDefined();
     const css = readFileSync(tokensPath as string, "utf8");
 
-    for (const [tier, ms] of Object.entries(HOLD_MS)) {
+    for (const [tier, ms] of Object.entries(SHAKE_MS)) {
       const declared = css.match(new RegExp(`--duration-shake-${tier}:\\s*(\\d+)ms`));
       expect(declared, `--duration-shake-${tier} is missing from tokens.css`).not.toBeNull();
       expect(Number((declared as RegExpMatchArray)[1])).toBe(ms);
     }
+  });
+});
+
+describe("how long the reveal lasts", () => {
+  it("gives a common two seconds", () => {
+    // 1.2s was over before the eye had settled on it; 3s turned out to be a
+    // wait. Two is long enough to be a beat and short enough to roll again.
+    expect(HOLD_MS.common).toBe(2000);
+  });
+
+  it("still gives a rarer tier longer", () => {
+    expect(HOLD_MS.common).toBeLessThan(HOLD_MS.rare);
+    expect(HOLD_MS.rare).toBeLessThan(HOLD_MS.epic);
+    expect(HOLD_MS.epic).toBeLessThan(HOLD_MS.legendary);
+  });
+});
+
+describe("when motion is welcome", () => {
+  /** Report that the user wants animation, so the envelope's timeline runs. */
+  const withMotion = () =>
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: query.includes("no-preference"),
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      onchange: null,
+      dispatchEvent: () => false,
+    }));
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("keeps the buttons away until the sticker is out", () => {
+    // A button to dismiss a reveal that has not happened yet invites skipping
+    // the only reward in the app. Unobservable without motion: with it off the
+    // envelope opens instantly and the footer is there from the first frame.
+    withMotion();
+    renderReveal();
+
+    expect(screen.queryByRole("button", { name: "Nice" })).not.toBeInTheDocument();
+  });
+
+  it("keeps the envelope in one place, so it cannot play twice", async () => {
+    // The reveal used to render bare and then move inside a button once it
+    // opened. React unmounts and remounts a component that changes position,
+    // and a remounted envelope runs its timeline again — the animation played
+    // twice. One button, always, inert until there is something to place.
+    withMotion();
+    renderReveal();
+
+    const place = screen.getByRole("button", { name: "Place it in the album" });
+    expect(place).toBeDisabled();
+
+    await waitFor(() => expect(place).toBeEnabled());
+    // The same node throughout: not a second envelope in a new wrapper.
+    expect(screen.getByRole("button", { name: "Place it in the album" })).toBe(place);
+  });
+
+  it("still holds a duplicate's sell action back too", () => {
+    withMotion();
+    renderReveal({ duplicate: true, quantity: 2 });
+
+    expect(screen.queryByRole("button", { name: /Sell for/ })).not.toBeInTheDocument();
   });
 });

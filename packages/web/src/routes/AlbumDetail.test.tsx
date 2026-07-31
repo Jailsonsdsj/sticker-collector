@@ -538,3 +538,90 @@ describe("opening a sticker full size", () => {
     expect(screen.getByText("1 of 2")).toBeInTheDocument();
   });
 });
+
+describe("placing a pulled sticker", () => {
+  beforeEach(() => {
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
+  /** The default mock answers any POST with a wallet body; a pull needs a pull. */
+  const mockPull = () =>
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if ((init?.method ?? "GET") !== "GET" && (url as string).endsWith("/pull")) {
+        return json(
+          {
+            balance: 960,
+            spentCoins: 40,
+            albumId: "alb1",
+            stickerId: "stk3",
+            tier: "common",
+            quantity: 1,
+            duplicate: false,
+            refundIfSold: 20,
+          },
+          201,
+        );
+      }
+      if ((init?.method ?? "GET") !== "GET") return json({ balance: 980 }, 201);
+      if (url.startsWith("/api/albums/")) return json(detail);
+      return json({ balance });
+    });
+
+  it("clears the Locked filter, or there is nothing to scroll to", async () => {
+    // The sticker that was just earned is no longer "locked", so with that
+    // filter on it drops out of the grid entirely.
+    const user = await open();
+    mockPull();
+    await user.click(screen.getByRole("button", { name: "Locked" }));
+    expect(slots()).toHaveLength(2);
+
+    await user.click(screen.getByRole("button", { name: /Random sticker/ }));
+    await user.click(await screen.findByRole("button", { name: "Place it in the album" }));
+
+    await waitFor(() => expect(slots()).toHaveLength(4));
+  });
+
+  it("scrolls to the slot it landed in", async () => {
+    const user = await open();
+    mockPull();
+    await user.click(screen.getByRole("button", { name: /Random sticker/ }));
+
+    await user.click(await screen.findByRole("button", { name: "Place it in the album" }));
+
+    await waitFor(() => expect(Element.prototype.scrollIntoView).toHaveBeenCalled());
+  });
+
+  it("marks every slot so it can be found again after a re-render", async () => {
+    await open();
+    expect(slots().every((el) => el.getAttribute("data-sticker-id"))).toBe(true);
+  });
+});
+
+describe("finishing an album", () => {
+  it("does not celebrate an album that was already finished when opened", async () => {
+    // Opening a completed album should not throw confetti every time.
+    detail = body({ status: "completed", percent: 100 }, [
+      slot({ slotIndex: 0, quantity: 1 }),
+      slot({ slotIndex: 1, quantity: 1 }),
+    ]);
+    await open();
+
+    expect(screen.queryByRole("dialog", { name: /is complete/ })).not.toBeInTheDocument();
+  });
+
+  it("celebrates a completion that happens while you are looking", async () => {
+    const user = await open();
+
+    // The last slot lands: buying invalidates the album, and the refetch comes
+    // back completed.
+    detail = body({ status: "completed", percent: 100 }, [
+      slot({ slotIndex: 0, quantity: 1 }),
+      slot({ slotIndex: 1, quantity: 1 }),
+    ]);
+    await user.click(screen.getAllByRole("button", { name: /^Buy / })[0] as HTMLElement);
+
+    expect(
+      await screen.findByRole("dialog", { name: /Kitchen heroes is complete/ }),
+    ).toBeInTheDocument();
+  });
+});

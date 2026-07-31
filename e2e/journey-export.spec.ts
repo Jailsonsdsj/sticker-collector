@@ -64,6 +64,14 @@ test("the last sticker completes the album, and the album prints", async ({ page
     .first()
     .click();
 
+  // Finishing an album now throws a full-screen celebration, which sits over
+  // the export panel until it is dismissed. That IS the feature — the journey
+  // has to walk through it the way a person would.
+  const celebration = page.getByRole("dialog", { name: /is complete/ });
+  await expect(celebration).toBeVisible();
+  await celebration.getByRole("button", { name: "See the album" }).click();
+  await expect(celebration).toBeHidden();
+
   const panel = page.getByRole("region", { name: "Print export" });
   await expect(panel).toBeVisible();
   await expect(panel.getByText("Ready to print")).toBeVisible();

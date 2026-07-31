@@ -1,5 +1,6 @@
 import type { EpicAccent, Priority } from "@sticker-collector/shared";
-import type { CSSProperties } from "react";
+import { type CSSProperties, useRef } from "react";
+import { useCompletionFlourish } from "../lib/useCompletionFlourish";
 import { Badge, Checkbox } from "./ui";
 import { cx } from "./ui/cx";
 
@@ -76,6 +77,11 @@ export function TaskRow({
   selected = false,
   onSelect,
 }: TaskRowProps) {
+  const row = useRef<HTMLDivElement>(null);
+  // The tick has to feel like it landed: the undo toast that used to say so is
+  // gone, and a row that merely greys out looks like one that failed to save.
+  useCompletionFlourish(row, Boolean(done));
+
   const p = PRIORITY[priority];
   const titleAction = selecting ? onSelect : onEdit;
   const vars = {
@@ -86,6 +92,7 @@ export function TaskRow({
 
   return (
     <div
+      ref={row}
       style={vars}
       className={cx(
         "flex items-start gap-3 rounded-2xl border p-3",

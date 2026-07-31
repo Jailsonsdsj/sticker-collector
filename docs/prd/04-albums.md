@@ -127,3 +127,20 @@ description.
 
 A locked sticker cannot be opened. Its art is the thing being earned, and in an
 album that hides locked slots it is not downloaded at all.
+
+**Unlocking, and finishing**
+
+Unlocking costs real coins and is the gate on everything else in an album, so
+the card the user just paid for bursts and pops rather than quietly losing a
+grayscale filter.
+
+Finishing is the loudest moment in the app: a full-screen celebration with the
+album's own cover, rays, and confetti, using the `celebration-*` vocabulary the
+design bundle shipped for it. It fires on the **transition** into complete and
+never on arrival — opening a finished album must not throw confetti every time.
+It is a plain overlay rather than a `<dialog>`, because the reveal dialog can
+still be open when the last sticker lands and two elements in the top layer
+argue over focus and Escape.
+
+Both are enhancements: with reduced motion the album still unlocks and still
+completes, without the show.

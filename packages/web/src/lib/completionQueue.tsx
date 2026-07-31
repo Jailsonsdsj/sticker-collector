@@ -8,7 +8,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { Button, Toast, ToastViewport } from "../components/ui";
 
 /**
  * The undo window.
@@ -20,7 +19,15 @@ import { Button, Toast, ToastViewport } from "../components/ui";
  * reverses it afterwards, leaving two ledger rows behind.
  *
  * So a completion is DEFERRED, not rolled back. The UI moves at once — the row
- * ticks, the balance rises — while the request waits out the window. Undo
+ * ticks, the balance rises — while the request waits out the window.
+ *
+ * **The window has no popup.** It used to raise a toast with an Undo button,
+ * which covered the tab bar after every single tick. Undoing is still there and
+ * still writes nothing — unticking the row inside the window cancels it — it
+ * simply stops announcing itself. The reward is the row's own flourish and the
+ * coins climbing in the wallet, not a banner asking whether you meant it.
+ *
+ * Undo
  * clears the timer and the request never happens at all.
  *
  * The queue lives above the router so switching tabs mid-window cannot drop a
@@ -129,22 +136,6 @@ export function CompletionQueueProvider({
   return (
     <QueueContext.Provider value={{ complete, cancel, isPending, pendingCoins }}>
       {children}
-      <ToastViewport>
-        {items.map(([key, item]) => (
-          <Toast
-            key={key}
-            tone="earn"
-            title={`+${item.coins} coins`}
-            action={
-              <Button variant="ghost" tone="lime" size="sm" onClick={() => forget(key)}>
-                Undo
-              </Button>
-            }
-          >
-            {item.title}
-          </Toast>
-        ))}
-      </ToastViewport>
     </QueueContext.Provider>
   );
 }

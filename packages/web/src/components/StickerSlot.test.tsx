@@ -272,3 +272,34 @@ describe("the price says what it costs in", () => {
     expect(screen.getByRole("button", { name: /Buy/ })).toHaveTextContent("¢");
   });
 });
+
+describe("what a slot brings to a purchase", () => {
+  it("carries no flourish nodes for a common", () => {
+    // A grid is mostly commons; dead nodes in every one of them is a cost paid
+    // on every render for an effect that never fires.
+    renderSlot({ tier: "common" });
+
+    expect(document.querySelector("[data-part='buy-ring']")).toBeNull();
+    expect(document.querySelector("[data-part='buy-bloom']")).toBeNull();
+  });
+
+  it("carries a ring for a rare", () => {
+    renderSlot({ tier: "rare" });
+
+    expect(document.querySelector("[data-part='buy-ring']")).not.toBeNull();
+    expect(document.querySelector("[data-part='buy-bloom']")).toBeNull();
+  });
+
+  it("carries both for a legendary", () => {
+    renderSlot({ tier: "legendary" });
+
+    expect(document.querySelector("[data-part='buy-ring']")).not.toBeNull();
+    expect(document.querySelector("[data-part='buy-bloom']")).not.toBeNull();
+  });
+
+  it("keeps them invisible until something plays them", () => {
+    renderSlot({ tier: "legendary" });
+
+    expect(document.querySelector("[data-part='buy-ring']")?.className).toContain("opacity-0");
+  });
+});
