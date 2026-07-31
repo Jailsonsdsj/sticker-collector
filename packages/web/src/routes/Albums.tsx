@@ -9,6 +9,7 @@ import { UnlockDialog } from "../components/UnlockDialog";
 import { Button, Chip, EmptyState, ErrorState, Skeleton, Tabs } from "../components/ui";
 import { ApiError } from "../lib/api";
 import { useUnlockAlbum } from "../lib/mutations";
+import { playUnlock } from "../lib/placement";
 import { useAlbums, useWallet } from "../lib/queries";
 
 /**
@@ -187,8 +188,12 @@ export function Albums() {
         onClose={() => setUnlocking(null)}
         onConfirm={async () => {
           if (!unlocking) return;
-          await unlock.mutateAsync(unlocking.id);
+          const unlocked = unlocking.id;
+          await unlock.mutateAsync(unlocked);
           setUnlocking(null);
+          // After the dialog closes and the card re-renders unlocked: the ring
+          // is on the card, and the card is only there once the list refreshes.
+          requestAnimationFrame(() => playUnlock(unlocked));
         }}
       />
     </>

@@ -27,11 +27,18 @@ export function AlbumCard({ album, onUnlock }: AlbumCardProps) {
   return (
     <div className="flex flex-col gap-2">
       <Link
+        data-album-id={album.id}
         to={`/albums/${album.id}`}
         aria-label={`${album.title}, ${album.percent}% complete`}
         className="relative block overflow-hidden rounded-2xl border border-border focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan"
         style={{ aspectRatio: "var(--aspect-card)" }}
       >
+        {/* Sits behind the cover and does nothing until an unlock plays it. */}
+        <span
+          data-part="unlock-ring"
+          aria-hidden
+          className="pointer-events-none absolute inset-0 m-auto size-32 rounded-full border-2 border-coin opacity-0"
+        />
         <ImageTile
           src={imageSrc(album.coverKey)}
           className="object-cover transition-[filter] duration-500"

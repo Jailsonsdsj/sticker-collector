@@ -1,17 +1,19 @@
 import type { PullResult, Tier, TierRecord } from "@sticker-collector/shared";
 import { canPullRandom, duplicateRefund, effectiveWeights } from "@sticker-collector/shared";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router";
 import { DeleteAlbumDialog } from "../components/DeleteAlbumDialog";
 import { ExportPanel } from "../components/ExportPanel";
 import { AppHeader, StickerGrid } from "../components/layout";
 import { RevealDialog } from "../components/RevealDialog";
+import { Celebration } from "../components/reveal/Celebration";
 import { StickerSlot } from "../components/StickerSlot";
 import { StickerViewer } from "../components/StickerViewer";
 import { Button, Chip, EmptyState, ErrorState, ProgressBar, Skeleton } from "../components/ui";
 import { cx } from "../components/ui/cx";
 import { ApiError } from "../lib/api";
 import { useBuySticker, useDeleteAlbum, usePullSticker, useSellDuplicate } from "../lib/mutations";
+import { celebrateSticker, placeSticker } from "../lib/placement";
 import { useAlbum, useWallet } from "../lib/queries";
 
 /**
@@ -53,6 +55,13 @@ export function AlbumDetail() {
   const [shown, setShown] = useState<"all" | "unlocked" | "locked">("all");
   const [reveal, setReveal] = useState<PullResult | null>(null);
   const [viewing, setViewing] = useState<number | null>(null);
+  /** A sticker that has been revealed and is waiting to be shown in the grid. */
+  const [placing, setPlacing] = useState<string | null>(null);
+  /** True from the moment the album first reads as complete until dismissed. */
+  const [celebrating, setCelebrating] = useState(false);
+  /** A sticker just bought outright, waiting for its slot to re-render owned. */
+  const [bought, setBought] = useState<{ id: string; tier: Tier } | null>(null);
+  const wasComplete = useRef<boolean | null>(null);
   const [deleting, setDeleting] = useState(false);
   const navigate = useNavigate();
 
@@ -62,6 +71,53 @@ export function AlbumDetail() {
   const pull = usePullSticker(id);
   const sell = useSellDuplicate(id);
   const remove = useDeleteAlbum();
+
+  /**
+   * Scroll to the sticker once the grid is actually showing it.
+   *
+   * Above the early returns, because hooks cannot be conditional — and an
+   * effect rather than something the dialog's handler does directly, because
+   * clearing the filter is a state change: at the moment of the tap the slot
+   * may not be in the DOM yet. Running after the render that follows is what
+   * makes "scroll to it" find anything at all.
+   */
+  /**
+   * Fire the celebration on the TRANSITION into complete, never on arrival.
+   *
+   * Opening a finished album should not throw confetti at you every time. The
+   * first observed status seeds the ref rather than triggering, so only a
+   * completion that happens while you are looking counts.
+   */
+  useEffect(() => {
+    const complete = album.data?.album.status === "completed";
+    if (album.data === undefined) return;
+    if (wasComplete.current === null) {
+      wasComplete.current = complete;
+      return;
+    }
+    if (complete && !wasComplete.current) setCelebrating(true);
+    wasComplete.current = complete;
+  }, [album.data]);
+
+  /**
+   * The bought sticker celebrates once the grid shows it as owned.
+   *
+   * Same shape as the placement effect and for the same reason: the purchase
+   * invalidates the album, so at the moment the request resolves the slot is
+   * still the locked one. Playing then would flourish a grey square.
+   */
+  useEffect(() => {
+    if (!bought) return;
+    if (celebrateSticker(bought.id, bought.tier)) setBought(null);
+  }, [bought]);
+
+  useEffect(() => {
+    if (!placing) return;
+    const slot = placeSticker(placing);
+    // Not found means the grid has not caught up yet; the next render tries
+    // again. Clearing on success stops it re-scrolling on every later render.
+    if (slot) setPlacing(null);
+  }, [placing]);
 
   if (album.error instanceof ApiError && album.error.status === 401) {
     return <Navigate to="/login" replace />;
@@ -220,7 +276,11 @@ export function AlbumDetail() {
               albumUnlocked={unlocked}
               affordable={balance >= summary.prices[sticker.tier as Tier]}
               pending={buy.isPending || sell.isPending}
-              onBuy={() => buy.mutate(sticker.id)}
+              onBuy={() =>
+                buy.mutate(sticker.id, {
+                  onSuccess: () => setBought({ id: sticker.id, tier: sticker.tier as Tier }),
+                })
+              }
               refund={refund}
               onSell={() => sell.mutate(sticker.id)}
               hideLocked={summary.hideLocked}
@@ -238,6 +298,14 @@ export function AlbumDetail() {
           Delete this album
         </Button>
       </div>
+
+      {celebrating && (
+        <Celebration
+          title={summary.title}
+          coverKey={summary.coverKey}
+          onClose={() => setCelebrating(false)}
+        />
+      )}
 
       <StickerViewer
         stickers={viewable}
@@ -267,7 +335,17 @@ export function AlbumDetail() {
           if (reveal) await sell.mutateAsync(reveal.stickerId);
           setReveal(null);
         }}
-        onClose={() => setReveal(null)}
+        onClose={() => {
+          // The reveal ends by answering "where did that go?". Clearing the
+          // filter first is not a courtesy: with "Locked" on, the sticker that
+          // was just earned is no longer in the grid, so there would be nothing
+          // to scroll to.
+          if (reveal) {
+            setShown("all");
+            setPlacing(reveal.stickerId);
+          }
+          setReveal(null);
+        }}
       />
     </>
   );

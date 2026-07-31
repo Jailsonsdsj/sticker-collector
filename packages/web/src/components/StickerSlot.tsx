@@ -1,5 +1,6 @@
 import type { OwnedSticker, Tier } from "@sticker-collector/shared";
 import { imageSrc } from "../lib/imageUpload";
+import { FLOURISH } from "../lib/rarity";
 import { Badge, Button, ImageTile } from "./ui";
 
 export interface StickerSlotProps {
@@ -64,6 +65,7 @@ export function StickerSlot({
   const owned = sticker.quantity > 0;
   const hidden = !owned && Boolean(hideLocked);
   const openable = owned && Boolean(onOpen);
+  const flourish = FLOURISH[sticker.tier];
 
   // A real button, not a click handler on the tile: the viewer is the only way
   // to read a sticker's description, and a div cannot be reached with a
@@ -73,6 +75,9 @@ export function StickerSlot({
     <div
       data-tier={sticker.tier}
       data-owned={owned}
+      // How a freshly pulled sticker is found again after the grid re-renders,
+      // so the album can scroll to where it landed.
+      data-sticker-id={sticker.id}
       // The slot as a whole is the picture — the frame carries the rarity and
       // the art is decorative inside it. A bare `aria-label` on a div is not
       // exposed at all, which is why the role is not optional here.
@@ -92,6 +97,25 @@ export function StickerSlot({
         aspectRatio: "var(--aspect-card)",
       }}
     >
+      {/* Dormant until a purchase plays them. Rendered only for the tiers that
+          earn them, so a grid of commons carries no dead nodes. */}
+      {flourish.ring && (
+        <span
+          data-part="buy-ring"
+          aria-hidden
+          className="pointer-events-none absolute inset-0 m-auto size-4/5 rounded-full border-2 opacity-0"
+          style={{ borderColor: `var(--color-rarity-${sticker.tier}-ring)` }}
+        />
+      )}
+      {flourish.bloom && (
+        <span
+          data-part="buy-bloom"
+          aria-hidden
+          className="pointer-events-none absolute inset-0 m-auto size-2/3 rounded-full opacity-0 blur-lg"
+          style={{ background: `var(--color-rarity-${sticker.tier})` }}
+        />
+      )}
+
       <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-lg bg-surface-2">
         {hidden && !lockedCoverKey ? (
           // No stand-in was supplied, so the slot says only that something
