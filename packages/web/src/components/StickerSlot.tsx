@@ -39,18 +39,19 @@ export interface StickerSlotProps {
  * the whole tile is frame. So the user always knows which slot holds the
  * legendary, long before they have it (`prd/05-stickers.md` §Rarity 3).
  *
- * **An unowned slot is a sealed pack**, not a greyed-out preview: the tier's
- * envelope, which carries its own frame, its rarity tab and the word LOCKED.
- * Every locked sticker therefore keeps its surprise, and the reveal opens the
- * very pack the grid has been showing.
+ * Locked art is the same single colour master under `--filter-locked-deep`.
+ * There is never a second, grayscale asset.
  *
- * That replaces the old black-and-white preview, which showed the art you had
- * not earned yet — a trade the design made deliberately (`prd/05-stickers.md`).
- * The sticker's own art is not requested at all while it is sealed, which is
- * what keeps the answer out of the network tab.
+ * **Only an album that hides its locked slots seals them.** That album's slots
+ * show the tier's envelope — its own frame, its rarity tab, the word LOCKED —
+ * and the sticker's own image is never requested, which is what keeps the
+ * answer out of the network tab. An album that hides nothing keeps showing the
+ * art you have not earned yet, drained of colour: that is what the option is
+ * choosing between, and what the reveal floods back in.
  *
- * An album that supplies its own stand-in still wins: that is an explicit
- * authoring choice about *this* album, and it outranks the generic pack.
+ * Within a hiding album an authored stand-in still wins over the pack: the
+ * cover is a picture the author chose for this album, stored once and reused
+ * for every hidden slot.
  */
 export function StickerSlot({
   sticker,
@@ -67,9 +68,11 @@ export function StickerSlot({
 }: StickerSlotProps) {
   const owned = sticker.quantity > 0;
   const hidden = !owned && Boolean(hideLocked);
-  // Sealed unless the album author supplied a stand-in for hidden slots, which
-  // is a decision about this album and outranks the generic pack.
-  const sealed = !owned && !(hidden && lockedCoverKey);
+  // The envelope belongs to albums that asked to keep their surprises. An
+  // album that hides nothing still shows its own art in black and white — that
+  // is the point of not hiding. Within a hiding album, an authored stand-in
+  // outranks the generic pack: it is a decision about *this* album.
+  const sealed = hidden && !lockedCoverKey;
   const openable = owned && Boolean(onOpen);
   const flourish = FLOURISH[sticker.tier];
 
@@ -90,7 +93,9 @@ export function StickerSlot({
       role="img"
       // The tier is still announced while hidden — that is what a locked slot
       // is *for* — but nothing identifies the sticker itself.
-      aria-label={`${sticker.tier} slot, ${owned ? "collected" : sealed ? "sealed" : "hidden"}`}
+      aria-label={`${sticker.tier} slot, ${
+        owned ? "collected" : sealed ? "sealed" : hidden ? "hidden" : "empty"
+      }`}
       // A slot is a picture, not prose: a long press or a control-click
       // should not start selecting it, and neither should raise a menu over
       // a tap target.
@@ -131,11 +136,18 @@ export function StickerSlot({
               ? envelopeSrc(sticker.tier)
               : imageSrc(hidden ? (lockedCoverKey as string) : sticker.imageKey)
           }
-          className="object-cover"
-          // The envelope is already the finished picture of a locked slot —
-          // its own frame, its own rarity tab, its own LOCKED badge. Dimming
-          // it would be dimming the design.
-          style={{ filter: "var(--filter-unlocked)" }}
+          className="object-cover transition-[filter] duration-500"
+          style={{
+            // Grey is for a slot showing its OWN art: the sticker you have not
+            // earned yet, drained of colour, which is what the reveal floods
+            // back in. An envelope and an authored stand-in are both finished
+            // pictures of a locked slot, and dimming either would be dimming
+            // the design.
+            filter: owned || hidden ? "var(--filter-unlocked)" : "var(--filter-locked-deep)",
+            // Locked art sits further back than the filter alone puts it, so a
+            // collected sticker is the thing the eye lands on.
+            opacity: owned || hidden ? 1 : 0.45,
+          }}
         />
       </div>
 

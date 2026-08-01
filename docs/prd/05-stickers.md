@@ -1,7 +1,7 @@
 ## Stickers
 
 1. Inside an **unlocked** album, stickers can be acquired either directly, by clicking an empty placeholder, or through a random purchase.
-2. Locked stickers are displayed as a **sealed envelope for their tier** — the design's artwork, carrying its own frame, the rarity name across the top and a LOCKED badge. A button beneath it displays its purchase price. *(This replaced the black-and-white preview of the sticker's own art: a pack keeps the surprise, and the sticker's image is never even requested while the slot is sealed. An album that supplies its own stand-in for hidden slots still shows that instead — an authored decision about one album outranks the generic pack.)*
+2. Locked stickers are displayed in black and white. A button beneath the sticker displays its purchase price. **Unless the album hides its locked slots** (§Albums, "Hide locked images"), in which case each one is a **sealed envelope for its tier** — the design's artwork, with its own frame, the rarity name across the top and a LOCKED badge — and the sticker's image is never requested at all, so the surprise is not in the network tab either. An album that also supplies its own stand-in shows that instead: an authored decision about one album outranks the generic pack.
 3. Unlocked stickers are displayed in color.
 4. Duplicate stickers are indicated by a quantity number in the upper-left corner.
 5. A duplicate obtained from a random purchase may be sold for half the album's random-sticker price.
