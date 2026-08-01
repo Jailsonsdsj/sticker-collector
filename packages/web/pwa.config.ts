@@ -16,6 +16,8 @@ import type { VitePWAOptions } from "vite-plugin-pwa";
 /** Cache names, so a test and a devtools panel call them the same thing. */
 export const CACHE_IMAGES = "sticker-images";
 export const CACHE_API = "sticker-api";
+/** The four app-icon sets, cached one at a time as they are looked at. */
+export const CACHE_ICONS = "sticker-app-icons";
 export const CACHE_FONTS = "sticker-fonts";
 
 export const pwaOptions: Partial<VitePWAOptions> = {
@@ -31,7 +33,10 @@ export const pwaOptions: Partial<VitePWAOptions> = {
     // The shell, precached at install: HTML, JS, CSS and the fonts the first
     // paint needs. Splash images are deliberately absent — they are megabytes
     // that iOS reads from disk, not something the shell waits on.
-    globPatterns: ["**/*.{html,js,css,woff2}", "icons/*.png", "manifest.webmanifest"],
+    // `coin/*.png` is shell, not decoration: the coin sits on the wallet, on
+    // every price and on every reward, so an offline launch without it is an
+    // app full of holes.
+    globPatterns: ["**/*.{html,js,css,woff2}", "icons/*.png", "coin/*.png", "manifest.webmanifest"],
 
     // A deep link opened offline has to resolve to the app, or the router never
     // gets a chance to render the route.
@@ -63,6 +68,26 @@ export const pwaOptions: Partial<VitePWAOptions> = {
           // browser until someone cleared the cache by hand.
           cacheableResponse: { statuses: [200] },
           expiration: { maxEntries: 500, maxAgeSeconds: 60 * 60 * 24 * 365 },
+        },
+      },
+      {
+        /**
+         * The app-icon sets: four of them, about 1.3 MB in total, and the app
+         * needs exactly one. Precaching all four to install a single icon is
+         * the trade `globPatterns` cannot express, so they are cached as they
+         * are seen instead.
+         *
+         * `CacheFirst` is safe for the same reason as the images above: these
+         * paths are immutable. A new icon is a new folder, never new bytes at
+         * an old name.
+         */
+        urlPattern: ({ url, request }: { url: URL; request: Request }) =>
+          url.pathname.startsWith("/app-icons/") && request.method === "GET",
+        handler: "CacheFirst",
+        options: {
+          cacheName: CACHE_ICONS,
+          cacheableResponse: { statuses: [200] },
+          expiration: { maxEntries: 40, maxAgeSeconds: 60 * 60 * 24 * 365 },
         },
       },
       {

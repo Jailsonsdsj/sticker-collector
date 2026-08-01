@@ -38,26 +38,60 @@ body {
  * invented in code belongs in the stylesheet that is hand-written.
  *
  * rotateY needs a perspective to read as a coin rather than a squash — without
- * one the face just narrows to a line and springs back. The perspective lives
- * on the transform itself so no parent has to cooperate.
+ * one the face just narrows to a line and springs back. It now lives on the
+ * `.coin` wrapper below, because the coin gained real faces.
  */
 @keyframes coin-spin {
   from {
-    transform: perspective(120px) rotateY(0deg);
+    transform: rotateY(0deg);
   }
   to {
-    transform: perspective(120px) rotateY(360deg);
+    transform: rotateY(360deg);
   }
+}
+
+/* The coin: two faces, back to back, in one 3D space.
+ *
+ * The perspective lives on the WRAPPER, not inside the transform as it used to
+ * when the coin was a flat glyph — `perspective()` in a rotating element's own
+ * transform re-projects the scene every frame and flattens its children, which
+ * is exactly what `transform-style: preserve-3d` is trying to keep. */
+.coin {
+  display: inline-block;
+  perspective: 320px;
+}
+
+.coin-body {
+  /* `display: block` is load-bearing. This is a <span>, and an inline box has
+     no height for a percentage to resolve against — the faces came out 0x0 and
+     the coin painted nothing at all while still laying out at the right size. */
+  display: block;
+  position: relative;
+  height: 100%;
+  width: 100%;
+  transform-style: preserve-3d;
+}
+
+.coin-face {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  width: 100%;
+  /* Hidden, so the star does not show through from behind while the reverse is
+     facing the user — a mirrored star reads as a printing error. */
+  backface-visibility: hidden;
+}
+
+.coin-face-back {
+  transform: rotateY(180deg);
 }
 
 .animate-coin-spin {
   animation: coin-spin 3.6s linear infinite;
-  /* The coin keeps its own lighting while it turns; without this the gradient
-     face flips to its back half and reads as a hole. */
-  backface-visibility: visible;
 }
 
-/* A permanently turning object is exactly what this setting is for. */
+/* A permanently turning object is exactly what this setting is for. It rests on
+   the star face, which is the side every static coin shows. */
 @media (prefers-reduced-motion: reduce) {
   .animate-coin-spin {
     animation: none;

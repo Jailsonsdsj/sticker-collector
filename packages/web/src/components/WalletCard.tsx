@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Skeleton } from "./ui";
+import { Coin, Skeleton } from "./ui";
 
 /** One minute of effort is one coin, so the balance doubles as hours invested. */
 function hoursOf(coins: number): string {
@@ -42,12 +42,7 @@ export function WalletCard({ balance, loading, pendingCoins = 0, action }: Walle
         <div>
           <div className="font-numeric text-xs text-ink-muted tracking-mono uppercase">Wallet</div>
           <div className="relative mt-1 flex items-baseline gap-2">
-            <span
-              aria-hidden
-              className="animate-coin-spin inline-flex size-7 items-center justify-center rounded-full font-numeric text-sm text-coin-ink shadow-coin-sm [background:var(--gradient-coin)]"
-            >
-              ¢
-            </span>
+            <Coin size="md" spin />
             {loading ? (
               <Skeleton variant="text" className="w-28" />
             ) : (

@@ -269,7 +269,9 @@ describe("the price says what it costs in", () => {
   it("carries a coin beside the number", () => {
     renderSlot({ quantity: 0 }, { albumUnlocked: true, affordable: true });
 
-    expect(screen.getByRole("button", { name: /Buy/ })).toHaveTextContent("¢");
+    // The coin is the object, not a glyph: a bare number on a button is a
+    // number, and the button has to say what it costs in.
+    expect(screen.getByRole("button", { name: /Buy/ }).querySelector(".coin")).not.toBeNull();
   });
 });
 

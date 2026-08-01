@@ -9,7 +9,15 @@ import { RevealDialog } from "../components/RevealDialog";
 import { Celebration } from "../components/reveal/Celebration";
 import { StickerSlot } from "../components/StickerSlot";
 import { StickerViewer } from "../components/StickerViewer";
-import { Button, Chip, EmptyState, ErrorState, ProgressBar, Skeleton } from "../components/ui";
+import {
+  Button,
+  Chip,
+  Coin,
+  EmptyState,
+  ErrorState,
+  ProgressBar,
+  Skeleton,
+} from "../components/ui";
 import { cx } from "../components/ui/cx";
 import { ApiError } from "../lib/api";
 import { useBuySticker, useDeleteAlbum, usePullSticker, useSellDuplicate } from "../lib/mutations";
@@ -28,26 +36,6 @@ const SHOWN_FILTERS = [
   { value: "unlocked" as const, label: "Unlocked" },
   { value: "locked" as const, label: "Locked" },
 ];
-
-/**
- * The coin, wherever a price is. Same glyph and gradient as the wallet, so a
- * number that costs coins never looks like a number that means anything else.
- */
-function CoinIcon({ size = "sm" }: { size?: "sm" | "md" }) {
-  return (
-    <span
-      aria-hidden
-      className={cx(
-        "inline-flex items-center justify-center rounded-full font-numeric text-coin-ink [background:var(--gradient-coin)]",
-        // Matched to the number it sits beside: a 16px coin next to a 20px
-        // figure reads as a bullet point rather than as currency.
-        size === "md" ? "size-6 text-2xs" : "size-4 text-3xs",
-      )}
-    >
-      ¢
-    </span>
-  );
-}
 
 export function AlbumDetail() {
   const { id = "" } = useParams();
@@ -236,14 +224,14 @@ export function AlbumDetail() {
             loading={pull.isPending}
             onClick={async () => setReveal(await pull.mutateAsync())}
           >
-            Random sticker · <CoinIcon /> {summary.randomPrice}
+            Random sticker · <Coin size="xs" /> {summary.randomPrice}
           </Button>
 
           {/* What you have to spend, on the line where spending happens. */}
           {/* Larger than the prices around it: this is the number you check
               before deciding, not one of the several you are choosing between. */}
           <span className="ml-auto flex shrink-0 items-center gap-1 font-numeric text-2xl font-bold text-coin">
-            <CoinIcon size="md" />
+            <Coin size="md" />
             {balance.toLocaleString()}
           </span>
         </div>

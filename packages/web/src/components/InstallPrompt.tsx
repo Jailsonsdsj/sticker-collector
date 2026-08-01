@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { appIconSrc, loadAppIcon } from "../lib/appIcon";
 import { Button } from "./ui";
 
 /**
@@ -50,6 +51,16 @@ export function InstallPrompt() {
       aria-label="Install this app"
       className="mb-4 flex flex-wrap items-center gap-3 rounded-2xl border border-cyan bg-panel p-3"
     >
+      {/* The icon it will arrive as. The nudge asks for a spot on the home
+          screen; showing what will land there is the shortest way to say what
+          the picker in Settings changed. */}
+      <img
+        src={appIconSrc(loadAppIcon(), 192)}
+        alt=""
+        className="size-10 shrink-0 rounded-xl"
+        draggable={false}
+      />
+
       <p className="flex-1 font-body text-sm text-ink-secondary">
         {ios ? (
           <>

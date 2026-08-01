@@ -57,17 +57,17 @@ describe("the corner slot", () => {
 describe("the coin", () => {
   it("turns on the spot", () => {
     // Spins in place — it does not travel across the card.
-    render(<WalletCard balance={1500} />);
-    expect(screen.getByText("¢")).toHaveClass("animate-coin-spin");
+    const { container } = render(<WalletCard balance={1500} />);
+    expect(container.querySelector(".coin-body")).toHaveClass("animate-coin-spin");
   });
 
   it("keeps its place in the layout while it turns", () => {
     // A rotateY does not affect layout, which is the point: the balance beside
     // it must not shuffle sideways once a frame.
-    render(<WalletCard balance={1500} />);
-    const coin = screen.getByText("¢");
+    const { container } = render(<WalletCard balance={1500} />);
+    const coin = container.querySelector(".coin") as HTMLElement;
 
-    expect(coin).toHaveClass("inline-flex", "size-7");
+    expect(coin).toHaveClass("size-7");
     expect(coin.className).not.toMatch(/absolute|translate-x/);
   });
 });

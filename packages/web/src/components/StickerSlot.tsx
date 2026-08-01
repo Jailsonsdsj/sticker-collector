@@ -1,7 +1,7 @@
 import type { OwnedSticker, Tier } from "@sticker-collector/shared";
 import { imageSrc } from "../lib/imageUpload";
 import { FLOURISH } from "../lib/rarity";
-import { Badge, Button, ImageTile } from "./ui";
+import { Badge, Button, Coin, ImageTile } from "./ui";
 
 export interface StickerSlotProps {
   sticker: OwnedSticker;
@@ -193,12 +193,7 @@ export function StickerSlot({
           onClick={onBuy}
           aria-label={`Buy ${sticker.tier} sticker for ${price}`}
         >
-          <span
-            aria-hidden
-            className="inline-flex size-4 items-center justify-center rounded-full font-numeric text-3xs text-coin-ink [background:var(--gradient-coin)]"
-          >
-            ¢
-          </span>
+          <Coin size="xs" />
           {price}
         </Button>
       )}

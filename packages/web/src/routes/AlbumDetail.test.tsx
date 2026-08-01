@@ -508,7 +508,9 @@ describe("the album's own chrome", () => {
     detail = body({ status: "in_progress" });
     await open();
 
-    expect(screen.getByRole("button", { name: /Random sticker/ })).toHaveTextContent("¢");
+    expect(
+      screen.getByRole("button", { name: /Random sticker/ }).querySelector(".coin"),
+    ).not.toBeNull();
   });
 });
 
