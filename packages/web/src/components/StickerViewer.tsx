@@ -10,7 +10,7 @@ import {
 import { imageSrc } from "../lib/imageUpload";
 import { prefersMotion } from "../lib/placement";
 import { saveSticker } from "../lib/saveImage";
-import { swipeDirection } from "../lib/swipe";
+import { cardFade, cardTilt, SWIPE_COMMIT_PX } from "../lib/swipe";
 import { Button, ImageTile, Sheet } from "./ui";
 
 export interface StickerViewerProps {
@@ -38,8 +38,12 @@ export interface StickerViewerProps {
  * swipe cannot be performed with a keyboard and this is the only way to read a
  * sticker's description.
  */
+/** How far a thrown card tilts as it leaves. Bigger than the drag tilt: the
+ *  exit is the flourish, the drag is the feedback. */
+const CARD_FLY_DEG = 18;
+
 export function StickerViewer({ stickers, index, onIndex, onClose }: StickerViewerProps) {
-  const start = useRef<{ x: number; y: number } | null>(null);
+  const drag = useRef<{ x: number; y: number; id: number } | null>(null);
   const frame = useRef<HTMLDivElement>(null);
   // Which way the last step went, so the new sticker enters from the side the
   // old one left towards. Without it every change slides in from the same
@@ -72,6 +76,43 @@ export function StickerViewer({ stickers, index, onIndex, onClose }: StickerView
     return () => window.removeEventListener("keydown", onKey);
   });
 
+  /** Is there a sticker that way? */
+  const canStep = (by: number) =>
+    index !== null && index + by >= 0 && index + by <= stickers.length - 1;
+
+  /** Puts a released card back where it started. */
+  const settle = () => {
+    if (!frame.current) return;
+    if (!prefersMotion()) {
+      gsap.set(frame.current, { x: 0, rotation: 0, opacity: 1 });
+      return;
+    }
+    gsap.to(frame.current, {
+      x: 0,
+      rotation: 0,
+      opacity: 1,
+      duration: 0.35,
+      ease: "elastic.out(1, 0.6)",
+    });
+  };
+
+  /** Throws the card off the screen, then steps. The next one enters from the
+   *  opposite edge, which is what makes the pair read as one movement. */
+  const release = (by: 1 | -1) => {
+    if (!frame.current || !prefersMotion()) {
+      step(by);
+      return;
+    }
+    gsap.to(frame.current, {
+      x: by > 0 ? -window.innerWidth : window.innerWidth,
+      rotation: by > 0 ? -CARD_FLY_DEG : CARD_FLY_DEG,
+      opacity: 0,
+      duration: 0.22,
+      ease: "power2.in",
+      onComplete: () => step(by),
+    });
+  };
+
   // The slide. It runs on a CHANGE of index, never on open — a sheet that is
   // still animating in should not also have its contents flying across it.
   useLayoutEffect(() => {
@@ -82,8 +123,28 @@ export function StickerViewer({ stickers, index, onIndex, onClose }: StickerView
 
     gsap.fromTo(
       frame.current,
-      { xPercent: direction.current * 60, autoAlpha: 0 },
-      { xPercent: 0, autoAlpha: 1, duration: 0.28, ease: "power2.out", clearProps: "transform" },
+      {
+        // `x: 0` is not decoration. The card that just left is the same node,
+        // and the throw parked it at x = ±innerWidth. Setting only `xPercent`
+        // here leaves that translation in place, so the entry starts on the
+        // side the card flew OFF towards and slides back — which reads as the
+        // next sticker arriving from the wrong edge. It only ever showed up
+        // after a swipe; the arrow keys never set `x`, so they looked right.
+        x: 0,
+        xPercent: direction.current * 60,
+        rotation: direction.current * CARD_FLY_DEG,
+        autoAlpha: 0,
+      },
+      {
+        xPercent: 0,
+        x: 0,
+        rotation: 0,
+        autoAlpha: 1,
+        opacity: 1,
+        duration: 0.28,
+        ease: "power2.out",
+        clearProps: "transform",
+      },
     );
   }, [index]);
 
@@ -130,27 +191,69 @@ export function StickerViewer({ stickers, index, onIndex, onClose }: StickerView
         </Button>
       }
     >
-      <div
-        className="flex min-h-0 flex-1 flex-col gap-4 touch-pan-y"
-        onPointerDown={(event: ReactPointerEvent<HTMLDivElement>) => {
-          if (event.pointerType === "mouse") return;
-          start.current = { x: event.clientX, y: event.clientY };
-        }}
-        onPointerUp={(event: ReactPointerEvent<HTMLDivElement>) => {
-          const from = start.current;
-          start.current = null;
-          if (!from) return;
-          // Right means "back", the way pages turn.
-          step(-swipeDirection(event.clientX - from.x, event.clientY - from.y));
-        }}
-        onPointerCancel={() => {
-          start.current = null;
-        }}
-      >
+      <div className="flex min-h-0 flex-1 flex-col gap-4">
         <div
           ref={frame}
-          className="mx-auto w-full max-w-sm shrink-0 overflow-hidden rounded-2xl border border-border"
-          style={{ aspectRatio: "var(--aspect-card)" }}
+          // `touch-action: none` on the CARD only. This is the fix for the
+          // reported bug: the gesture used to sample its start and end and let
+          // the browser own everything in between, so a horizontal drag
+          // scrolled the album underneath while the picture sat still. Telling
+          // the browser to keep its hands off *this* box — and nothing else —
+          // hands the frames to the card and leaves the caption below it
+          // scrolling normally.
+          style={{ aspectRatio: "var(--aspect-card)", touchAction: "none" }}
+          className="mx-auto w-full max-w-sm shrink-0 overflow-hidden rounded-2xl border border-border select-none"
+          onPointerDown={(event: ReactPointerEvent<HTMLDivElement>) => {
+            if (event.pointerType === "mouse") return;
+            drag.current = { x: event.clientX, y: event.clientY, id: event.pointerId };
+            // Captured, so a finger that leaves the card mid-drag still
+            // reports to it. Without this a fast flick ends in a card stuck
+            // halfway across the screen.
+            event.currentTarget.setPointerCapture?.(event.pointerId);
+          }}
+          onPointerMove={(event: ReactPointerEvent<HTMLDivElement>) => {
+            const from = drag.current;
+            if (!from || !frame.current) return;
+
+            const dx = event.clientX - from.x;
+            // At the ends of the collection the card still moves, but only a
+            // quarter as far: the resistance IS the message that there is
+            // nothing that way.
+            const room = (dx < 0 && index === stickers.length - 1) || (dx > 0 && index === 0);
+            const travelled = room ? dx * 0.25 : dx;
+
+            gsap.set(frame.current, {
+              x: travelled,
+              rotation: cardTilt(travelled),
+              opacity: cardFade(travelled),
+            });
+          }}
+          onPointerUp={(event: ReactPointerEvent<HTMLDivElement>) => {
+            const from = drag.current;
+            drag.current = null;
+            if (!from || !frame.current) return;
+
+            const dx = event.clientX - from.x;
+            const dy = event.clientY - from.y;
+            const committed =
+              Math.abs(dx) > SWIPE_COMMIT_PX &&
+              Math.abs(dx) > Math.abs(dy) &&
+              canStep(dx < 0 ? 1 : -1);
+
+            if (committed) {
+              // Right means "back", the way pages turn.
+              release(dx < 0 ? 1 : -1);
+              return;
+            }
+
+            // Snapped back, not cut back: a card that teleports home reads as
+            // the app having missed the gesture.
+            settle();
+          }}
+          onPointerCancel={() => {
+            drag.current = null;
+            settle();
+          }}
         >
           <ImageTile
             // Keyed so moving to the next sticker shimmers again rather than

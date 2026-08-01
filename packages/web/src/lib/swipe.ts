@@ -75,3 +75,31 @@ export function rowOffset(dx: number, dy: number): number {
   const travelled = past <= 0 ? Math.abs(dx) : SWIPE_COMMIT_PX + past * 0.25;
   return Math.sign(dx) * travelled;
 }
+
+/**
+ * A card that follows the finger — the gesture the dating apps made standard.
+ *
+ * The sticker viewer used to sample only the start and end of a touch and let
+ * the browser own everything in between, which meant the page scrolled under
+ * the picture while the picture sat still. A card that *tracks* the finger has
+ * to answer two questions on every frame, and both of them are arithmetic:
+ * how far it has tilted, and how far it has faded.
+ */
+
+/** Degrees at the commit distance. Past that the tilt stops growing — a card
+ *  spinning past ~15° stops reading as a card being moved. */
+export const CARD_TILT_MAX_DEG = 12;
+
+/** How much a card is allowed to fade before it is released. Never to zero:
+ *  the thing being dragged has to stay the thing you are looking at. */
+export const CARD_FADE_FLOOR = 0.55;
+
+export function cardTilt(dx: number): number {
+  const share = Math.max(-1, Math.min(1, dx / SWIPE_COMMIT_PX));
+  return share * CARD_TILT_MAX_DEG;
+}
+
+export function cardFade(dx: number): number {
+  const share = Math.min(Math.abs(dx) / (SWIPE_COMMIT_PX * 2), 1);
+  return 1 - share * (1 - CARD_FADE_FLOOR);
+}

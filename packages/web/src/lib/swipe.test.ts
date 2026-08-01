@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { claimsGesture, rowOffset, SWIPE_CLAIM_PX, SWIPE_COMMIT_PX, swipeIntent } from "./swipe";
+import {
+  CARD_FADE_FLOOR,
+  CARD_TILT_MAX_DEG,
+  cardFade,
+  cardTilt,
+  claimsGesture,
+  rowOffset,
+  SWIPE_CLAIM_PX,
+  SWIPE_COMMIT_PX,
+  swipeIntent,
+} from "./swipe";
 
 describe("claiming the gesture", () => {
   it("leaves a small movement alone, so a tap stays a tap", () => {
@@ -62,5 +72,27 @@ describe("how far the row follows", () => {
   it("never runs away with the row", () => {
     // A flick across the whole screen should still leave the row on its list.
     expect(Math.abs(rowOffset(2000, 0))).toBeLessThan(600);
+  });
+});
+
+describe("a card that follows the finger", () => {
+  it("tilts with the drag, and stops tilting past the commit distance", () => {
+    expect(cardTilt(0)).toBe(0);
+    expect(cardTilt(SWIPE_COMMIT_PX / 2)).toBeCloseTo(CARD_TILT_MAX_DEG / 2);
+    // A card spinning past ~15° stops reading as a card being moved.
+    expect(cardTilt(SWIPE_COMMIT_PX * 5)).toBe(CARD_TILT_MAX_DEG);
+    expect(cardTilt(-SWIPE_COMMIT_PX * 5)).toBe(-CARD_TILT_MAX_DEG);
+  });
+
+  it("fades with the drag but never out", () => {
+    expect(cardFade(0)).toBe(1);
+    expect(cardFade(SWIPE_COMMIT_PX)).toBeLessThan(1);
+    // The thing being dragged has to stay the thing you are looking at.
+    expect(cardFade(SWIPE_COMMIT_PX * 10)).toBe(CARD_FADE_FLOOR);
+  });
+
+  it("fades the same either way", () => {
+    // Direction is meaning — next or previous — not distance.
+    expect(cardFade(50)).toBe(cardFade(-50));
   });
 });

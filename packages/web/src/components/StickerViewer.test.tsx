@@ -36,10 +36,19 @@ function setup(index: number | null = 0, stickers = three) {
   return { onIndex, onClose };
 }
 
-/** A finger, in three events. */
-const swipe = (element: HTMLElement, dx: number, dy = 0) => {
-  fireEvent.pointerDown(element, { pointerType: "touch", clientX: 0, clientY: 0 });
-  fireEvent.pointerUp(element, { pointerType: "touch", clientX: dx, clientY: dy });
+/** The card itself, which is the only thing the gesture lives on now. */
+const card = () => document.querySelector('[style*="touch-action"]') as HTMLElement;
+
+/** A finger, tracked: down, a couple of moves, up. */
+const swipe = (dx: number, dy = 0, element: HTMLElement = card()) => {
+  fireEvent.pointerDown(element, { pointerType: "touch", clientX: 0, clientY: 0, pointerId: 1 });
+  fireEvent.pointerMove(element, {
+    pointerType: "touch",
+    clientX: dx / 2,
+    clientY: dy / 2,
+    pointerId: 1,
+  });
+  fireEvent.pointerUp(element, { pointerType: "touch", clientX: dx, clientY: dy, pointerId: 1 });
 };
 
 const surface = () => screen.getByText("1 of 3").parentElement as HTMLElement;
@@ -104,7 +113,7 @@ describe("moving through the collection", () => {
   it("swipes left to the next one, without closing", () => {
     const { onIndex, onClose } = setup();
 
-    swipe(surface(), -(SWIPE_COMMIT_PX + 10));
+    swipe(-(SWIPE_COMMIT_PX + 10));
 
     expect(onIndex).toHaveBeenCalledWith(1);
     expect(onClose).not.toHaveBeenCalled();
@@ -113,14 +122,14 @@ describe("moving through the collection", () => {
   it("swipes right to go back, the way pages turn", () => {
     const { onIndex } = setup(1);
 
-    swipe(screen.getByText("2 of 3").parentElement as HTMLElement, SWIPE_COMMIT_PX + 10);
+    swipe(SWIPE_COMMIT_PX + 10);
 
     expect(onIndex).toHaveBeenCalledWith(0);
   });
 
   it("ignores a drag down the page", () => {
     const { onIndex } = setup();
-    swipe(surface(), -40, 200);
+    swipe(-40, 200);
     expect(onIndex).not.toHaveBeenCalled();
   });
 
@@ -128,7 +137,7 @@ describe("moving through the collection", () => {
     // Running off the end of a collection should stop, not silently start it
     // again — wrapping makes it impossible to tell you have reached the end.
     const { onIndex } = setup(0);
-    swipe(surface(), SWIPE_COMMIT_PX + 10);
+    swipe(SWIPE_COMMIT_PX + 10);
     expect(onIndex).not.toHaveBeenCalled();
   });
 
@@ -196,6 +205,20 @@ describe("sliding between stickers", () => {
     fromTo.mockRestore();
   });
 
+  it("clears the throw's translation before entering, or it arrives from the wrong side", () => {
+    // The card that flew out is the same node, parked at x = ±innerWidth. An
+    // entry that sets only `xPercent` inherits that, starts on the side it
+    // left towards, and slides back.
+    withMotion();
+    const fromTo = vi.spyOn(gsap, "fromTo").mockReturnValue({} as ReturnType<typeof gsap.fromTo>);
+
+    const go = renderAt(0);
+    go(1);
+
+    expect(fromTo.mock.calls[0]?.[1]).toMatchObject({ x: 0, xPercent: 60 });
+    fromTo.mockRestore();
+  });
+
   it("changes the sticker without animating when motion is unwelcome", () => {
     const fromTo = vi.spyOn(gsap, "fromTo");
 
@@ -236,5 +259,95 @@ describe("saving a sticker to the device", () => {
     // nobody who cannot see it can use.
     expect(button).toHaveTextContent("");
     expect(button).toHaveAccessibleName();
+  });
+});
+
+describe("the card follows the finger", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  const withMotion = () =>
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: query.includes("no-preference"),
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      onchange: null,
+      dispatchEvent: () => false,
+    }));
+
+  const drag = (dx: number, dy = 0) => {
+    fireEvent.pointerDown(card(), { pointerType: "touch", clientX: 0, clientY: 0, pointerId: 1 });
+    fireEvent.pointerMove(card(), { pointerType: "touch", clientX: dx, clientY: dy, pointerId: 1 });
+  };
+
+  it("takes the frames away from the browser, and only on the card", () => {
+    // The bug: the gesture sampled its start and end and let the browser own
+    // everything between, so a horizontal drag scrolled the album underneath
+    // while the picture sat still.
+    setup();
+
+    expect(card().style.touchAction).toBe("none");
+    // The caption below still scrolls — the fix is not "stop all scrolling".
+    expect((card().parentElement as HTMLElement).style.touchAction).toBe("");
+  });
+
+  it("moves and tilts under the finger, before anything is released", () => {
+    const set = vi.spyOn(gsap, "set").mockReturnValue({} as ReturnType<typeof gsap.set>);
+    setup();
+
+    drag(-60);
+
+    const applied = set.mock.calls[0]?.[1] as { x: number; rotation: number; opacity: number };
+    expect(applied.x).toBe(-60);
+    // Tilt and fade follow the drag; a card that only slides reads as a
+    // scrollbar, not as a thing being thrown.
+    expect(applied.rotation).toBeLessThan(0);
+    expect(applied.opacity).toBeLessThan(1);
+    set.mockRestore();
+  });
+
+  it("resists at the ends instead of pretending there is more", () => {
+    const set = vi.spyOn(gsap, "set").mockReturnValue({} as ReturnType<typeof gsap.set>);
+    setup(0);
+
+    drag(80); // back, from the first sticker
+
+    const applied = set.mock.calls[0]?.[1] as { x: number };
+    expect(applied.x).toBe(20);
+    set.mockRestore();
+  });
+
+  it("throws a committed card off the screen before stepping", async () => {
+    withMotion();
+    const to = vi.spyOn(gsap, "to").mockImplementation((_target, vars) => {
+      (vars as { onComplete?: () => void }).onComplete?.();
+      return {} as ReturnType<typeof gsap.to>;
+    });
+    const { onIndex } = setup();
+
+    swipe(-(SWIPE_COMMIT_PX + 10));
+
+    const flight = to.mock.calls[0]?.[1] as { x: number; opacity: number };
+    expect(flight.x).toBeLessThan(0);
+    expect(flight.opacity).toBe(0);
+    // And the step happens after the flight, not instead of it.
+    expect(onIndex).toHaveBeenCalledWith(1);
+    to.mockRestore();
+  });
+
+  it("springs a released card back when the swipe was not enough", () => {
+    withMotion();
+    const to = vi.spyOn(gsap, "to").mockReturnValue({} as ReturnType<typeof gsap.to>);
+    const { onIndex } = setup();
+
+    swipe(-30);
+
+    expect(onIndex).not.toHaveBeenCalled();
+    // Back to zero, not cut back: a card that teleports home reads as a missed
+    // gesture.
+    expect(to.mock.calls[0]?.[1]).toMatchObject({ x: 0, rotation: 0, opacity: 1 });
+    to.mockRestore();
   });
 });

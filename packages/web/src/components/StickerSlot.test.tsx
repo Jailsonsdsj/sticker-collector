@@ -41,13 +41,12 @@ function renderSlot(
 const frame = () => document.querySelector("[data-tier]") as HTMLElement;
 const art = () => document.querySelector("img") as HTMLImageElement;
 
-describe("the rarity reads on an empty slot", () => {
+describe("the rarity frame reads on an empty slot", () => {
   it("tells a legendary slot from a common one before either is owned", () => {
     // The claim this task exists for: the user always knows which slot holds
-    // the legendary, locked or not. It used to be the bezel; it is now the
-    // envelope, which prints the tier across the top.
+    // the legendary, locked or not.
     renderSlot({ tier: "common", quantity: 0 });
-    const common = art().getAttribute("src");
+    const common = { bg: frame().style.background, pad: frame().style.padding };
 
     render(
       <StickerSlot
@@ -58,36 +57,35 @@ describe("the rarity reads on an empty slot", () => {
         onBuy={vi.fn()}
       />,
     );
-    // Scoped to the slot: the buy button carries a coin, which is also an
-    // <img> and is also last in the document.
-    const legendary = (
-      [...document.querySelectorAll("[data-tier]")].at(-1) as HTMLElement
-    ).querySelector("img") as HTMLImageElement;
+    const legendary = [...document.querySelectorAll("[data-tier]")].at(-1) as HTMLElement;
 
-    expect(common).toBe("/envelopes/common.png");
-    expect(legendary.getAttribute("src")).toBe("/envelopes/legendary.png");
+    expect(legendary.style.background).not.toBe(common.bg);
+    expect(legendary.style.padding).not.toBe(common.pad);
   });
 
-  it("gives every tier its own envelope", () => {
-    const envelopes = new Set<string>();
+  it("gives every tier its own frame", () => {
+    const backgrounds = new Set<string>();
+    const paddings = new Set<string>();
 
     for (const tier of ["common", "rare", "epic", "legendary"] as Tier[]) {
-      const { view } = renderSlot({ tier, quantity: 0 });
-      envelopes.add(art().getAttribute("src") ?? "");
+      const { view } = renderSlot({ tier });
+      backgrounds.add(frame().style.background);
+      paddings.add(frame().style.padding);
       view.unmount();
     }
 
-    expect(envelopes.size).toBe(4);
+    expect(backgrounds.size).toBe(4);
+    expect(paddings.size).toBe(4);
   });
 
-  it("keeps the bezel for a slot that is not sealed", () => {
-    // An owned sticker still wears its rarity frame; only the sealed pack
-    // skips it, because the artwork draws its own.
-    const { view } = renderSlot({ tier: "epic", quantity: 1 });
+  it("drops the bezel only for a sealed slot, whose artwork draws its own", () => {
+    // A greyed slot still needs the frame — it is the only thing saying which
+    // tier it is.
+    const { view } = renderSlot({ tier: "epic", quantity: 0 });
     expect(frame().style.background).toContain("frame-epic");
     view.unmount();
 
-    renderSlot({ tier: "epic", quantity: 0 });
+    renderSlot({ tier: "epic", quantity: 0 }, { hideLocked: true, lockedCoverKey: null });
     expect(frame().style.background).toBe("");
   });
 
@@ -102,7 +100,7 @@ describe("the rarity reads on an empty slot", () => {
     // role is not exposed to assistive tech at all, and a label query alone
     // would pass anyway.
     renderSlot({ tier: "legendary", quantity: 0 });
-    expect(screen.getByRole("img", { name: "legendary slot, sealed" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "legendary slot, empty" })).toBeInTheDocument();
   });
 
   it("announces a collected slot differently", () => {
@@ -112,14 +110,13 @@ describe("the rarity reads on an empty slot", () => {
 });
 
 describe("colour and grey", () => {
-  it("seals an unowned sticker in its tier's envelope, and never fetches the art", () => {
-    // Stronger than the greyscale preview this replaced: the answer is not in
-    // the network tab either, because the sticker's own image is never asked
-    // for while the slot is sealed.
+  it("greys an unowned sticker with a filter over the one master", () => {
+    // An album that hides nothing shows the art you have not earned yet,
+    // drained of colour. That is what the reveal floods back in.
     renderSlot({ quantity: 0 });
 
-    expect(art().getAttribute("src")).toBe("/envelopes/common.png");
-    expect(art().getAttribute("src")).not.toContain(key(1));
+    expect(art().style.filter).toContain("filter-locked");
+    expect(art().getAttribute("src")).toBe(`/api/images/${key(1)}`);
   });
 
   it("shows an owned sticker in colour, from the same source", () => {
@@ -195,12 +192,13 @@ describe("an album that hides its locked slots", () => {
     expect(imageOf(/hidden/)?.getAttribute("src")).not.toContain(key(1));
   });
 
-  it("falls back to the envelope when the author supplied no stand-in", () => {
-    // It used to be a bare "?". The envelope says the same thing and says the
-    // tier while it is at it.
+  it("seals the slot in its tier's envelope when the author supplied no stand-in", () => {
+    // The whole point of the option: the art is not merely greyed, it is not
+    // requested at all, so the answer is not in the network tab either.
     renderSlot({ quantity: 0, tier: "epic" }, { hideLocked: true, lockedCoverKey: null });
 
     expect(imageOf(/sealed/)?.getAttribute("src")).toBe("/envelopes/epic.png");
+    expect(imageOf(/sealed/)?.getAttribute("src")).not.toContain(key(1));
   });
 
   it("still announces the tier — that is what a locked slot is for", () => {
@@ -234,13 +232,12 @@ describe("an album that hides its locked slots", () => {
     expect(imageOf(/hidden/)?.getAttribute("style")).toContain("var(--filter-unlocked)");
   });
 
-  it("seals a locked slot even in an album that hides nothing", () => {
-    // `hideLocked` used to be the difference between a greyed preview and a
-    // stand-in. With envelopes every locked slot is sealed, and the setting
-    // only decides whether the album's own stand-in replaces the pack.
+  it("leaves an album that hides nothing exactly as it was", () => {
+    // No envelope, no stand-in: the sticker's own art in black and white.
     renderSlot({ quantity: 0 });
 
-    expect(imageOf(/sealed/)?.getAttribute("src")).toBe("/envelopes/common.png");
+    expect(imageOf(/empty/)?.getAttribute("src")).toContain(key(1));
+    expect(imageOf(/empty/)?.getAttribute("style")).toContain("locked-deep");
   });
 });
 
@@ -251,7 +248,7 @@ describe("a slot is a picture, not prose", () => {
     renderSlot({ quantity: 0 });
 
     const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
-    screen.getByRole("img", { name: /sealed/ }).dispatchEvent(event);
+    screen.getByRole("img", { name: /empty/ }).dispatchEvent(event);
 
     expect(event.defaultPrevented).toBe(true);
   });
@@ -259,20 +256,28 @@ describe("a slot is a picture, not prose", () => {
   it("cannot be selected or long-pressed into a callout", () => {
     renderSlot({ quantity: 0 });
 
-    const slot = screen.getByRole("img", { name: /sealed/ });
+    const slot = screen.getByRole("img", { name: /empty/ });
     expect(slot.className).toContain("select-none");
     expect(slot.className).toContain("[-webkit-touch-callout:none]");
   });
 });
 
-describe("the envelope is shown as itself", () => {
-  it("is never dimmed — it is the finished picture of a locked slot", () => {
-    // Dimming it would be dimming the design: the pack already reads as
-    // locked, tab, badge and all.
+describe("locked art recedes", () => {
+  it("is dimmed as well as filtered, so collected stickers lead the eye", () => {
     renderSlot({ quantity: 0 });
+
+    const style = screen.getByRole("img", { name: /empty/ }).querySelector("img")?.style;
+    expect(Number(style?.opacity)).toBeLessThan(1);
+  });
+
+  it("shows the envelope as itself, never dimmed", () => {
+    // A pack already reads as locked — tab, badge and all. Dimming it would be
+    // dimming the design.
+    renderSlot({ quantity: 0 }, { hideLocked: true, lockedCoverKey: null });
 
     const style = screen.getByRole("img", { name: /sealed/ }).querySelector("img")?.style;
     expect(style?.filter).toBe("var(--filter-unlocked)");
+    expect(style?.opacity).toBe("1");
   });
 
   it("gives way to the real art the moment it is owned", () => {
