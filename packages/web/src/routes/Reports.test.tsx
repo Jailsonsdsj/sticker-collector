@@ -202,9 +202,9 @@ describe("what it assembles", () => {
     expect(rows[0]?.textContent).toContain("Mon");
   });
 
-  it("draws the heatmap", async () => {
+  it("draws the consistency calendar", async () => {
     await open();
-    expect(screen.getByLabelText("Completion heatmap")).toBeInTheDocument();
+    expect(screen.getByLabelText("Completion calendar")).toBeInTheDocument();
   });
 
   it("names the epics the time went to, and labels unassigned work", async () => {

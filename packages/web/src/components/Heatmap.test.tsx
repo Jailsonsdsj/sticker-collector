@@ -1,7 +1,9 @@
 import type { DayTally } from "@sticker-collector/shared";
 import { addDays, weekdayOf } from "@sticker-collector/shared";
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import gsap from "gsap";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { Heatmap, heatLevel } from "./Heatmap";
 
 /** 2026-07-27 is a Monday — every row claim below is checkable by hand. */
@@ -73,16 +75,18 @@ describe("a gap is visible at a glance", () => {
   });
 });
 
-describe("the grid is Monday-first", () => {
-  it("puts a Monday in the top row and a Sunday in the bottom one", () => {
-    // A Sunday-first grid puts every cell one row out and looks plausible.
-    render(<Heatmap days={run(7)} today={SUNDAY} />);
+describe("the calendar is Monday-first", () => {
+  it("puts a Monday in the first column and a Sunday in the last", () => {
+    // A Sunday-first calendar puts every date one column out and looks
+    // entirely plausible.
+    // Both dates are in July, the month this opens on. 2026-07-05 is a Sunday.
+    render(<Heatmap days={run(7)} today={MONDAY} />);
 
-    expect(cell(MONDAY).dataset.row).toBe("0");
-    expect(cell(SUNDAY).dataset.row).toBe("6");
+    expect(cell(MONDAY).dataset.col).toBe("0");
+    expect(cell("2026-07-05").dataset.col).toBe("6");
   });
 
-  it("labels the rows Mon to Sun", () => {
+  it("labels the columns Mon to Sun", () => {
     render(<Heatmap days={run(7)} today={SUNDAY} />);
     const labels = [...document.querySelectorAll("[aria-hidden='true']")]
       .map((node) => node.textContent)
@@ -90,25 +94,32 @@ describe("the grid is Monday-first", () => {
     expect(labels.slice(0, 7)).toEqual(["M", "T", "W", "T", "F", "S", "S"]);
   });
 
-  it("keeps every weekday in its own row when the year starts mid-week", () => {
-    // A partial first week must pad, not shift.
-    const wednesday = addDays(MONDAY, 2);
-    const days = Array.from({ length: 12 }, (_, i) => day(addDays(wednesday, i), 1, 1));
-    render(<Heatmap days={days} today={addDays(wednesday, 11)} />);
+  it("pads the first week rather than shifting it", () => {
+    // 2026-07-01 is a Wednesday. A month that starts mid-week must leave the
+    // Monday and Tuesday cells empty, not slide every date two columns left.
+    render(<Heatmap days={run(12)} today={MONDAY} />);
 
-    expect(cell(wednesday).dataset.row).toBe("2");
-    expect(cell(addDays(wednesday, 5)).dataset.row).toBe("0"); // the next Monday
+    expect(cell("2026-07-01").dataset.col).toBe("2");
+    expect(cell("2026-07-06").dataset.col).toBe("0"); // the following Monday
   });
 
-  it("runs oldest week first", () => {
-    const days = run(14);
-    render(<Heatmap days={days} today={addDays(MONDAY, 13)} />);
+  it("leaves exactly the right number of blanks before the 1st", () => {
+    // 2026-07-01 is a Wednesday: Monday and Tuesday are blank, and nothing
+    // else. Padding by one too many shifts every date a column and still looks
+    // like a calendar.
+    render(<Heatmap days={run(12)} today={MONDAY} />);
+
+    expect(document.querySelectorAll("[data-pad]")).toHaveLength(2);
+  });
+
+  it("runs the month in date order", () => {
+    render(<Heatmap days={run(14)} today={MONDAY} />);
 
     const rendered = [...document.querySelectorAll("[data-date]")].map(
       (node) => (node as HTMLElement).dataset.date,
     );
-    expect(rendered[0]).toBe(MONDAY);
-    expect(rendered.at(-1)).toBe(addDays(MONDAY, 13));
+    expect(rendered[0]).toBe("2026-07-01");
+    expect(rendered.at(-1)).toBe("2026-07-31");
   });
 });
 
@@ -133,25 +144,213 @@ describe("reading it without colour", () => {
 
   it("names itself for a screen reader", () => {
     render(<Heatmap days={run(3)} today={MONDAY} />);
-    expect(screen.getByLabelText("Completion heatmap")).toBeInTheDocument();
+    expect(screen.getByLabelText("Completion calendar")).toBeInTheDocument();
   });
 });
 
-describe("a year of cells", () => {
-  it("renders one per day", () => {
-    render(<Heatmap days={run(366)} today={addDays(MONDAY, 365)} />);
-    expect(document.querySelectorAll("[data-date]")).toHaveLength(366);
+describe("one month at a time", () => {
+  it("opens on the month the user is living in, not on the oldest one", () => {
+    // A year of history would otherwise land the reader in last August.
+    render(<Heatmap days={run(366)} today={addDays(MONDAY, 200)} />);
+
+    expect(screen.getByText(monthLabelOf(addDays(MONDAY, 200)))).toBeInTheDocument();
+    expect(document.querySelectorAll("[data-date]")).toHaveLength(
+      daysInMonthOf(addDays(MONDAY, 200)),
+    );
   });
 
-  it("renders an untouched year as empty cells rather than nothing", () => {
-    const days = Array.from({ length: 90 }, (_, i) => day(addDays(MONDAY, i), 0, 0));
-    render(<Heatmap days={days} today={addDays(MONDAY, 89)} />);
+  it("moves a month at a time, and stops at the ends of the history", async () => {
+    const user = userEvent.setup();
+    render(<Heatmap days={run(60)} today={MONDAY} />);
 
-    expect(document.querySelectorAll("[data-level='empty']")).toHaveLength(90);
+    expect(screen.getByText("July 2026")).toBeInTheDocument();
+    // 60 days from 27 July reaches September, so August is a step forward and
+    // there is nothing before July.
+    expect(screen.getByRole("button", { name: "Previous month" })).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: "Next month" }));
+    expect(screen.getByText("August 2026")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Previous month" })).toBeEnabled();
+
+    // September is the last month with history, and there is nothing beyond it
+    // to page into — an empty month is not a report.
+    await user.click(screen.getByRole("button", { name: "Next month" }));
+    expect(screen.getByText("September 2026")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Next month" })).toBeDisabled();
+  });
+
+  it("falls back to the newest month it has when today is past the history", () => {
+    // The report window ends where the data ends. Opening on a month with no
+    // data at all would look like a wiped year.
+    render(<Heatmap days={run(3)} today="2026-11-15" />);
+
+    expect(screen.getByText("July 2026")).toBeInTheDocument();
+  });
+
+  it("draws the days of the month that have no data, without claiming anything about them", () => {
+    // July has 31 days; the history here covers three. The rest are drawn so
+    // the month keeps its shape, but "nothing scheduled" would be a claim about
+    // days nobody has data for.
+    render(<Heatmap days={run(3)} today={MONDAY} />);
+
+    expect(document.querySelectorAll("[data-date]")).toHaveLength(31);
+    expect(document.querySelectorAll("[data-level='none']")).toHaveLength(28);
+    expect(
+      screen.getByRole("img", { name: "2026-07-01: outside the reported period" }),
+    ).toBeInTheDocument();
+  });
+
+  it("renders an untouched month as empty cells rather than nothing", () => {
+    const days = Array.from({ length: 5 }, (_, i) => day(addDays(MONDAY, i), 0, 0));
+    render(<Heatmap days={days} today={MONDAY} />);
+
+    expect(document.querySelectorAll("[data-level='empty']")).toHaveLength(5);
   });
 
   it("renders nothing at all when there is no history to show", () => {
     render(<Heatmap days={[]} today={MONDAY} />);
-    expect(screen.queryByLabelText("Completion heatmap")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Completion calendar")).not.toBeInTheDocument();
+  });
+});
+
+const MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
+const monthLabelOf = (date: string) =>
+  `${MONTHS[Number(date.slice(5, 7)) - 1]} ${date.slice(0, 4)}`;
+
+const daysInMonthOf = (date: string) =>
+  new Date(Date.UTC(Number(date.slice(0, 4)), Number(date.slice(5, 7)), 0)).getUTCDate();
+
+/** A finger, in two events, on the month grid. */
+const swipe = (dx: number, dy = 0) => {
+  const grid = document.querySelector("[data-date]")?.parentElement as HTMLElement;
+  fireEvent.pointerDown(grid, { pointerType: "touch", clientX: 0, clientY: 0 });
+  fireEvent.pointerUp(grid, { pointerType: "touch", clientX: dx, clientY: dy });
+};
+
+describe("swiping between months", () => {
+  it("goes forward on a left swipe and back on a right one", () => {
+    render(<Heatmap days={run(60)} today={MONDAY} />);
+    expect(screen.getByText("July 2026")).toBeInTheDocument();
+
+    swipe(-120);
+    expect(screen.getByText("August 2026")).toBeInTheDocument();
+
+    // Right means "back", the way pages turn.
+    swipe(120);
+    expect(screen.getByText("July 2026")).toBeInTheDocument();
+  });
+
+  it("refuses to swipe past the history", () => {
+    render(<Heatmap days={run(60)} today={MONDAY} />);
+
+    swipe(120);
+
+    // July is the oldest month there is; a swipe into June would show a blank
+    // grid the buttons already refuse to reach.
+    expect(screen.getByText("July 2026")).toBeInTheDocument();
+
+    // And the refusal has to leave no residue. Storing June and merely
+    // *displaying* July looks identical here, but then costs two swipes to
+    // reach August — the gesture appears to be ignored every other time.
+    swipe(-120);
+    expect(screen.getByText("August 2026")).toBeInTheDocument();
+  });
+
+  it("ignores a short drag and a vertical one", () => {
+    render(<Heatmap days={run(60)} today={MONDAY} />);
+
+    swipe(-30);
+    expect(screen.getByText("July 2026")).toBeInTheDocument();
+
+    // The page scrolls through this grid. A calendar that changed month on a
+    // diagonal scroll would be unusable on a phone.
+    swipe(-120, 200);
+    expect(screen.getByText("July 2026")).toBeInTheDocument();
+  });
+
+  it("leaves a mouse alone", () => {
+    render(<Heatmap days={run(60)} today={MONDAY} />);
+    const grid = document.querySelector("[data-date]")?.parentElement as HTMLElement;
+
+    fireEvent.pointerDown(grid, { pointerType: "mouse", clientX: 0, clientY: 0 });
+    fireEvent.pointerUp(grid, { pointerType: "mouse", clientX: -200, clientY: 0 });
+
+    // A drag with a mouse is a selection, not a page turn.
+    expect(screen.getByText("July 2026")).toBeInTheDocument();
+  });
+});
+
+describe("the month slides in", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  /** jsdom answers "no" to every media query unless told otherwise. */
+  const withMotion = () =>
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: query.includes("no-preference"),
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      onchange: null,
+      dispatchEvent: () => false,
+    }));
+
+  it("enters from the side the last month left towards", async () => {
+    withMotion();
+    const fromTo = vi.spyOn(gsap, "fromTo").mockReturnValue({} as ReturnType<typeof gsap.fromTo>);
+    const user = userEvent.setup();
+
+    render(<Heatmap days={run(60)} today={MONDAY} />);
+    // Opening is not a step.
+    expect(fromTo).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Next month" }));
+    expect(fromTo.mock.calls[0]?.[1]).toMatchObject({ xPercent: 25 });
+
+    await user.click(screen.getByRole("button", { name: "Previous month" }));
+    expect(fromTo.mock.calls[1]?.[1]).toMatchObject({ xPercent: -25 });
+
+    fromTo.mockRestore();
+  });
+
+  it("does not animate a swipe that was refused", () => {
+    // At the oldest month a backwards swipe changes nothing, so it must not
+    // play a slide either — an animation that ends where it started reads as
+    // the app failing to keep up.
+    withMotion();
+    const fromTo = vi.spyOn(gsap, "fromTo").mockReturnValue({} as ReturnType<typeof gsap.fromTo>);
+
+    render(<Heatmap days={run(60)} today={MONDAY} />);
+    swipe(120);
+
+    expect(fromTo).not.toHaveBeenCalled();
+    fromTo.mockRestore();
+  });
+
+  it("changes month without animating when motion is unwelcome", async () => {
+    const fromTo = vi.spyOn(gsap, "fromTo");
+    const user = userEvent.setup();
+
+    render(<Heatmap days={run(60)} today={MONDAY} />);
+    await user.click(screen.getByRole("button", { name: "Next month" }));
+
+    expect(fromTo).not.toHaveBeenCalled();
+    expect(screen.getByText("August 2026")).toBeInTheDocument();
+    fromTo.mockRestore();
   });
 });

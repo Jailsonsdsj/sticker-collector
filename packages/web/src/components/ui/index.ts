@@ -8,6 +8,7 @@ export {
 } from "./Button";
 export { Checkbox, type CheckboxProps, type CheckboxSize } from "./Checkbox";
 export { Chip, type ChipProps, type ChipShape, type ChipSize, type ChipTone } from "./Chip";
+export { Coin, type CoinProps, type CoinSize } from "./Coin";
 export { Dialog, type DialogProps, type DialogTone } from "./Dialog";
 export { EmptyState, type EmptyStateProps } from "./EmptyState";
 export { ErrorState, type ErrorStateProps, isOffline } from "./ErrorState";

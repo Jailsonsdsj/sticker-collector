@@ -34,7 +34,38 @@ Defaults are in **bold**.
 | `Tabs<T>` | `ui/Tabs.tsx` | `items: {value, label, tone?, disabled?}[]` · `value` · `onChange` · `tone` **violet**·cyan·coin·lime·magenta · `size` sm·**md** · `label` | selected, unselected, hover, focus-visible, disabled | accent colours · `--color-panel` · `--color-surface-4` · `--color-ink-secondary` · `--radius-lg/xl/md` |
 | `EmptyState` | `ui/EmptyState.tsx` | `icon` · `title` · `description` · `action` | with/without icon, description, action | `--color-border` (dashed) · `--color-surface-1` · `--color-ink-muted`/`-dim`/`-faint` · `--radius-3xl` · `--font-display` |
 | `ImageTile` | `ui/ImageTile.tsx` | `src` · `alt` **""** · `className` · `style` · `loading` **lazy**·eager | shimmering, loaded, failed | `--color-surface-2/4` · `.animate-image-shimmer` (app.css) |
+| `Coin` | `ui/Coin.tsx` | `size` xs·**sm**·md·lg · `spin` **false** | still, spinning; static under `prefers-reduced-motion` | `/coin/{front,back}.png` (public) · `.coin*` + `.animate-coin-spin` (app.css) |
 | `Skeleton` | `ui/Skeleton.tsx` | `variant` **text**·block·card · `lines` **1** | pulsing; static under `prefers-reduced-motion` | `--color-surface-3` · `--animate-skeleton` · `--aspect-card` · `--radius-sm/xl/lg` |
+
+**The coin is two images, not a glyph.** `Coin` puts the design's star front and
+"1 COIN" reverse back to back in one 3D space, so the wallet's spin turns onto
+the reverse instead of a disc squashing to a line. The design's third image, the
+rim, is deliberately unused: the coin has no thickness. Anything static
+shows the star; only the wallet spins. It is `aria-hidden` everywhere — the
+number beside it carries the meaning. Both PNGs are shell, and are
+precached (`pwa.config.ts`).
+
+**A locked slot is a sealed envelope.** `public/envelopes/<tier>.png`, one per
+rarity, drawn edge-to-edge with no bezel behind it (the artwork has its own).
+The same file is the pack in the reveal, so the grid and the animation agree
+about what is being opened. `envelopeSrc()` in `lib/rarity.ts` is the single
+source of the path.
+
+**The tab bar's icons are artwork, not glyphs.** Five tabs × two states in
+`public/nav/<tab>-{on,off}.png`, both mounted and cross-faded so a tap never
+blinks. The unlit files are their own grey-violet drawings, not a tint of the
+lit ones. Accents: Tasks coin, Week cyan, Albums **magenta**, Epics violet,
+Stats lime — Albums moved off violet because two violet tabs side by side read
+as one. Labels are the display face, uppercase and italic, in the tab's accent
+when active.
+
+**The app icon is a preference, not a constant.** `AppIconPicker` (Settings)
+writes the choice to `localStorage` and rewrites the document's
+`apple-touch-icon`, `icon` and `manifest` links; `main.tsx` reapplies it before
+first paint. The four sets live in `public/app-icons/<id>/` — see
+`docs/design/project/assets/Icons/README.md` for how they are cut. An icon
+already on an iOS home screen never changes: iOS copies the artwork at "Add to
+Home Screen", so the panel says to re-add the app.
 
 **Helpers, not components:** `cx()` joins class names; `toneVars()` builds a tone's custom properties; `useModal()` drives a native `<dialog>` from an `open` prop.
 

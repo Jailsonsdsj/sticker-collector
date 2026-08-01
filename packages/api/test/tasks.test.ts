@@ -368,7 +368,10 @@ describe("idempotency", () => {
 
 describe("lastCompletedOn", () => {
   it("is null until the task is closed, then names the day", async () => {
-    const created = await createRoutine();
+    // Daily, for the same reason as the test below: "today" is the real
+    // current date, and the default Mon–Fri mask refuses to be completed on a
+    // Saturday. The test used to pass five days a week.
+    const created = await createRoutine({ weekdays: 0b1111111 });
     const list = async () =>
       (await (await call("GET", "/api/tasks")).json()) as Array<{
         id: string;

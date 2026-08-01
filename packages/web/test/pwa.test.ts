@@ -147,6 +147,18 @@ describe("navigation", () => {
   });
 });
 
+describe("the app icons", () => {
+  it("are cached as they are seen, not precached", () => {
+    // Four sets, ~1.3 MB, of which the app needs one. Precaching all four to
+    // install a single icon is the trade `globPatterns` cannot express.
+    const globs = (workbox.globPatterns as string[]).join(" ");
+    expect(globs).not.toContain("app-icons");
+
+    const rule = routeFor("/app-icons/star/icon-192.png");
+    expect(rule?.handler).toBe("CacheFirst");
+  });
+});
+
 describe("what gets precached", () => {
   it("includes the shell and the icons", () => {
     const globs = (workbox.globPatterns as string[]).join(" ");
@@ -154,6 +166,14 @@ describe("what gets precached", () => {
     expect(globs).toContain("js");
     expect(globs).toContain("css");
     expect(globs).toContain("icons/*.png");
+    // The coin is on the wallet and on every price; offline it must not be a
+    // broken-image box.
+    expect(globs).toContain("coin/*.png");
+    // The tab bar is on every screen; offline it must not be five blank
+    // squares.
+    expect(globs).toContain("nav/*.png");
+    // A locked slot IS the envelope; offline they would be empty boxes.
+    expect(globs).toContain("envelopes/*.png");
   });
 
   it("leaves the launch images out", () => {

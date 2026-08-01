@@ -1,5 +1,5 @@
 import { AlbumGrid, AppHeader, StickerGrid, TabBar } from "../../components/layout";
-import { Badge, Button } from "../../components/ui";
+import { Badge, Button, Coin } from "../../components/ui";
 import { Panel, Row, Section } from "../Section";
 
 /** Numbered cells, so the column count is countable rather than trusted. */
@@ -24,7 +24,7 @@ export function Layout() {
               title="Albums"
               trailing={
                 <Badge tone="coin" font="numeric">
-                  1,240 ¢
+                  1,240 <Coin size="xs" />
                 </Badge>
               }
             />

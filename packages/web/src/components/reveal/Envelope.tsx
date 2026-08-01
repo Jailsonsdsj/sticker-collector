@@ -2,12 +2,16 @@ import type { Tier } from "@sticker-collector/shared";
 import gsap from "gsap";
 import { useLayoutEffect, useRef } from "react";
 import { imageSrc } from "../../lib/imageUpload";
-import { FLOURISH } from "../../lib/rarity";
+import { envelopeSrc, FLOURISH } from "../../lib/rarity";
 import { Badge } from "../ui";
 import { cx } from "../ui/cx";
 
 /**
  * The envelope a pull arrives in, and the sticker coming out of it.
+ *
+ * The pack itself is the tier's envelope artwork — the same file a locked slot
+ * wears in the grid, so the thing you have been looking at is the thing that
+ * shakes and opens.
  *
  * The design bundle shipped this vocabulary and nothing ever used it:
  * `pack-shake` with a per-rarity duration, `burst-ring`, `flash-bloom` and a
@@ -109,18 +113,21 @@ export function Envelope({ tier, imageKey, quantity = 1, onOpened }: EnvelopePro
           ease: "sine.inOut",
           transformOrigin: "50% 100%",
         })
-        .to("[data-part='flap']", {
-          rotationX: -160,
+        // The pack lifts and opens out instead of hinging: one flat image has
+        // no flap to rotate, and a fake fold on printed artwork looks like a
+        // rendering fault rather than a fold.
+        .to("[data-part='pack']", {
+          y: -14,
+          scale: 1.06,
           duration: 0.32,
           ease: "back.in(1.4)",
-          transformOrigin: "50% 0%",
         })
         .to(
           "[data-part='card']",
           { autoAlpha: 1, y: 0, scale: 1, duration: 0.45, ease: "back.out(1.5)" },
           "-=0.1",
         )
-        .to("[data-part='pack']", { autoAlpha: 0, duration: 0.25 }, "-=0.35");
+        .to("[data-part='pack']", { autoAlpha: 0, y: -34, duration: 0.3 }, "-=0.35");
 
       if (flourish.bloom) {
         timeline.fromTo(
@@ -225,26 +232,20 @@ export function Envelope({ tier, imageKey, quantity = 1, onOpened }: EnvelopePro
             )}
           </div>
 
-          {/* The pack, over the card until it opens. */}
-          <div
+          {/* The pack, over the card until it opens.
+              It is the *same* envelope the grid has been showing for this tier,
+              which is what makes the reveal feel like opening that slot rather
+              than a scene about some other card. Drawn as one image, so there
+              is no flap to hinge — the pack lifts and dissolves instead, and
+              the tear line printed on it does the work the hinge used to. */}
+          <img
             data-part="pack"
             aria-hidden
-            className="absolute inset-0 rounded-xl border border-border-strong"
-            style={{
-              // NOT `--gradient-panel-raised`: that is the dialog's own surface,
-              // so the pack's body disappeared into the background and only the
-              // coloured flap read as an envelope — it looked like a lid covering
-              // a third of the sticker.
-              background: "var(--gradient-cover)",
-              boxShadow: "var(--shadow-md)",
-            }}
-          >
-            <div
-              data-part="flap"
-              className="h-1/3 w-full rounded-t-xl border-border border-b"
-              style={{ background: `var(--gradient-frame-${tier})` }}
-            />
-          </div>
+            src={envelopeSrc(tier)}
+            alt=""
+            className="absolute inset-0 h-full w-full rounded-xl object-cover"
+            draggable={false}
+          />
         </div>
       </div>
     </div>

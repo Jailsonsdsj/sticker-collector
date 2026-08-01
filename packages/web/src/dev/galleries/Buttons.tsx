@@ -1,4 +1,4 @@
-import { Button, type ButtonTone, type ButtonVariant } from "../../components/ui";
+import { Button, type ButtonTone, type ButtonVariant, Coin } from "../../components/ui";
 import { Panel, Row, Section } from "../Section";
 
 const TONES: ButtonTone[] = ["coin", "lime", "magenta", "violet", "cyan", "neutral"];
@@ -53,7 +53,9 @@ export function Buttons() {
 
         <div className="max-w-sm">
           <Row label="block">
-            <Button block>Unlock · 400 ¢</Button>
+            <Button block>
+              Unlock · 400 <Coin size="xs" />
+            </Button>
           </Row>
         </div>
       </Panel>

@@ -12,7 +12,7 @@ Everything below derives from data the app already stores: the occurrence log, e
 
 **Consistency**
 
-- **The heatmap** — a calendar year, one cell per day, shaded by proportion of that day's occurrences completed. The single most motivating view a habit app owns; it makes a gap physically visible.
+- **The consistency calendar** — a real month grid, one cell per day, shaded by the proportion of that day's occurrences completed and paged a month at a time — by swipe or by the arrows — from today back through the year of history. The single most motivating view a habit app owns; it makes a gap physically visible. It was a year of anonymous dots, which showed the shape of a gap but not *which days* — "I dropped off around the 20th" is the thought it has to answer, and that needs dates on the cells. The shading keeps two states at the bottom: a scheduled day missed is not the same as a day with nothing scheduled, and a day outside the reported window claims neither.
 - **Completion rate** over the trailing 7, 30, and 90 days — occurrences done over occurrences scheduled. Trailing, not all-time, so recent effort is not drowned by ancient history.
 - **Weekday shape** — completion rate broken out by day of week, which surfaces the honest pattern (*Mondays hold, Fridays collapse*).
 
