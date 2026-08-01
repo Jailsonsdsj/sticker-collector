@@ -45,6 +45,12 @@ shows the star; only the wallet spins. It is `aria-hidden` everywhere — the
 number beside it carries the meaning. Both PNGs are shell, and are
 precached (`pwa.config.ts`).
 
+**A locked slot is a sealed envelope.** `public/envelopes/<tier>.png`, one per
+rarity, drawn edge-to-edge with no bezel behind it (the artwork has its own).
+The same file is the pack in the reveal, so the grid and the animation agree
+about what is being opened. `envelopeSrc()` in `lib/rarity.ts` is the single
+source of the path.
+
 **The tab bar's icons are artwork, not glyphs.** Five tabs × two states in
 `public/nav/<tab>-{on,off}.png`, both mounted and cross-faded so a tap never
 blinks. The unlit files are their own grey-violet drawings, not a tint of the

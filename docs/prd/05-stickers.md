@@ -1,7 +1,7 @@
 ## Stickers
 
 1. Inside an **unlocked** album, stickers can be acquired either directly, by clicking an empty placeholder, or through a random purchase.
-2. Locked stickers are displayed in black and white. A button beneath the sticker displays its purchase price.
+2. Locked stickers are displayed as a **sealed envelope for their tier** — the design's artwork, carrying its own frame, the rarity name across the top and a LOCKED badge. A button beneath it displays its purchase price. *(This replaced the black-and-white preview of the sticker's own art: a pack keeps the surprise, and the sticker's image is never even requested while the slot is sealed. An album that supplies its own stand-in for hidden slots still shows that instead — an authored decision about one album outranks the generic pack.)*
 3. Unlocked stickers are displayed in color.
 4. Duplicate stickers are indicated by a quantity number in the upper-left corner.
 5. A duplicate obtained from a random purchase may be sold for half the album's random-sticker price.
@@ -9,7 +9,7 @@
 
 **Enhancements (MVP)**
 
-- **The reveal.** A random pull animates the black-and-white slot flooding into color, held a beat longer for higher tiers. This is the app's single most rewarding moment; it earns real attention.
+- **The reveal.** A random pull shakes open the tier's envelope — the *same* file the locked slot wears, so the pack you have been looking at is the pack that opens — and the sticker rises out of it in colour, held a beat longer for higher tiers. This is the app's single most rewarding moment; it earns real attention.
 - **Duplicate, then decide.** A duplicate surfaces its "sell for X" action inline, so a pull that returns a dupe still ends in a choice rather than a dead end.
 - **The sticker viewer.** Tapping a collected sticker opens it full-size with its title and description. Swiping — or the arrow keys — moves through the **collected** stickers only, without closing, and the next one **slides in from the side the last one left towards**, so "back" never feels like "next". A locked slot has nothing to show: its art is the thing being earned.
 - **Saving a sticker to the device.** The viewer offers a download icon (no label — the glyph is the whole control, with an accessible name behind it). On a device that can share files it opens the share sheet, which is the only route to an iOS camera roll; everywhere else it downloads, named after the sticker's title rather than its content address.

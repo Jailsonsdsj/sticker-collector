@@ -27,7 +27,9 @@ describe("the reveal always ends with a sticker", () => {
 
   it("shows the art regardless", () => {
     renderEnvelope();
-    expect(screen.getByRole("presentation", { hidden: true })).toHaveAttribute(
+    // Scoped to the card: the pack is an <img> too now, and it is the tier's
+    // envelope rather than the sticker.
+    expect((part("card") as HTMLElement).querySelector("img")).toHaveAttribute(
       "src",
       `/api/images/${key}`,
     );
@@ -52,15 +54,15 @@ describe("the reveal always ends with a sticker", () => {
     );
   });
 
-  it("does not wear the dialog's own surface", () => {
-    // `--gradient-panel-raised` IS the dialog's background, so the pack's body
-    // disappeared into it and only the coloured flap read as an envelope — it
-    // looked like a lid covering a third of the sticker. Any other surface is
-    // fine; that one is not.
-    renderEnvelope();
+  it("is the same envelope the grid shows for that tier", () => {
+    // The pack used to be a gradient with a hinged flap, and it wore
+    // `--gradient-panel-raised` — the dialog's own background — so its body
+    // vanished and only the flap read as an envelope. It is now the design's
+    // artwork, and the *same file* a locked slot wears, so the reveal opens
+    // the pack the user has been looking at.
+    renderEnvelope({ tier: "legendary" });
 
-    expect((part("pack") as HTMLElement).style.background).not.toContain("panel-raised");
-    expect((part("pack") as HTMLElement).style.background).toBeTruthy();
+    expect(part("pack")).toHaveAttribute("src", "/envelopes/legendary.png");
   });
 
   it("puts the card in the DOM from the start", () => {

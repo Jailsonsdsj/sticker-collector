@@ -172,6 +172,8 @@ describe("what gets precached", () => {
     // The tab bar is on every screen; offline it must not be five blank
     // squares.
     expect(globs).toContain("nav/*.png");
+    // A locked slot IS the envelope; offline they would be empty boxes.
+    expect(globs).toContain("envelopes/*.png");
   });
 
   it("leaves the launch images out", () => {

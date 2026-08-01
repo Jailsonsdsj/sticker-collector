@@ -21,3 +21,15 @@ export const FLOURISH: Record<Tier, Flourish> = {
   epic: { ring: true, bloom: true, shine: false },
   legendary: { ring: true, bloom: true, shine: true },
 };
+
+/**
+ * The sealed pack for a tier — the artwork a slot wears before it is earned,
+ * and the pack a reveal opens.
+ *
+ * One image serving both places is the point: the thing you have been staring
+ * at in the grid is the thing that shakes and opens. Two different packs would
+ * make the reveal a scene about some other card.
+ */
+export function envelopeSrc(tier: Tier): string {
+  return `/envelopes/${tier}.png`;
+}

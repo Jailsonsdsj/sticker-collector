@@ -43,6 +43,10 @@ export const pwaOptions: Partial<VitePWAOptions> = {
       // 48 KB for the whole tab bar, lit and unlit. It is on every screen, so
       // an offline launch without it is five blank squares.
       "nav/*.png",
+      // Four packs, ~590 KB. Every album shows them on every locked slot, so
+      // an offline album without them is a grid of empty boxes — and they are
+      // also the reveal's own artwork.
+      "envelopes/*.png",
       "manifest.webmanifest",
     ],
 
