@@ -45,6 +45,14 @@ shows the star; only the wallet spins. It is `aria-hidden` everywhere — the
 number beside it carries the meaning. Both PNGs are shell, and are
 precached (`pwa.config.ts`).
 
+**The tab bar's icons are artwork, not glyphs.** Five tabs × two states in
+`public/nav/<tab>-{on,off}.png`, both mounted and cross-faded so a tap never
+blinks. The unlit files are their own grey-violet drawings, not a tint of the
+lit ones. Accents: Tasks coin, Week cyan, Albums **magenta**, Epics violet,
+Stats lime — Albums moved off violet because two violet tabs side by side read
+as one. Labels are the display face, uppercase and italic, in the tab's accent
+when active.
+
 **The app icon is a preference, not a constant.** `AppIconPicker` (Settings)
 writes the choice to `localStorage` and rewrites the document's
 `apple-touch-icon`, `icon` and `manifest` links; `main.tsx` reapplies it before

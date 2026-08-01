@@ -169,6 +169,9 @@ describe("what gets precached", () => {
     // The coin is on the wallet and on every price; offline it must not be a
     // broken-image box.
     expect(globs).toContain("coin/*.png");
+    // The tab bar is on every screen; offline it must not be five blank
+    // squares.
+    expect(globs).toContain("nav/*.png");
   });
 
   it("leaves the launch images out", () => {

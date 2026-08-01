@@ -36,7 +36,15 @@ export const pwaOptions: Partial<VitePWAOptions> = {
     // `coin/*.png` is shell, not decoration: the coin sits on the wallet, on
     // every price and on every reward, so an offline launch without it is an
     // app full of holes.
-    globPatterns: ["**/*.{html,js,css,woff2}", "icons/*.png", "coin/*.png", "manifest.webmanifest"],
+    globPatterns: [
+      "**/*.{html,js,css,woff2}",
+      "icons/*.png",
+      "coin/*.png",
+      // 48 KB for the whole tab bar, lit and unlit. It is on every screen, so
+      // an offline launch without it is five blank squares.
+      "nav/*.png",
+      "manifest.webmanifest",
+    ],
 
     // A deep link opened offline has to resolve to the app, or the router never
     // gets a chance to render the route.
