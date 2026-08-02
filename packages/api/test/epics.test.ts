@@ -40,6 +40,8 @@ function call(method: string, path: string, body?: unknown, auth = true) {
 type EpicBody = {
   id: string;
   title: string;
+  description: string | null;
+  status: string;
   accent: string;
   coinGoalAlbumId: string | null;
   oneOffTotal: number;
@@ -262,6 +264,59 @@ describe("CRUD", () => {
   it("requires a session", async () => {
     expect((await call("GET", "/api/epics", undefined, false)).status).toBe(401);
     expect((await call("POST", "/api/epics", { title: "X" }, false)).status).toBe(401);
+  });
+});
+
+describe("the section an epic lives in", () => {
+  it("defaults to active, so every epic that already exists stays put", async () => {
+    // The migration defaults the column too; this is the other half of the same
+    // promise, for epics created after it.
+    expect((await createEpic()).status).toBe("active");
+  });
+
+  it("is set at creation", async () => {
+    expect((await createEpic({ status: "next" })).status).toBe("next");
+    expect((await createEpic({ status: "achieved" })).status).toBe("achieved");
+  });
+
+  it("refuses a section that is not one of the three", async () => {
+    expect((await call("POST", "/api/epics", { title: "X", status: "someday" })).status).toBe(400);
+  });
+
+  it("moves between sections on a patch", async () => {
+    const ep = await createEpic();
+
+    const res = await call("PATCH", `/api/epics/${ep.id}`, { status: "achieved" });
+
+    expect(res.status).toBe(200);
+    expect((await res.json()) as EpicBody).toMatchObject({ status: "achieved" });
+  });
+});
+
+describe("the description actually reaches the database", () => {
+  it("is stored on create", async () => {
+    // It was accepted by the schema, returned by the read, and never written:
+    // the insert simply did not list it, so every description typed into the
+    // form was dropped on the floor.
+    const created = await createEpic({ description: "Everything for the sticker app." });
+
+    expect(created.description).toBe("Everything for the sticker app.");
+    const read = (await (await call("GET", `/api/epics/${created.id}`)).json()) as EpicBody;
+    expect(read.description).toBe("Everything for the sticker app.");
+  });
+
+  it("is stored on update, and can be cleared", async () => {
+    const ep = await createEpic({ description: "First words." });
+
+    await call("PATCH", `/api/epics/${ep.id}`, { description: "Second words." });
+    expect(
+      ((await (await call("GET", `/api/epics/${ep.id}`)).json()) as EpicBody).description,
+    ).toBe("Second words.");
+
+    await call("PATCH", `/api/epics/${ep.id}`, { description: null });
+    expect(
+      ((await (await call("GET", `/api/epics/${ep.id}`)).json()) as EpicBody).description,
+    ).toBeNull();
   });
 });
 

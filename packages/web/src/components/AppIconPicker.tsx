@@ -7,6 +7,7 @@ import {
   loadAppIcon,
   saveAppIcon,
 } from "../lib/appIcon";
+import { SettingsPanel } from "./SettingsPanel";
 import { cx } from "./ui/cx";
 
 /**
@@ -32,15 +33,14 @@ export function AppIconPicker() {
   };
 
   return (
-    <section aria-label="App icon" className="mb-5 rounded-3xl border border-border bg-panel p-5">
-      <h2 className="font-display text-xl tracking-display uppercase italic">App icon</h2>
-      <p className="mt-1 font-body text-sm text-ink-secondary">
-        The icon this app wears on your home screen and in the browser tab.
-      </p>
-
+    <SettingsPanel
+      label="App icon"
+      title="App icon"
+      description="The icon this app wears on your home screen and in the browser tab."
+    >
       {/* The inputs share a `name`, which is what makes them one choice; the
           group's own label is the section heading above. */}
-      <div className="mt-4 flex flex-wrap gap-4">
+      <div className="flex flex-wrap gap-4">
         {APP_ICONS.map((icon) => {
           const selected = icon.id === chosen;
           return (
@@ -90,6 +90,6 @@ export function AppIconPicker() {
         Already added to your home screen? iOS copies the icon when you add the app and never looks
         again — remove it and add it once more to pick this one up.
       </p>
-    </section>
+    </SettingsPanel>
   );
 }

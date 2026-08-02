@@ -2,6 +2,7 @@ import { todayIn } from "@sticker-collector/shared";
 import { useRef, useState } from "react";
 import { exportBackup, restoreBackup } from "../lib/backupClient";
 import { lastExportAt, recordExport } from "../lib/backupState";
+import { SettingsPanel } from "./SettingsPanel";
 import { Button, Input } from "./ui";
 
 export interface BackupPanelProps {
@@ -85,13 +86,12 @@ export function BackupPanel({
   };
 
   return (
-    <section aria-label="Backup" className="flex flex-col gap-5">
+    <SettingsPanel
+      label="Backup"
+      title="Backup"
+      description="One file with everything in it, images included. This is how a lost passphrase is recovered, and the insurance against the browser clearing its storage."
+    >
       <div className="flex flex-col gap-2">
-        <h2 className="font-display text-2xl tracking-display uppercase italic text-ink">Backup</h2>
-        <p className="font-body text-sm text-ink-secondary">
-          One file with everything in it, images included. This is how a lost passphrase is
-          recovered, and the insurance against the browser clearing its storage.
-        </p>
         <p className="font-body text-sm text-ink-dim">
           {exportedAt ? `Last backed up ${readableDate(exportedAt)}.` : "Never backed up."}
         </p>
@@ -108,7 +108,7 @@ export function BackupPanel({
         </div>
       </div>
 
-      <div className="flex flex-col gap-2 border-border border-t pt-4">
+      <div className="mt-5 flex flex-col gap-2 border-border border-t pt-4">
         <h3 className="font-body text-sm font-bold text-ink">Restore from a backup</h3>
         <p className="font-body text-sm text-ink-secondary">
           Restoring writes a backup into an empty install. It cannot overwrite an account that
@@ -159,13 +159,13 @@ export function BackupPanel({
         )}
       </div>
 
-      {message && <p className="font-body text-sm text-lime">{message}</p>}
+      {message && <p className="mt-4 font-body text-sm text-lime">{message}</p>}
       {error && (
-        <p role="alert" className="font-body text-sm text-magenta">
+        <p role="alert" className="mt-4 font-body text-sm text-magenta">
           {error}
         </p>
       )}
-    </section>
+    </SettingsPanel>
   );
 }
 

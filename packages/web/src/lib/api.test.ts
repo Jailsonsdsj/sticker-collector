@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError, api } from "./api";
+import { listErrors } from "./errorLog";
 import { getToken, setToken } from "./session";
 
 /**
@@ -134,3 +135,48 @@ describe("success", () => {
 function headersOf(call: number): Record<string, string | undefined> {
   return (fetchMock.mock.calls[call]?.[1]?.headers ?? {}) as Record<string, string | undefined>;
 }
+
+describe("what the error log sees", () => {
+  it("records a failed request once, with enough to report it", async () => {
+    reply(500, { error: "d1 exploded" });
+
+    await expect(api("/api/tasks", { method: "POST" })).rejects.toThrow(ApiError);
+
+    // This is the only place that sees every failure; a screen that catches
+    // one still shows whatever it always showed.
+    expect(listErrors()).toEqual([
+      expect.objectContaining({
+        method: "POST",
+        path: "/api/tasks",
+        status: 500,
+        message: "d1 exploded",
+      }),
+    ]);
+  });
+
+  it("records a request that never reached the server as status 0", async () => {
+    fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
+
+    await expect(api("/api/tasks")).rejects.toThrow(TypeError);
+
+    // Offline, DNS, a dropped connection: there is no status to report, and
+    // pretending there is one sends people looking at the server.
+    expect(listErrors()[0]).toMatchObject({ status: 0, method: "GET" });
+  });
+
+  it("records an expired session too — the popup is what ignores it", async () => {
+    reply(401);
+
+    await expect(api("/api/tasks")).rejects.toThrow(ApiError);
+
+    expect(listErrors()[0]).toMatchObject({ status: 401 });
+  });
+
+  it("records nothing when the request succeeds", async () => {
+    reply(200, { ok: true });
+
+    await api("/api/tasks");
+
+    expect(listErrors()).toEqual([]);
+  });
+});

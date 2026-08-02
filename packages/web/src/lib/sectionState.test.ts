@@ -95,14 +95,26 @@ describe("stored values that cannot be trusted", () => {
 });
 
 describe("the defaults table", () => {
-  it("names every section the home screen renders", () => {
+  it("names every collapsible section in the app", () => {
     expect(Object.keys(SECTION_DEFAULTS).sort()).toEqual([
       "backlog",
       "completed",
+      "epics-achieved",
+      "epics-active",
+      "epics-next",
       "general",
       "missed",
       "today",
     ]);
+  });
+
+  it("folds what is a record rather than work in hand", () => {
+    // Missed and the routine backlog on the home screen; finished epics on the
+    // Epics screen. A year of achievements above the fold buries what is
+    // running today.
+    expect(SECTION_DEFAULTS["epics-achieved"]).toBe(false);
+    expect(SECTION_DEFAULTS["epics-active"]).toBe(true);
+    expect(SECTION_DEFAULTS["epics-next"]).toBe(true);
   });
 
   it("is what sectionIsOpen falls back to", () => {

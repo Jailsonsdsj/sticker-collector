@@ -102,6 +102,8 @@ export const epic = sqliteTable("epic", {
   /** Optional, author-written: what this epic is actually for. */
   description: text("description"),
   accent: text("accent").notNull(),
+  /** active | next | achieved. Defaulted so existing rows stay where they are. */
+  status: text("status").notNull().default("active"),
   coinGoalAlbumId: text("coin_goal_album_id").references(() => album.id),
   createdAt: text("created_at").notNull(),
 });

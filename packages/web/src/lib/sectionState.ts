@@ -29,6 +29,11 @@ export const SECTION_DEFAULTS: Record<string, boolean> = {
   missed: false,
   completed: true,
   backlog: false,
+  // Epics: what is running and what is next are work in hand; finished epics
+  // are a record, and a year of them above the fold buries both.
+  "epics-active": true,
+  "epics-next": true,
+  "epics-achieved": false,
 };
 
 function read(): Record<string, boolean> {

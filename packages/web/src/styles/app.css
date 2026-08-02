@@ -135,3 +135,29 @@ body {
     animation: none;
   }
 }
+
+/* The app's own column.
+ *
+ * Full width by default, which is what a phone and an iPad both want — in
+ * portrait and in landscape. The cap applies only where the pointer says
+ * "desktop": a fine pointer that can hover. Width is the wrong signal here,
+ * because a landscape iPad and a small laptop are the same number of pixels
+ * and want opposite things; iPadOS reports a coarse primary pointer even with
+ * a keyboard attached, so the query lands on the right side of that line.
+ *
+ * The rules on either side arrive with the cap. Without a cap there is nothing
+ * to rule off. */
+.app-column {
+  margin-inline: auto;
+  width: 100%;
+}
+
+@media (pointer: fine) and (hover: hover) {
+  .app-column {
+    max-width: 32rem;
+  }
+
+  .app-column-framed {
+    border-inline: 1px solid var(--color-border);
+  }
+}

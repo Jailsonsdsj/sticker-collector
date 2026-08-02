@@ -1,5 +1,6 @@
 import {
   type CreateTaskInput,
+  DEFAULT_EFFORT_MINUTES,
   maskToggleDay,
   type Priority,
   type Task,
@@ -81,7 +82,11 @@ export function initialState(options: { epicId?: string | null } = {}): TaskForm
     weekdays: WEEKDAYS_MASK_NONE,
     dueDate: "",
     dueTime: "",
-    effortMinutes: "",
+    // The same 30 the server gives a quick-add. A blank effort field made the
+    // full form a worse capture than the one-line box beside it: two taps of
+    // typing before Save would even light up, for a number most tasks were
+    // going to be anyway.
+    effortMinutes: String(DEFAULT_EFFORT_MINUTES),
     rewardCoins: "",
     rewardLocked: false,
     pinnedToday: false,

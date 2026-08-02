@@ -7,10 +7,11 @@ import { SelectionBar } from "../components/SelectionBar";
 import { SwipeRow } from "../components/SwipeRow";
 import { TaskForm } from "../components/TaskForm";
 import { TaskRow } from "../components/TaskRow";
+import { TaskView } from "../components/TaskView";
 import { Button, Dialog, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { WalletCard } from "../components/WalletCard";
 import { ApiError } from "../lib/api";
-import { usePendingCompletions } from "../lib/completionQueue";
+import { type CompletionRef, usePendingCompletions } from "../lib/completionQueue";
 import { buildHome, HOME_WINDOW_BACK, HOME_WINDOW_FORWARD, type HomeItem } from "../lib/home";
 import {
   useBulkDeleteTasks,
@@ -52,6 +53,14 @@ export function Tasks() {
   const [formOpen, setFormOpen] = useState(false);
   // The form seeds its state once on mount, so each open needs a fresh mount.
   const [editing, setEditing] = useState<{ task: Task; nonce: number } | null>(null);
+  /**
+   * The task being read.
+   *
+   * Tapping a row opens this rather than the edit form: asking "what is this
+   * again?" should not begin by putting the thing at risk. Edit is one tap
+   * further in, and deliberate.
+   */
+  const [viewing, setViewing] = useState<{ item: HomeItem; ref: CompletionRef } | null>(null);
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
   const uncomplete = useUncompleteOccurrence();
@@ -139,7 +148,7 @@ export function Tasks() {
           selecting={selecting}
           selected={selection.has(item.task.id)}
           onSelect={() => selection.toggle(item.task.id)}
-          onEdit={() => setEditing({ task: item.task, nonce: Date.now() })}
+          onEdit={() => setViewing({ item, ref })}
           onToggle={(next) => {
             if (next) {
               queue.complete(ref, { title: item.task.title, coins });
@@ -236,6 +245,42 @@ export function Tasks() {
         {selection.count} task{selection.count === 1 ? "" : "s"} will stop appearing. Coins they
         already earned are kept.
       </Dialog>
+
+      {viewing && (
+        <TaskView
+          task={viewing.item.task}
+          epic={viewing.item.task.epicId ? (epicById.get(viewing.item.task.epicId) ?? null) : null}
+          done={viewing.item.done || queue.isPending(viewing.ref)}
+          // A future occurrence is not completable and the API says so with a
+          // 400; the button stays away rather than promising otherwise.
+          onToggleDone={
+            viewing.item.scheduledOn !== null && viewing.item.scheduledOn > today
+              ? undefined
+              : () => {
+                  const item = viewing.item;
+                  const ref = viewing.ref;
+                  const coins = item.occurrence?.rewardSnapshotCoins ?? item.task.rewardCoins;
+                  if (!(item.done || queue.isPending(ref))) {
+                    queue.complete(ref, { title: item.task.title, coins });
+                  } else if (queue.isPending(ref)) {
+                    queue.cancel(ref);
+                  } else {
+                    void uncomplete.mutateAsync(ref);
+                  }
+                  setViewing(null);
+                }
+          }
+          onEdit={() => {
+            setEditing({ task: viewing.item.task, nonce: Date.now() });
+            setViewing(null);
+          }}
+          onDelete={() => {
+            deleteTask.mutate(viewing.item.task.id);
+            setViewing(null);
+          }}
+          onClose={() => setViewing(null)}
+        />
+      )}
 
       <TaskForm
         key={`create-${formOpen}`}

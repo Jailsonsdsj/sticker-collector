@@ -34,7 +34,9 @@ epicRoutes.post("/", async (c) => {
         id: crypto.randomUUID(),
         userId,
         title: input.title,
+        description: input.description ?? null,
         accent: input.accent,
+        status: input.status,
         coinGoalAlbumId: input.coinGoalAlbumId ?? null,
         createdAt: new Date().toISOString(),
       })
@@ -68,7 +70,10 @@ epicRoutes.patch("/:id", async (c) => {
   }
 
   const patch: Record<string, unknown> = {};
-  for (const field of ["title", "accent", "coinGoalAlbumId"] as const) {
+  // Every updatable field, spelled out. A field missing from this list is
+  // accepted by the schema, returned by the read, and silently never written —
+  // which is exactly what happened to `description`.
+  for (const field of ["title", "description", "accent", "status", "coinGoalAlbumId"] as const) {
     if (field in data && data[field] !== undefined) patch[field] = data[field];
   }
 

@@ -1,4 +1,4 @@
-import type { Epic, Task } from "@sticker-collector/shared";
+import type { Epic, EpicStatus, Task } from "@sticker-collector/shared";
 import { todayIn } from "@sticker-collector/shared";
 import { useMemo, useState } from "react";
 import { Navigate } from "react-router";
@@ -6,7 +6,9 @@ import { DeleteEpicDialog } from "../components/DeleteEpicDialog";
 import { EpicCard } from "../components/EpicCard";
 import { EpicForm } from "../components/EpicForm";
 import { AppHeader } from "../components/layout";
+import { SectionHeading } from "../components/SectionHeading";
 import { TaskForm } from "../components/TaskForm";
+import { TaskView } from "../components/TaskView";
 import { Button, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { ApiError } from "../lib/api";
 import { usePendingCompletions } from "../lib/completionQueue";
@@ -19,6 +21,7 @@ import {
   useUpdateTask,
 } from "../lib/mutations";
 import { useEpics, useTasks } from "../lib/queries";
+import { useCollapsibleSections } from "../lib/sectionState";
 
 /**
  * Epics — grouping, progress, and the second door into the task form.
@@ -27,6 +30,20 @@ import { useEpics, useTasks } from "../lib/queries";
  * independently created tasks" (prd/03-epics.md), so this renders `TaskForm`
  * with `defaultEpicId` rather than a variant of it.
  */
+/**
+ * The three lists, and the order work moves through them.
+ *
+ * "Achievements" is deliberately last and starts folded: it is a record, not a
+ * queue, and an epic finished in March should not push what is running today
+ * off the first screenful — the same reasoning the home screen folds Missed and
+ * the routine backlog.
+ */
+const SECTIONS = [
+  { status: "active" as const, id: "epics-active", title: "Active progress" },
+  { status: "next" as const, id: "epics-next", title: "Next steps" },
+  { status: "achieved" as const, id: "epics-achieved", title: "Achievements" },
+];
+
 export function Epics() {
   const epics = useEpics();
   const tasks = useTasks();
@@ -45,12 +62,29 @@ export function Epics() {
   const today = todayIn(Intl.DateTimeFormat().resolvedOptions().timeZone);
 
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [editing, setEditing] = useState<{ epic: Epic | null; nonce: number } | null>(null);
+  const [editing, setEditing] = useState<{
+    epic: Epic | null;
+    /** Which section the ＋ was tapped in. A new epic lands where it was asked
+     *  for, rather than always in Active progress and needing a move. */
+    status: EpicStatus;
+    nonce: number;
+  } | null>(null);
   const [openTask, setOpenTask] = useState<{ task: Task; nonce: number } | null>(null);
+  /** Read first, edit second — the same order the Tasks screen uses. */
+  const [viewing, setViewing] = useState<Task | null>(null);
   const [deleting, setDeleting] = useState<Epic | null>(null);
   // The nonce remounts TaskForm, whose state is seeded once on mount — without
   // it, opening from a second epic would keep the first one's answers.
   const [addingTo, setAddingTo] = useState<{ epicId: string; nonce: number } | null>(null);
+
+  const folds = useCollapsibleSections();
+
+  /** The three lists, in the order the work moves through them. */
+  const byStatus = useMemo(() => {
+    const groups: Record<EpicStatus, Epic[]> = { active: [], next: [], achieved: [] };
+    for (const epic of epics.data ?? []) groups[epic.status].push(epic);
+    return groups;
+  }, [epics.data]);
 
   const tasksByEpic = useMemo(() => {
     const map = new Map<string, typeof tasks.data & object>();
@@ -75,7 +109,7 @@ export function Epics() {
           <Button
             size="sm"
             tone="violet"
-            onClick={() => setEditing({ epic: null, nonce: Date.now() })}
+            onClick={() => setEditing({ epic: null, status: "active", nonce: Date.now() })}
           >
             ＋ New
           </Button>
@@ -101,35 +135,72 @@ export function Epics() {
           title="No epics yet"
           description="An epic groups related tasks and tracks how much of it is finished."
           action={
-            <Button tone="violet" onClick={() => setEditing({ epic: null, nonce: Date.now() })}>
+            <Button
+              tone="violet"
+              onClick={() => setEditing({ epic: null, status: "active", nonce: Date.now() })}
+            >
               Create an epic
             </Button>
           }
         />
       )}
 
-      <div className="flex flex-col gap-3">
-        {(epics.data ?? []).map((epic) => (
-          <EpicCard
-            key={epic.id}
-            epic={epic}
-            tasks={tasksByEpic.get(epic.id) ?? []}
-            expanded={expanded === epic.id}
-            onToggleExpand={() => setExpanded((id) => (id === epic.id ? null : epic.id))}
-            onAddTask={() => setAddingTo({ epicId: epic.id, nonce: Date.now() })}
-            onCompleteTask={(task) =>
-              // An undated one-off closes TODAY — the only date the API accepts
-              // for one.
-              queue.complete(
-                { taskId: task.id, scheduledOn: today },
-                { title: task.title, coins: task.rewardCoins },
-              )
-            }
-            onOpenTask={(task) => setOpenTask({ task, nonce: Date.now() })}
-            isCompleting={(task) => queue.isPending({ taskId: task.id, scheduledOn: today })}
-            onEdit={() => setEditing({ epic, nonce: Date.now() })}
-            onDelete={() => setDeleting(epic)}
-          />
+      <div className="flex flex-col gap-6">
+        {SECTIONS.map(({ status, title, id }) => (
+          <section key={status}>
+            <SectionHeading
+              tone="epic"
+              count={byStatus[status].length}
+              open={folds.isOpen(id)}
+              onToggle={() => folds.toggle(id)}
+              action={
+                <button
+                  type="button"
+                  // Starting a new epic *here* is the point: the section is the
+                  // decision, so it should not have to be made twice.
+                  aria-label={`New epic in ${title}`}
+                  onClick={() => setEditing({ epic: null, status, nonce: Date.now() })}
+                  className="cursor-pointer font-body text-xl leading-none text-violet outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan"
+                >
+                  ＋
+                </button>
+              }
+            >
+              {title}
+            </SectionHeading>
+
+            {folds.isOpen(id) &&
+              (byStatus[status].length === 0 ? (
+                <p className="font-body text-sm text-ink-faint">Nothing here yet.</p>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {byStatus[status].map((epic) => (
+                    <EpicCard
+                      key={epic.id}
+                      epic={epic}
+                      tasks={tasksByEpic.get(epic.id) ?? []}
+                      expanded={expanded === epic.id}
+                      onToggleExpand={() => setExpanded((id) => (id === epic.id ? null : epic.id))}
+                      onAddTask={() => setAddingTo({ epicId: epic.id, nonce: Date.now() })}
+                      onCompleteTask={(task) =>
+                        // An undated one-off closes TODAY — the only date the
+                        // API accepts for one.
+                        queue.complete(
+                          { taskId: task.id, scheduledOn: today },
+                          { title: task.title, coins: task.rewardCoins },
+                        )
+                      }
+                      onOpenTask={(task) => setViewing(task)}
+                      isCompleting={(task) =>
+                        queue.isPending({ taskId: task.id, scheduledOn: today })
+                      }
+                      onEdit={() => setEditing({ epic, status: epic.status, nonce: Date.now() })}
+                      onDelete={() => setDeleting(epic)}
+                    />
+                  ))}
+                </div>
+              ))}
+          </section>
         ))}
       </div>
 
@@ -137,6 +208,7 @@ export function Epics() {
         key={`epic-${editing?.nonce ?? "closed"}`}
         open={editing !== null}
         epic={editing?.epic ?? null}
+        defaultStatus={editing?.status ?? "active"}
         onClose={() => setEditing(null)}
         onSubmit={(values) =>
           editing?.epic
@@ -153,6 +225,39 @@ export function Epics() {
         onClose={() => setAddingTo(null)}
         onSubmit={(payload) => createTask.mutateAsync(payload)}
       />
+
+      {viewing && (
+        <TaskView
+          task={viewing}
+          epic={epics.data?.find((candidate) => candidate.id === viewing.epicId) ?? null}
+          done={
+            Boolean(viewing.lastCompletedOn) ||
+            queue.isPending({ taskId: viewing.id, scheduledOn: today })
+          }
+          // Only a one-off can be closed from a list with no notion of a day:
+          // the API refuses a routine on a date its schedule does not cover.
+          onToggleDone={
+            viewing.type === "oneoff" && !viewing.lastCompletedOn
+              ? () => {
+                  queue.complete(
+                    { taskId: viewing.id, scheduledOn: today },
+                    { title: viewing.title, coins: viewing.rewardCoins },
+                  );
+                  setViewing(null);
+                }
+              : undefined
+          }
+          onEdit={() => {
+            setOpenTask({ task: viewing, nonce: Date.now() });
+            setViewing(null);
+          }}
+          onDelete={() => {
+            void deleteTask.mutateAsync(viewing.id);
+            setViewing(null);
+          }}
+          onClose={() => setViewing(null)}
+        />
+      )}
 
       <TaskForm
         key={`open-${openTask?.nonce ?? "closed"}`}
