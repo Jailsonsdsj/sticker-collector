@@ -50,6 +50,13 @@
       "when": 1785517744229,
       "tag": "0007_dear_multiple_man",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1785703764233,
+      "tag": "0008_nosy_baron_strucker",
+      "breakpoints": true
     }
   ]
 }

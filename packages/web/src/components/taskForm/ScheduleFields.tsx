@@ -1,9 +1,16 @@
 import { maskHasDay, WEEKDAYS, type Weekday } from "@sticker-collector/shared";
 import type { TaskFormAction, TaskFormState } from "../../lib/taskForm";
-import { Checkbox, Chip, Field, Input, Tabs } from "../ui";
+import { Chip, Field, Input, Tabs } from "../ui";
 
 // One-off first, and it is also `initialState`'s default — the first tab being
 // the selected one is the whole point of the order.
+/** The two lists an undated one-off can land in, named as the home screen
+ *  names them. */
+const SECTIONS = [
+  { value: "today" as const, label: "For today", tone: "lime" as const },
+  { value: "general" as const, label: "General", tone: "cyan" as const },
+];
+
 const TYPES = [
   { value: "oneoff" as const, label: "· One-off", tone: "cyan" as const },
   { value: "routine" as const, label: "↻ Routine", tone: "violet" as const },
@@ -77,17 +84,24 @@ export function ScheduleFields({
         </div>
       )}
 
-      {/* Offered for an UNDATED one-off only, and that is not a UI preference.
+      {/* Which list this lands in, said as the two lists themselves.
+          A checkbox called "Do this today" asked the user to work out where an
+          unticked box put the task; the sections are named on the screen it
+          came from, so name them here too.
+
+          Offered for an UNDATED one-off only, and that is not a UI preference.
           The API validates a fresh completion against the schedule, and an
-          undated one-off is its single exception — anything else pinned to
-          today would be a row in today's list that the server refuses to tick.
-          Giving a date to a pinned task therefore takes the pin away with it. */}
+          undated one-off is its single exception — anything else put in today's
+          list would be a row the server refuses to tick. Giving a date to a
+          task takes the choice away with it. */}
       {state.type === "oneoff" && !state.dueDate && (
-        <Field label="Today">
-          <Checkbox
-            label="Do this today"
-            checked={state.pinnedToday}
-            onChange={(value) => dispatch({ kind: "pinToday", value })}
+        <Field label="Section">
+          <Tabs
+            items={SECTIONS}
+            value={state.pinnedToday ? "today" : "general"}
+            onChange={(value) => dispatch({ kind: "pinToday", value: value === "today" })}
+            tone="lime"
+            label="Section"
           />
         </Field>
       )}

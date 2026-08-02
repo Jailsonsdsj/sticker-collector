@@ -53,6 +53,24 @@ is the pack in the reveal — always, whatever the album chose — so opening a 
 looks the same everywhere. `envelopeSrc()` in `lib/rarity.ts` is the single
 source of the path.
 
+**Settings sections are `SettingsPanel`, not hand-dressed.** A rounded card on
+the panel ground, a `text-xl` display heading, one line of prose, and an
+optional action on the heading's line. Backup, App icon and Error log all use
+it — three components that merely *described* the same shape is three chances to
+drift, which is exactly what happened before it existed.
+
+**One column, centred — on a desktop only.** `APP_WIDTH`
+(`layout/appWidth.ts`) is the class `app-column`, applied to the shell's
+`<main>`, the tab bar's row and a sheet's header/toolbar/body; the width itself
+lives in `app.css` and is capped at 32rem **only** under `(pointer: fine) and
+(hover: hover)`. A phone and an iPad — portrait or landscape — fill their
+screens. The gate is the pointer, never a width breakpoint: a landscape iPad and
+a small laptop are the same number of pixels and want opposite things, and
+iPadOS reports a coarse pointer even with a keyboard attached. The tab bar's
+*chrome* always spans the window, because a strip that stops mid-screen looks
+like a rendering fault; `app-column-framed` draws the side rules, and only where
+there is a cap to rule off.
+
 **The tab bar's icons are artwork, not glyphs.** Five tabs × two states in
 `public/nav/<tab>-{on,off}.png`, both mounted and cross-faded so a tap never
 blinks. The unlit files are their own grey-violet drawings, not a tint of the

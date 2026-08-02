@@ -63,6 +63,21 @@ export const EPIC_ACCENTS = [
 export const epicAccentSchema = z.enum(EPIC_ACCENTS);
 export type EpicAccent = z.infer<typeof epicAccentSchema>;
 
+/**
+ * Which of the three lists an epic sits in.
+ *
+ * Stored, not derived: "next" is a decision about what to pick up, and
+ * "achieved" is a decision that something is finished — neither follows from
+ * the one-off ratio. An epic at 100% may still be running, and an epic at 40%
+ * may be as done as it is ever going to be.
+ *
+ * `active` is the default so every epic that already exists stays exactly where
+ * it was.
+ */
+export const EPIC_STATUSES = ["active", "next", "achieved"] as const;
+export const epicStatusSchema = z.enum(EPIC_STATUSES);
+export type EpicStatus = z.infer<typeof epicStatusSchema>;
+
 /** 7-bit weekday mask, bit 0 = Monday. A routine with no days is not a routine. */
 export const weekdayMaskSchema = z.int().min(1).max(WEEKDAYS_MASK_ALL);
 
@@ -249,6 +264,7 @@ export const createEpicSchema = z.strictObject({
   /** Optional, author-written. Empty means "none", not an empty description. */
   description: z.string().max(2000).nullish(),
   accent: epicAccentSchema.default("epic-1"),
+  status: epicStatusSchema.default("active"),
   /** "Finish this epic to afford the Travel album" — informational only. */
   coinGoalAlbumId: idSchema.nullish(),
 });
@@ -260,6 +276,7 @@ export const updateEpicSchema = z
     title: titleSchema,
     description: z.string().max(2000).nullish(),
     accent: epicAccentSchema,
+    status: epicStatusSchema,
     coinGoalAlbumId: idSchema.nullish(),
   })
   .partial()
@@ -278,6 +295,7 @@ export const epicSchema = z.object({
   title: z.string(),
   description: z.string().nullable(),
   accent: epicAccentSchema,
+  status: epicStatusSchema,
   coinGoalAlbumId: idSchema.nullable(),
   createdAt: instantSchema,
   oneOffTotal: z.int().min(0),

@@ -1,4 +1,5 @@
 import {
+  DEFAULT_EFFORT_MINUTES,
   maskFromDays,
   type Task,
   WEEKDAYS,
@@ -37,12 +38,15 @@ const valid = (extra: TaskFormAction[] = []) =>
   ]);
 
 describe("initial state — the done-when", () => {
-  it("is blank when opened from the main button", () => {
+  it("is blank when opened from the main button, except for the default effort", () => {
     const s = initialState();
     expect(s.title).toBe("");
     expect(s.description).toBe("");
     expect(s.url).toBe("");
-    expect(s.effortMinutes).toBe("");
+    // The one field that arrives filled: the same 30 the server gives a
+    // quick-add, so the full form is not a worse capture than the one-line box
+    // beside it.
+    expect(s.effortMinutes).toBe(String(DEFAULT_EFFORT_MINUTES));
     expect(s.rewardCoins).toBe("");
     expect(s.weekdays).toBe(0);
     expect(s.dueDate).toBe("");
@@ -53,6 +57,23 @@ describe("initial state — the done-when", () => {
     const s = initialState({ epicId: "e1" });
     expect(s.epicId).toBe("e1");
     expect({ ...s, epicId: null }).toEqual(initialState());
+  });
+});
+
+describe("the default effort", () => {
+  it("is the server's own default, not a number typed here twice", () => {
+    expect(initialState().effortMinutes).toBe("30");
+    expect(DEFAULT_EFFORT_MINUTES).toBe(30);
+  });
+
+  it("carries into the payload, and lets the server inherit the reward", () => {
+    const payload = toPayload({ ...initialState(), title: "Water the plants" });
+
+    // `rewardCoins` is deliberately absent, not zero: `createTaskSchema` says
+    // "omit to inherit the effort", so a form nobody touched is 30 minutes and
+    // 30 coins without this file restating the rule.
+    expect(payload).toMatchObject({ effortMinutes: 30 });
+    expect(payload?.rewardCoins).toBeUndefined();
   });
 });
 

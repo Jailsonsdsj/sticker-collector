@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { APP_WIDTH } from "../layout/appWidth";
 import { cx } from "./cx";
 import { useModal } from "./useModal";
 
@@ -52,21 +53,31 @@ export function Sheet({
           The inset has to be reapplied here, at the only element that can. */}
       <header
         className={cx(
-          "flex shrink-0 items-center justify-between gap-3 border-b border-border px-5 pb-3",
+          "shrink-0 border-b border-border px-5 pb-3",
           "pt-[calc(env(safe-area-inset-top)+var(--space-5))]",
         )}
       >
-        <div className="flex min-w-16 justify-start">{leading}</div>
-        {title && (
-          <span className="font-display text-xl tracking-display uppercase italic">{title}</span>
-        )}
-        <div className="flex min-w-16 justify-end">{trailing}</div>
+        {/* Constrained to the app's own column, like everything else: a Cancel
+            and a Save at opposite ends of a monitor are one gesture apart on a
+            phone and half a screen apart here. */}
+        <div className={cx(APP_WIDTH, "flex items-center justify-between gap-3")}>
+          <div className="flex min-w-16 justify-start">{leading}</div>
+          {title && (
+            <span className="font-display text-xl tracking-display uppercase italic">{title}</span>
+          )}
+          <div className="flex min-w-16 justify-end">{trailing}</div>
+        </div>
       </header>
-      {toolbar && <div className="shrink-0 border-b border-border px-5 py-3">{toolbar}</div>}
+      {toolbar && (
+        <div className="shrink-0 border-b border-border px-5 py-3">
+          <div className={APP_WIDTH}>{toolbar}</div>
+        </div>
+      )}
       {/* Same problem at the other end: the home indicator overlaps the last
           field, and a sheet is exactly where a Save button tends to sit. */}
       <div
         className={cx(
+          APP_WIDTH,
           "flex min-h-0 flex-1 flex-col gap-4 overflow-auto px-5 pt-4",
           // --space-7 does not exist: the token scale skips 7. `pb-7` was
           // Tailwind arithmetic on --spacing (4px x 7 = 28px), so the calc has

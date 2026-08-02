@@ -16,6 +16,7 @@ const epic: Epic = {
   title: "Sticker App",
   description: null,
   accent: "epic-1",
+  status: "active" as const,
   coinGoalAlbumId: null,
   createdAt: "2026-07-01T00:00:00Z",
   oneOffTotal: 3,

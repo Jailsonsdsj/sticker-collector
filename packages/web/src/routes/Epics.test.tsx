@@ -20,6 +20,7 @@ const EPICS: Epic[] = [
     title: "Sticker App",
     description: null,
     accent: "epic-1",
+    status: "active" as const,
     coinGoalAlbumId: null,
     createdAt: "2026-07-01T00:00:00Z",
     oneOffTotal: 2,
@@ -30,6 +31,7 @@ const EPICS: Epic[] = [
     title: "Health",
     description: null,
     accent: "epic-2",
+    status: "active" as const,
     coinGoalAlbumId: null,
     createdAt: "2026-07-01T00:00:00Z",
     oneOffTotal: 0,
@@ -114,6 +116,14 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 const renderScreen = () => render(<Epics />, { wrapper });
+
+/** Renders and waits for the first section to arrive. */
+async function open() {
+  const user = userEvent.setup();
+  renderScreen();
+  await waitFor(() => expect(epicHeader("Sticker App")).toBeInTheDocument());
+  return user;
+}
 
 /**
  * jsdom does not apply the UA stylesheet that hides a closed <dialog>, so every
@@ -227,6 +237,7 @@ describe("epic CRUD", () => {
         title: "Travel",
         description: null,
         accent: "epic-3",
+        status: "active" as const,
       });
     });
   });
@@ -305,7 +316,7 @@ describe("finishing a task from inside the epic", () => {
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/complete"))).toBe(false);
   });
 
-  it("opens the task's own form when its title is clicked", async () => {
+  it("reads the task before offering to change it", async () => {
     const user = userEvent.setup();
     renderScreen();
     await waitFor(() => expect(epicHeader("Sticker App")).toBeInTheDocument());
@@ -313,7 +324,14 @@ describe("finishing a task from inside the epic", () => {
 
     await user.click(screen.getByRole("button", { name: "Ship it" }));
 
-    // Editing, not creating: the sheet is seeded with the task.
+    // The view, not the form: asking "what is this again?" should not begin by
+    // putting the task at risk.
+    expect(sheet().getByRole("heading", { name: "Ship it" })).toBeInTheDocument();
+    expect(sheet().queryByDisplayValue("Ship it")).toBeNull();
+
+    await user.click(sheet().getByRole("button", { name: "Edit" }));
+
+    // ...and the form is one deliberate tap further in, seeded with the task.
     expect(sheet().getByDisplayValue("Ship it")).toBeInTheDocument();
   });
 });
@@ -329,5 +347,81 @@ describe("the epic description", () => {
 
     renderScreen();
     expect(await screen.findByText("Everything for the sticker app.")).toBeInTheDocument();
+  });
+});
+
+describe("the three sections", () => {
+  const section = (name: string) =>
+    screen.getByRole("button", { name: new RegExp(`^▶?\\s*${name}`, "i") });
+
+  it("keeps every existing epic in Active progress", async () => {
+    // The migration defaults `status` to active, so nothing moves out from
+    // under anyone on the day this ships.
+    renderScreen();
+    // The headings render before the data does, so wait for an epic, not for a
+    // heading — otherwise this asserts on an empty screen.
+    await waitFor(() => expect(epicHeader("Sticker App")).toBeInTheDocument());
+
+    expect(screen.getByText("Active progress")).toBeInTheDocument();
+    expect(screen.getByText("Next steps")).toBeInTheDocument();
+    expect(screen.getByText("Achievements")).toBeInTheDocument();
+  });
+
+  it("puts an epic under the heading its status names", async () => {
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.startsWith("/api/epics"))
+        return json([
+          { ...EPICS[0], title: "Running", status: "active" },
+          { ...EPICS[1], title: "Later", status: "next" },
+          { ...EPICS[0], id: "e3", title: "Finished", status: "achieved" },
+        ]);
+      if (url.startsWith("/api/tasks")) return json([]);
+      return json({});
+    });
+
+    const user = userEvent.setup();
+    renderScreen();
+    // `epicHeader` picks the card's own header button — the title also appears
+    // in the task form's epic chips.
+    await waitFor(() => expect(epicHeader("Running")).toBeInTheDocument());
+
+    expect(epicHeader("Later")).toBeInTheDocument();
+    // Achievements starts folded: a record, not a queue. (The title still
+    // appears once, in the task form's epic chips — the card is what is gone.)
+    expect(screen.queryByRole("button", { name: /^▶?\s*Finished/ })).toBeNull();
+
+    await user.click(section("Achievements"));
+    expect(epicHeader("Finished")).toBeInTheDocument();
+  });
+
+  it("creates a new epic in the section its ＋ was tapped in", async () => {
+    const user = await open();
+
+    await user.click(screen.getByRole("button", { name: "New epic in Next steps" }));
+    await user.type(sheet().getByLabelText(/title/i), "Learn Rust");
+    await user.click(sheet().getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      const post = fetchMock.mock.calls.find(
+        ([url, init]) => url === "/api/epics" && init?.method === "POST",
+      );
+      // The section is the decision; it should not have to be made twice.
+      expect(JSON.parse(post?.[1].body as string)).toMatchObject({ status: "next" });
+    });
+  });
+
+  it("defaults the header button to Active progress", async () => {
+    const user = await open();
+
+    await user.click(screen.getByRole("button", { name: /New$/ }));
+    await user.type(sheet().getByLabelText(/title/i), "Something");
+    await user.click(sheet().getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      const post = fetchMock.mock.calls.find(
+        ([url, init]) => url === "/api/epics" && init?.method === "POST",
+      );
+      expect(JSON.parse(post?.[1].body as string)).toMatchObject({ status: "active" });
+    });
   });
 });

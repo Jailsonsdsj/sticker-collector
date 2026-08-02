@@ -206,3 +206,50 @@ describe("leaving the mode", () => {
     expect(screen.getAllByRole("checkbox", { name: "Stretch" }).length).toBeGreaterThan(0);
   });
 });
+
+describe("tapping a task", () => {
+  const openScreen = async () => {
+    const user = userEvent.setup();
+    render(<Tasks />, { wrapper });
+    await waitFor(() => expect(screen.getAllByText("Buy milk").length).toBeGreaterThan(0));
+    return user;
+  };
+
+  it("reads it rather than opening the editor", async () => {
+    const user = await openScreen();
+
+    await user.click(screen.getAllByRole("button", { name: "Buy milk" })[0] as HTMLElement);
+
+    // Asking "what is this again?" should not begin by putting the task at
+    // risk: the view first, the form only if asked for.
+    expect(dialog().getByRole("heading", { name: "Buy milk" })).toBeInTheDocument();
+    expect(dialog().queryByDisplayValue("Buy milk")).toBeNull();
+  });
+
+  it("hands over to the editor on Edit", async () => {
+    const user = await openScreen();
+    await user.click(screen.getAllByRole("button", { name: "Buy milk" })[0] as HTMLElement);
+
+    await user.click(dialog().getByRole("button", { name: "Edit" }));
+
+    // One sheet at a time: the view closes as the form opens, or Escape lands
+    // on whichever of the two the browser happens to prefer.
+    expect(document.querySelectorAll("dialog[open]")).toHaveLength(1);
+    expect(dialog().getByDisplayValue("Buy milk")).toBeInTheDocument();
+  });
+
+  it("closes the task from the view", async () => {
+    const user = await openScreen();
+    await user.click(screen.getAllByRole("button", { name: "Buy milk" })[0] as HTMLElement);
+
+    await user.click(dialog().getByRole("button", { name: "Done" }));
+
+    // Back to the list, with the row ticked — the tick goes through the same
+    // undo queue as the row's own checkbox.
+    expect(document.querySelector("dialog[open]")).toBeNull();
+    await waitFor(() => {
+      const row = screen.getAllByRole("checkbox", { name: /buy milk/i })[0] as HTMLElement;
+      expect(row).toBeChecked();
+    });
+  });
+});

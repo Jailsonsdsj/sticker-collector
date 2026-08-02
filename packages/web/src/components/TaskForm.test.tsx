@@ -1,5 +1,5 @@
 import type { Epic, Task } from "@sticker-collector/shared";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { TaskForm } from "./TaskForm";
@@ -17,6 +17,7 @@ const EPICS: Epic[] = [
     title: "Sticker App",
     description: null,
     accent: "epic-1",
+    status: "active" as const,
     coinGoalAlbumId: null,
     createdAt: "2026-07-01T00:00:00Z",
     oneOffTotal: 0,
@@ -27,6 +28,7 @@ const EPICS: Epic[] = [
     title: "Health",
     description: null,
     accent: "epic-2",
+    status: "active" as const,
     coinGoalAlbumId: null,
     createdAt: "2026-07-01T00:00:00Z",
     oneOffTotal: 0,
@@ -75,14 +77,15 @@ describe("the done-when — epic pre-fill", () => {
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ epicId: "e2" }));
   });
 
-  it("arrives entirely blank when opened from the main button", async () => {
+  it("arrives blank but for the default effort, when opened from the main button", async () => {
     const u = userEvent.setup();
     const { onSubmit, save } = setup();
 
     expect(screen.getByLabelText(/title/i)).toHaveValue("");
     expect(screen.getByLabelText(/description/i)).toHaveValue("");
     expect(screen.getByLabelText(/url/i)).toHaveValue("");
-    expect(screen.getByLabelText(/^effort/i)).toHaveValue("");
+    // Effort arrives at the default; everything else is blank.
+    expect(screen.getByLabelText(/^effort/i)).toHaveValue("30");
     expect(screen.getByLabelText(/reward/i)).toHaveValue("");
     expect(screen.getByRole("button", { name: "None" })).toHaveAttribute("aria-pressed", "true");
     // A blank form is a one-off, so there is no weekday picker to be blank.
@@ -99,6 +102,8 @@ describe("effort and reward", () => {
   it("mirrors typed effort into reward", async () => {
     const u = userEvent.setup();
     setup();
+    // Cleared first: the field arrives at the default now, and typing appends.
+    await u.clear(screen.getByLabelText(/^effort/i));
     await u.type(screen.getByLabelText(/^effort/i), "45");
     expect(screen.getByLabelText(/reward/i)).toHaveValue("45");
   });
@@ -106,6 +111,7 @@ describe("effort and reward", () => {
   it("stops mirroring once reward is edited", async () => {
     const u = userEvent.setup();
     setup();
+    await u.clear(screen.getByLabelText(/^effort/i));
     await u.type(screen.getByLabelText(/^effort/i), "45");
     await u.clear(screen.getByLabelText(/reward/i));
     await u.type(screen.getByLabelText(/reward/i), "100");
@@ -142,8 +148,11 @@ describe("the type switch changes which schedule is asked for", () => {
   it("opens on One-off, and shows it first", async () => {
     setup();
 
-    const tabs = screen.getAllByRole("tab").map((tab) => tab.textContent);
-    expect(tabs).toEqual(["· One-off", "↻ Routine"]);
+    // Scoped to the type switch: the section chooser below is a tablist too.
+    const types = within(screen.getByRole("tablist", { name: "Task type" }))
+      .getAllByRole("tab")
+      .map((tab) => tab.textContent);
+    expect(types).toEqual(["· One-off", "↻ Routine"]);
     expect(screen.getByRole("tab", { name: "· One-off" })).toHaveAttribute("aria-selected", "true");
   });
 
@@ -180,12 +189,17 @@ describe("saving", () => {
     expect(save()).toBeDisabled();
     expect(screen.getByRole("alert")).toHaveTextContent(/title/i);
 
+    // Effort no longer has to be typed: it arrives at the default, so a title
+    // is the only thing standing between a blank form and a saved task.
     await u.type(screen.getByLabelText(/title/i), "Stretch");
+    expect(save()).toBeEnabled();
+
+    // Emptying it puts the form back in the wrong, and says so.
+    await u.clear(screen.getByLabelText(/^effort/i));
     expect(screen.getByRole("alert")).toHaveTextContent(/effort/i);
+    expect(save()).toBeDisabled();
 
     await u.type(screen.getByLabelText(/^effort/i), "15");
-    // A one-off is complete here: an undated one-off is a legitimate task, and
-    // one-off is where a blank form now starts.
     expect(save()).toBeEnabled();
 
     // A routine asks for one more thing, and says so.
@@ -396,5 +410,65 @@ describe("editing — delete", () => {
   it("offers no delete while creating", () => {
     render(<TaskForm open onClose={vi.fn()} onSubmit={vi.fn()} epics={EPICS} />);
     expect(screen.queryByRole("button", { name: /delete task/i })).not.toBeInTheDocument();
+  });
+});
+
+describe("which section a new one-off lands in", () => {
+  const sections = () => screen.getByRole("tablist", { name: "Section" });
+
+  it("offers the two lists by name, and starts on General", async () => {
+    setup();
+
+    // It used to be a checkbox called "Do this today", which asked the user to
+    // work out where an unticked box put the task.
+    expect(within(sections()).getByRole("tab", { name: "General" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(within(sections()).getByRole("tab", { name: "For today" })).toBeInTheDocument();
+  });
+
+  it("pins to today when For today is chosen", async () => {
+    const u = userEvent.setup();
+    const { onSubmit, save } = setup();
+
+    await u.type(screen.getByLabelText(/title/i), "Water the plants");
+    await u.click(within(sections()).getByRole("tab", { name: "For today" }));
+    await u.click(save());
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({ pinnedOn: expect.any(String) }),
+    );
+  });
+
+  it("sends no pin for General", async () => {
+    const u = userEvent.setup();
+    const { onSubmit, save } = setup();
+
+    await u.type(screen.getByLabelText(/title/i), "Water the plants");
+    await u.click(save());
+
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ pinnedOn: null }));
+  });
+
+  it("goes away once the one-off has a date", async () => {
+    const u = userEvent.setup();
+    setup();
+
+    await u.type(screen.getByLabelText(/due date/i), "2026-08-09");
+
+    // Not a UI preference: the API validates a fresh completion against the
+    // schedule, and an undated one-off is its single exception. A dated task in
+    // today's list is a row the server refuses to tick.
+    expect(screen.queryByRole("tablist", { name: "Section" })).not.toBeInTheDocument();
+  });
+
+  it("is not offered for a routine, which follows its own days", async () => {
+    const u = userEvent.setup();
+    setup();
+
+    await u.click(screen.getByRole("tab", { name: "↻ Routine" }));
+
+    expect(screen.queryByRole("tablist", { name: "Section" })).not.toBeInTheDocument();
   });
 });

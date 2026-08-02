@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import { cx } from "./ui/cx";
 
-export type SectionTone = "missed" | "general" | "today" | "backlog" | "completed";
+export type SectionTone = "missed" | "general" | "today" | "backlog" | "completed" | "epic";
 
 /** Each section wears its own accent, per the design: Missed magenta, Today
  *  cyan, Backlog muted — so the eye finds the urgent one first. */
@@ -14,6 +14,9 @@ const TONE: Record<SectionTone, string> = {
   backlog: "--color-backlog",
   // Done work reads as earned, which is the same green the wallet pays in.
   completed: "--color-earn",
+  // Epics have always been violet; their sections keep that identity rather
+  // than borrowing the home screen's day-shaped accents.
+  epic: "--color-violet",
 };
 
 export function SectionHeading({
@@ -23,6 +26,7 @@ export function SectionHeading({
   className,
   open,
   onToggle,
+  action,
 }: {
   tone: SectionTone;
   children: ReactNode;
@@ -31,6 +35,8 @@ export function SectionHeading({
   /** Omit both to render a plain, non-interactive heading. */
   open?: boolean;
   onToggle?: () => void;
+  /** Trailing control — "add one of these, here". */
+  action?: ReactNode;
 }) {
   const collapsible = onToggle !== undefined;
 
@@ -73,6 +79,7 @@ export function SectionHeading({
       {count !== undefined && (
         <span className="font-numeric text-xs font-bold [color:var(--ui-accent)]">{count}</span>
       )}
+      {action}
     </div>
   );
 }

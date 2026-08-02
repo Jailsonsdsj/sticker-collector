@@ -1,4 +1,4 @@
-import type { Epic, EpicAccent } from "@sticker-collector/shared";
+import type { Epic, EpicAccent, EpicStatus } from "@sticker-collector/shared";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import type { Db } from "../db/client";
 import { album, epic, occurrence, task } from "../db/schema";
@@ -21,6 +21,7 @@ const PROGRESS_COLUMNS = {
   title: epic.title,
   description: epic.description,
   accent: epic.accent,
+  status: epic.status,
   coinGoalAlbumId: epic.coinGoalAlbumId,
   createdAt: epic.createdAt,
   oneOffTotal: sql<number>`COUNT(DISTINCT ${task.id})`,
@@ -32,6 +33,7 @@ function toEpic(row: {
   title: string;
   description: string | null;
   accent: string;
+  status: string;
   coinGoalAlbumId: string | null;
   createdAt: string;
   oneOffTotal: number;
@@ -42,6 +44,7 @@ function toEpic(row: {
     title: row.title,
     description: row.description,
     accent: row.accent as EpicAccent,
+    status: row.status as EpicStatus,
     coinGoalAlbumId: row.coinGoalAlbumId,
     createdAt: row.createdAt,
     oneOffTotal: Number(row.oneOffTotal),
