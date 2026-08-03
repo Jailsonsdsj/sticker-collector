@@ -195,6 +195,10 @@ export function Epics() {
                       isCompleting={(task) =>
                         queue.isPending({ taskId: task.id, scheduledOn: localToday })
                       }
+                      // One fold id per epic, so each card remembers its own
+                      // Done divider rather than all of them moving together.
+                      doneOpen={folds.isOpen(`epic-done-${epic.id}`)}
+                      onToggleDone={() => folds.toggle(`epic-done-${epic.id}`)}
                       onEdit={() => setEditing({ epic, status: epic.status, nonce: Date.now() })}
                       onDelete={() => setDeleting(epic)}
                     />

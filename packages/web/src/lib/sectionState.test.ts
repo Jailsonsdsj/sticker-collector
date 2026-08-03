@@ -117,6 +117,19 @@ describe("the defaults table", () => {
     expect(SECTION_DEFAULTS["epics-next"]).toBe(true);
   });
 
+  it("folds a per-epic Done divider, whose id cannot be listed", () => {
+    // One id per epic, so the table cannot name them. Finished subtasks are a
+    // record of an epic, not a list of what is left in it.
+    expect(sectionIsOpen({}, "epic-done-abc")).toBe(false);
+    expect(sectionIsOpen({ "epic-done-abc": true }, "epic-done-abc")).toBe(true);
+    // A different epic keeps its own answer.
+    expect(sectionIsOpen({ "epic-done-abc": true }, "epic-done-xyz")).toBe(false);
+  });
+
+  it("still opens anything it has never heard of", () => {
+    expect(sectionIsOpen({}, "something-new")).toBe(true);
+  });
+
   it("is what sectionIsOpen falls back to", () => {
     expect(sectionIsOpen({}, "missed")).toBe(false);
     expect(sectionIsOpen({ missed: true }, "missed")).toBe(true);

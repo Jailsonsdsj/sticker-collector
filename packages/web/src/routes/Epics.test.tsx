@@ -292,6 +292,12 @@ describe("finishing a task from inside the epic", () => {
 
     expect(screen.getByRole("checkbox", { name: /complete ship it$/i })).toBeInTheDocument();
 
+    // The finished one lives behind the Done divider, which starts folded.
+    expect(screen.queryByRole("checkbox", { name: /complete shipped it/i })).toBeNull();
+    await user.click(screen.getByRole("button", { name: /^▶?\s*Done/ }));
+
+    // It keeps its box — ticked and inert. A row that loses its box on
+    // completion reads as a row that vanished.
     const done = screen.getByRole("checkbox", { name: /complete shipped it/i });
     expect(done).toBeChecked();
     expect(done).toBeDisabled();

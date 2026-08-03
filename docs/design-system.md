@@ -62,7 +62,7 @@ drift, which is exactly what happened before it existed.
 **One column, centred — on a desktop only.** `APP_WIDTH`
 (`layout/appWidth.ts`) is the class `app-column`, applied to the shell's
 `<main>`, the tab bar's row and a sheet's header/toolbar/body; the width itself
-lives in `app.css` and is capped at 32rem **only** under `(pointer: fine) and
+lives in `app.css` and is capped at 49.92rem **only** under `(pointer: fine) and
 (hover: hover)`. A phone and an iPad — portrait or landscape — fill their
 screens. The gate is the pointer, never a width breakpoint: a landscape iPad and
 a small laptop are the same number of pixels and want opposite things, and
