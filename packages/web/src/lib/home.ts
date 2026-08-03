@@ -1,4 +1,4 @@
-import type { LocalDate, Occurrence, Task } from "@sticker-collector/shared";
+import type { LocalDate, Occurrence, Priority, Task } from "@sticker-collector/shared";
 import { localDateIn } from "@sticker-collector/shared";
 
 /**
@@ -145,17 +145,47 @@ export function buildHome(
     // Most recent first: yesterday's slip is the one you are most likely to
     // still care about.
     missed: missed.sort(byDateDesc),
-    general: general.sort(byTitle),
-    forToday: forToday.sort(byTitle),
+    general: general.sort(byPriority),
+    forToday: forToday.sort(byPriority),
     routineBacklog: routineBacklog.sort(byDateAsc),
+    // Done work is a record, not a queue: nothing here needs doing, so the
+    // alphabet is a kinder order than shouting about a finished "high".
     completedToday: completedToday.sort(byTitle),
   };
 }
 
 const byTitle = (a: HomeItem, b: HomeItem) => a.task.title.localeCompare(b.task.title);
+
+/**
+ * High first, then medium, then low — the order a list is read in.
+ *
+ * Priority already tints the row; sorting by it is what makes the tint worth
+ * having, because the urgent work is at the top of the section instead of
+ * wherever the alphabet put it. Title breaks the tie so the order is stable:
+ * two mediums must not swap places between renders.
+ */
+const PRIORITY_RANK: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
+
+const byPriority = (a: HomeItem, b: HomeItem) =>
+  PRIORITY_RANK[a.task.priority] - PRIORITY_RANK[b.task.priority] || byTitle(a, b);
+
+/**
+ * Dated sections lead with the date and fall back to priority.
+ *
+ * A missed Tuesday and a missed Thursday are not the same item at different
+ * urgencies — they are different days, and the day is the thing being read.
+ * Within one day, priority orders them.
+ */
 const byDateAsc = (a: HomeItem, b: HomeItem) =>
-  (a.scheduledOn ?? "").localeCompare(b.scheduledOn ?? "") || byTitle(a, b);
-const byDateDesc = (a: HomeItem, b: HomeItem) => -byDateAsc(a, b);
+  (a.scheduledOn ?? "").localeCompare(b.scheduledOn ?? "") || byPriority(a, b);
+
+/**
+ * Only the DATE reverses. Negating the whole comparison would reverse the
+ * tiebreak with it, and put the *low*-priority item first within a day — a
+ * section that reads high-first everywhere except here.
+ */
+const byDateDesc = (a: HomeItem, b: HomeItem) =>
+  -(a.scheduledOn ?? "").localeCompare(b.scheduledOn ?? "") || byPriority(a, b);
 
 /** How wide a window the home screen needs: seven days back covers everything
  *  still missed (day 8 archives), and a fortnight ahead fills the Backlog. */

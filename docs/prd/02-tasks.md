@@ -89,6 +89,14 @@ choice is remembered per device, and only for sections the user has actually
 toggled, so a default can be changed later and still reach anyone who never
 expressed a preference.
 
+**Within a section, the order is priority first — high, medium, low — with the
+title breaking ties** so the list is stable between renders. Priority already
+tints the row; sorting by it is what makes the tint worth having. The two dated
+sections keep the **day** as the primary key and order by priority *within* a
+day: a missed Tuesday and a missed Thursday are different days, not one item at
+two urgencies. *Completed today* stays alphabetical — it is a record, and
+nothing in it needs doing.
+
 **An item appears in exactly one section**, decided by precedence: completed
 today wins over everything, then for-today, then missed, then general, then the
 backlog. Without that rule a one-off pinned to today qualifies for two sections
