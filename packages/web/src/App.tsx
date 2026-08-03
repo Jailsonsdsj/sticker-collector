@@ -5,6 +5,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ApiError } from "./lib/api";
 import { CompletionQueueProvider } from "./lib/completionQueue";
 import { useCompleteOccurrence } from "./lib/mutations";
+import { useMe } from "./lib/timezone";
 import { router } from "./routes/router";
 
 const queryClient = new QueryClient({
@@ -23,6 +24,18 @@ const queryClient = new QueryClient({
  * the window must not drop a pending completion, and unmounting the router
  * would take the timers with it.
  */
+/**
+ * Adopts the profile's timezone before anything asks what day it is.
+ *
+ * Mounted above the router so one fetch serves every screen. Until it answers,
+ * the device's zone stands in — which is what the whole app used to do, and is
+ * still the right fallback for a first paint with no network.
+ */
+function Timezone({ children }: { children: ReactNode }) {
+  useMe();
+  return <>{children}</>;
+}
+
 function CompletionQueue({ children }: { children: ReactNode }) {
   const complete = useCompleteOccurrence();
   return (
@@ -47,9 +60,11 @@ export function App() {
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <CompletionQueue>
-          <RouterProvider router={router} />
-        </CompletionQueue>
+        <Timezone>
+          <CompletionQueue>
+            <RouterProvider router={router} />
+          </CompletionQueue>
+        </Timezone>
       </QueryClientProvider>
     </ErrorBoundary>
   );

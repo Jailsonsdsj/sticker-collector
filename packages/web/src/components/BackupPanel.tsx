@@ -2,6 +2,7 @@ import { todayIn } from "@sticker-collector/shared";
 import { useRef, useState } from "react";
 import { exportBackup, restoreBackup } from "../lib/backupClient";
 import { lastExportAt, recordExport } from "../lib/backupState";
+import { today } from "../lib/timezone";
 import { SettingsPanel } from "./SettingsPanel";
 import { Button, Input } from "./ui";
 
@@ -46,7 +47,7 @@ export function BackupPanel({
     setMessage(null);
     try {
       const filename = await onExport({
-        today: todayIn(Intl.DateTimeFormat().resolvedOptions().timeZone),
+        today: today(),
         onProgress: (done, total) => setProgress(`${done} of ${total} images`),
       });
       // Recorded only on success: a failed export is not a backup, and telling

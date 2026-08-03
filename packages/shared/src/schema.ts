@@ -303,6 +303,37 @@ export const epicSchema = z.object({
 });
 export type Epic = z.infer<typeof epicSchema>;
 
+/**
+ * The signed-in user's own settings.
+ *
+ * `timezone` is the one that matters everywhere: the local day is resolved from
+ * it on the server, so the client has to resolve it the same way or the two
+ * disagree about what "today" is — which is a 400 on every completion for the
+ * hours they disagree for.
+ */
+export const meSchema = z.object({
+  userId: idSchema,
+  timezone: z.string().min(1),
+});
+export type Me = z.infer<typeof meSchema>;
+
+/** IANA name, validated by asking the runtime rather than by pattern. */
+export const updateMeSchema = z.strictObject({
+  timezone: z.string().min(1).max(64),
+});
+export type UpdateMe = z.infer<typeof updateMeSchema>;
+
+/** Does this runtime know the zone? A typo here silently moves every day
+ *  boundary, so it is worth refusing at the door. */
+export function isKnownTimeZone(zone: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: zone });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // ── Album ────────────────────────────────────────────────────────────────────
 
 export const tierSchema = z.enum(TIERS);

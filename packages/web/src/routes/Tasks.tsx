@@ -25,6 +25,7 @@ import {
 import { useEpics, useOccurrences, useTasks, useWallet } from "../lib/queries";
 import { useCollapsibleSections } from "../lib/sectionState";
 import { useSelection } from "../lib/selection";
+import { appTimeZone } from "../lib/timezone";
 
 /**
  * Home — Missed, Today, Backlog, in that order (prd/02-tasks.md §Home).
@@ -39,7 +40,7 @@ export function Tasks() {
   // the API resolves the same thing from `user.timezone` for its own answers.
   // Resolved once and reused: `buildHome` needs the zone as well as the date,
   // because "completed today" is a UTC instant read in the user's own day.
-  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const timeZone = appTimeZone();
   const today = todayIn(timeZone);
   const from = addDays(today, -HOME_WINDOW_BACK);
   const to = addDays(today, HOME_WINDOW_FORWARD);
@@ -111,7 +112,17 @@ export function Tasks() {
 
     // An undated one-off is scheduled on no day at all, so ticking it closes
     // TODAY — which is the only date the API accepts for one (T-06).
-    const ref = { taskId: item.task.id, scheduledOn: item.scheduledOn ?? today };
+    //
+    // `undated ? today` rather than `item.scheduledOn ?? today`: unticking
+    // leaves the occurrence row behind as `pending`, so an undated one-off that
+    // was ticked and untangled once carries an old date around forever. Sending
+    // it back is how you get "an undated task can only be completed today" on a
+    // task that looks perfectly ordinary.
+    const undated = item.task.type === "oneoff" && !item.task.dueAt;
+    const ref = {
+      taskId: item.task.id,
+      scheduledOn: undated ? today : (item.scheduledOn ?? today),
+    };
 
     // A future occurrence is not completable; T-05 returns 400. Rendering it
     // inert is better than firing a request that is guaranteed to fail.

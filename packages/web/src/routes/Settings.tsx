@@ -2,6 +2,7 @@ import { AppIconPicker } from "../components/AppIconPicker";
 import { BackupPanel } from "../components/BackupPanel";
 import { ErrorLogPanel } from "../components/ErrorLogPanel";
 import { AppHeader } from "../components/layout";
+import { TimeZonePanel } from "../components/TimeZonePanel";
 
 /**
  * Settings.
@@ -17,6 +18,7 @@ export function Settings() {
   return (
     <>
       <AppHeader title="Settings" />
+      <TimeZonePanel />
       <AppIconPicker />
       <BackupPanel />
       <ErrorLogPanel />

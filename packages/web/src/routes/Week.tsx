@@ -10,6 +10,7 @@ import { ApiError } from "../lib/api";
 import { usePendingCompletions } from "../lib/completionQueue";
 import { useUncompleteOccurrence, useUpdateTask } from "../lib/mutations";
 import { useEpics, useOccurrences, useTasks } from "../lib/queries";
+import { today } from "../lib/timezone";
 import { weekDates } from "../lib/week";
 
 /**
@@ -37,8 +38,8 @@ const VIEWS = [
 ];
 
 export function Week() {
-  const today = todayIn(Intl.DateTimeFormat().resolvedOptions().timeZone);
-  const dates = useMemo(() => weekDates(today), [today]);
+  const localToday = today();
+  const dates = useMemo(() => weekDates(localToday), [localToday]);
   const [view, setView] = useState<"schedule" | "complete">("complete");
 
   const tasks = useTasks();
@@ -86,7 +87,7 @@ export function Week() {
           <WeeklyGrid
             routines={routines}
             accentOf={accentOf}
-            today={today}
+            today={localToday}
             onChangeMask={(id, weekdays) => update.mutate({ id, patch: { weekdays } })}
           />
           <p className="mt-5 text-center font-body text-sm text-ink-dim">
@@ -99,7 +100,7 @@ export function Week() {
           accentOf={accentOf}
           occurrences={occurrences.data ?? []}
           dates={dates}
-          today={today}
+          today={localToday}
           isPending={(taskId, scheduledOn) => queue.isPending({ taskId, scheduledOn })}
           onToggle={(taskId, scheduledOn, next) => {
             const task = routines.find((t) => t.id === taskId);

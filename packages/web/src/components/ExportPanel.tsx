@@ -3,6 +3,7 @@ import { todayIn } from "@sticker-collector/shared";
 import { useState } from "react";
 import { exportAlbum } from "../lib/exportAlbum";
 import type { Paper } from "../lib/pdfLayout";
+import { today } from "../lib/timezone";
 import { Button, Chip } from "./ui";
 
 export interface ExportPanelProps {
@@ -39,7 +40,7 @@ export function ExportPanel({ album, save }: ExportPanelProps) {
       const filename = await exportAlbum({
         album,
         paper,
-        today: todayIn(Intl.DateTimeFormat().resolvedOptions().timeZone),
+        today: today(),
         onProgress: (done, total) => setProgress({ done, total }),
         save,
       });

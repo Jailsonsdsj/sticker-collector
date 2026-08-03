@@ -381,3 +381,66 @@ describe("undated one-offs — the Backlog", () => {
     expect(await balance()).toBe(0);
   });
 });
+
+describe("the timezone the day is counted in", () => {
+  /** An UNDATED one-off: no weekdays, no due date — the one kind of task that
+   *  may only ever be completed on today. */
+  async function createOneOff(): Promise<{ id: string }> {
+    const res = await call("POST", "/api/tasks", {
+      type: "oneoff",
+      title: "Water the plants",
+      effortMinutes: 15,
+    });
+    expect(res.status).toBe(201);
+    return (await res.json()) as { id: string };
+  }
+
+  /**
+   * The bug reported from a phone: *every* undated one-off refused with "an
+   * undated task can only be completed today".
+   *
+   * It needs no stale data and no old task — only a client that decided what
+   * "today" is in a different zone from the profile. The profile was
+   * provisioned Europe/Lisbon; the phone is in America/Sao_Paulo. Between
+   * 20:00 and midnight in Brazil, Lisbon is already tomorrow, so the date the
+   * client sends is the server's yesterday and the guard refuses it.
+   */
+  it("refuses the client's day when the client used a different zone", async () => {
+    const user = await makeUser("Europe/Lisbon");
+    userId = user.id;
+    token = user.token;
+    const task = await createOneOff();
+
+    // 22:30 in São Paulo on the 2nd is 02:30 on the 3rd in Lisbon.
+    const instant = new Date("2026-08-03T01:30:00Z");
+    const brazilToday = todayIn("America/Sao_Paulo", instant);
+    const lisbonToday = todayIn("Europe/Lisbon", instant);
+    expect(brazilToday).not.toBe(lisbonToday);
+
+    const refused = await call("POST", "/api/occurrences/complete", {
+      taskId: task.id,
+      scheduledOn: brazilToday,
+    });
+
+    // Only two dates exist in this test and the server accepts exactly one of
+    // them. Which one is not the client's business — that is the point.
+    expect(refused.status).toBe(400);
+    expect(((await refused.json()) as { error: string }).error).toContain(
+      "undated task can only be completed today",
+    );
+  });
+
+  it("accepts the profile's day, which is what the client now sends", async () => {
+    const user = await makeUser("Europe/Lisbon");
+    userId = user.id;
+    token = user.token;
+    const task = await createOneOff();
+
+    const res = await call("POST", "/api/occurrences/complete", {
+      taskId: task.id,
+      scheduledOn: todayIn("Europe/Lisbon"),
+    });
+
+    expect(res.status).toBe(200);
+  });
+});
