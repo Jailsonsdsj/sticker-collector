@@ -55,6 +55,17 @@ describe("reading a task", () => {
     expect(screen.getByText("The big one by the window first.")).toBeInTheDocument();
   });
 
+  it("keeps the line breaks the author typed", () => {
+    // The form gives six rows to write in; a list of steps written as a list
+    // arrived here as one run-on paragraph, because HTML collapses newlines.
+    const steps = "Water the big one.\nThen the herbs.\nSkip the cactus.";
+    open({ task: task({ description: steps }) });
+
+    const paragraph = screen.getByText(/Skip the cactus/);
+    expect(paragraph.className).toContain("whitespace-pre-line");
+    expect(paragraph.textContent).toBe(steps);
+  });
+
   it("says there is no description rather than leaving a hole", () => {
     open({ task: task({ description: null }) });
 
@@ -100,6 +111,29 @@ describe("what can be done from here", () => {
     expect(onDelete).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: "Delete" }));
     expect(onDelete).toHaveBeenCalled();
+  });
+
+  it("puts Done and Edit side by side", () => {
+    // The two things you came here to do. Stacked, they pushed Delete up
+    // towards the thumb.
+    open();
+
+    const doneButton = screen.getByRole("button", { name: "Done" });
+    const editButton = screen.getByRole("button", { name: "Edit" });
+    expect(doneButton.parentElement).toBe(editButton.parentElement);
+    // A row, not a column: "flex" alone is true of the stack this replaced.
+    expect(doneButton.parentElement?.className).toContain("flex");
+    expect(doneButton.parentElement?.className).not.toContain("flex-col");
+    // Each takes half; neither is a full-width block any more.
+    expect(doneButton.className).toContain("flex-1");
+    expect(editButton.className).toContain("flex-1");
+  });
+
+  it("gives Edit the whole row when the task cannot be closed from here", () => {
+    open({ onToggleDone: undefined });
+
+    const editButton = screen.getByRole("button", { name: "Edit" });
+    expect(editButton.parentElement?.children).toHaveLength(1);
   });
 
   it("reads Reopen once the task is closed", () => {

@@ -159,7 +159,14 @@ export function EpicCard({
           thing only appears once the card is open, so a long one cannot push
           every other epic off the screen. */}
       {epic.description && (
-        <p className={cx("mt-2 font-body text-sm text-ink-secondary", !expanded && "line-clamp-2")}>
+        <p
+          className={cx(
+            "mt-2 font-body text-sm text-ink-secondary",
+            // Only once the card is open: a clamped two-line preview should
+            // stay two lines, whatever the author's paragraphing.
+            expanded ? "whitespace-pre-line" : "line-clamp-2",
+          )}
+        >
           {epic.description}
         </p>
       )}
