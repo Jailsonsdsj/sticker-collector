@@ -1,6 +1,7 @@
 import { addDays, type Epic, type Task, todayIn } from "@sticker-collector/shared";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate } from "react-router";
+import { DailyReviewDialog } from "../components/DailyReviewDialog";
 import { QuickAdd } from "../components/QuickAdd";
 import { SectionHeading, type SectionTone } from "../components/SectionHeading";
 import { SelectionBar } from "../components/SelectionBar";
@@ -12,6 +13,7 @@ import { Button, Dialog, EmptyState, ErrorState, Skeleton } from "../components/
 import { WalletCard } from "../components/WalletCard";
 import { ApiError } from "../lib/api";
 import { type CompletionRef, usePendingCompletions } from "../lib/completionQueue";
+import { buildReview, type DailyReview, markReviewed, shouldReview } from "../lib/dailyReview";
 import { buildHome, HOME_WINDOW_BACK, HOME_WINDOW_FORWARD, type HomeItem } from "../lib/home";
 import {
   useBulkDeleteTasks,
@@ -62,6 +64,7 @@ export function Tasks() {
    * further in, and deliberate.
    */
   const [viewing, setViewing] = useState<{ item: HomeItem; ref: CompletionRef } | null>(null);
+  const [review, setReview] = useState<DailyReview | null>(null);
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
   const uncomplete = useUncompleteOccurrence();
@@ -95,6 +98,33 @@ export function Tasks() {
     () => new Map((epics.data ?? []).map((e: Epic) => [e.id, e])),
     [epics.data],
   );
+
+  /**
+   * Yesterday, read back on the first visit of the day.
+   *
+   * Built from the occurrences the home screen already fetched — its window
+   * reaches seven days back — so the prompt costs no extra request and no
+   * stored summary.
+   */
+  const yesterday = useMemo(
+    () =>
+      buildReview(
+        addDays(today, -1),
+        occurrences.data ?? [],
+        tasks.data ?? [],
+        epics.data ?? [],
+        timeZone,
+      ),
+    [occurrences.data, tasks.data, epics.data, today, timeZone],
+  );
+
+  useEffect(() => {
+    if (!shouldReview(today, yesterday)) return;
+    // Marked before it is shown, not after: a modal the user dismisses by
+    // navigating away must not come back on the next tab.
+    markReviewed(today);
+    setReview(yesterday);
+  }, [today, yesterday]);
 
   if (unauthorised) return <Navigate to="/login" replace />;
 
@@ -256,6 +286,8 @@ export function Tasks() {
         {selection.count} task{selection.count === 1 ? "" : "s"} will stop appearing. Coins they
         already earned are kept.
       </Dialog>
+
+      <DailyReviewDialog review={review} heading="Yesterday" onClose={() => setReview(null)} />
 
       {viewing && (
         <TaskView

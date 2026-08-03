@@ -354,3 +354,31 @@ describe("the month slides in", () => {
     fromTo.mockRestore();
   });
 });
+
+describe("opening a day's review", () => {
+  it("makes a day with work in it pressable, and says so", async () => {
+    const onSelectDay = vi.fn();
+    const user = userEvent.setup();
+    render(<Heatmap days={run(3)} today={MONDAY} onSelectDay={onSelectDay} />);
+
+    const cell = screen.getByRole("button", { name: new RegExp(`${MONDAY}.*Review this day`) });
+    await user.click(cell);
+
+    expect(onSelectDay).toHaveBeenCalledWith(MONDAY);
+  });
+
+  it("leaves a day with nothing finished as a picture", () => {
+    // A dialog reading "you finished nothing that day" is a punishment, not a
+    // review.
+    render(<Heatmap days={[day(MONDAY, 2, 0)]} today={MONDAY} onSelectDay={vi.fn()} />);
+
+    expect(screen.queryByRole("button", { name: /Review this day/ })).toBeNull();
+    expect(screen.getByRole("img", { name: `${MONDAY}: 0 of 2 completed` })).toBeInTheDocument();
+  });
+
+  it("leaves every cell inert when no handler is given", () => {
+    render(<Heatmap days={run(3)} today={MONDAY} />);
+
+    expect(screen.queryByRole("button", { name: /Review this day/ })).toBeNull();
+  });
+});

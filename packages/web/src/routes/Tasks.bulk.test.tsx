@@ -358,3 +358,58 @@ describe("which date a tick is sent for", () => {
     await waitFor(() => expect(onCommit).toHaveBeenCalledWith({ taskId: "t3", scheduledOn: due }));
   }, 10000);
 });
+
+describe("yesterday, read back on the first visit of the day", () => {
+  const yesterday = addDays(TODAY, -1);
+
+  const withYesterday = () => {
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      const read = (init?.method ?? "GET") === "GET";
+      if (read && url.startsWith("/api/occurrences"))
+        return json([
+          {
+            taskId: "t2",
+            scheduledOn: yesterday,
+            status: "done",
+            completedAt: `${yesterday}T12:00:00Z`,
+            rewardSnapshotCoins: 30,
+          },
+        ]);
+      if (read && url.startsWith("/api/tasks")) return json(TASKS);
+      if (read && url.startsWith("/api/epics")) return json([]);
+      if (read && url.startsWith("/api/wallet")) return json({ balance: 0 });
+      return json({ ok: true });
+    });
+  };
+
+  it("opens once, listing what was finished and what it paid", async () => {
+    withYesterday();
+    render(<Tasks />, { wrapper });
+
+    expect(await screen.findByText("Yesterday")).toBeInTheDocument();
+    expect(screen.getByText(/One thing finished/)).toBeInTheDocument();
+    expect(screen.getByText("+30")).toBeInTheDocument();
+  });
+
+  it("does not open again the same day", async () => {
+    withYesterday();
+    const first = render(<Tasks />, { wrapper });
+    await screen.findByText("Yesterday");
+    first.unmount();
+
+    render(<Tasks />, { wrapper });
+
+    // The wallet is on the screen whatever the sections contain — this fixture
+    // has one done occurrence and nothing else to render.
+    await screen.findByRole("region", { name: "Wallet" });
+    expect(screen.queryByText("Yesterday")).not.toBeInTheDocument();
+  });
+
+  it("stays away when yesterday was empty", async () => {
+    // The default fixture has no completions at all.
+    render(<Tasks />, { wrapper });
+
+    await waitFor(() => expect(screen.getAllByText("Buy milk").length).toBeGreaterThan(0));
+    expect(screen.queryByText("Yesterday")).not.toBeInTheDocument();
+  });
+});
