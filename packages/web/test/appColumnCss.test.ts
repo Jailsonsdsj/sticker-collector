@@ -47,7 +47,9 @@ describe("the app column", () => {
   it("caps the width only for a pointer that can hover", () => {
     const block = mediaBlock("(pointer: fine) and (hover: hover)");
 
-    expect(block).toContain("max-width");
+    // The number is pinned so widening the desktop column stays a decision
+    // rather than a drift: 49.92rem is the original 32rem, +30%, then +20%.
+    expect(block).toContain("max-width: 49.92rem");
     // iPadOS reports a coarse primary pointer even with a keyboard attached,
     // so this query lands on the right side of the tablet/desktop line.
     expect(block).toContain("(pointer: fine)");

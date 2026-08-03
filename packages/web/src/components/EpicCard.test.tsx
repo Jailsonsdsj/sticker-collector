@@ -1,6 +1,7 @@
 import type { Epic, Task } from "@sticker-collector/shared";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { EpicCard } from "./EpicCard";
 
@@ -118,5 +119,92 @@ describe("actions", () => {
 
     await user.click(screen.getByRole("button", { name: "Delete" }));
     expect(onDelete).toHaveBeenCalledOnce();
+  });
+});
+
+describe("finished subtasks", () => {
+  const withTasks = (tasks: Task[], props: Partial<Parameters<typeof EpicCard>[0]> = {}) =>
+    render(
+      <EpicCard
+        epic={epic()}
+        tasks={tasks}
+        expanded
+        onToggleExpand={vi.fn()}
+        onAddTask={vi.fn()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        {...props}
+      />,
+    );
+
+  const open = task({ id: "a", title: "Ship it" });
+  const closed = task({ id: "b", title: "Shipped it", lastCompletedOn: "2026-07-20" });
+
+  it("shows what is left with no heading over it", () => {
+    // A heading over the open work would be naming the obvious: the list is
+    // the epic.
+    withTasks([open, closed]);
+
+    expect(screen.getByText("Ship it")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /to do|open|remaining/i })).toBeNull();
+  });
+
+  it("hides finished ones behind a Done divider, folded", async () => {
+    // Driven the way the screen drives it: the fold lives in `sectionState` so
+    // it survives leaving the tab, which a component-local `useState` would
+    // not.
+    const Harness = () => {
+      const [doneOpen, setDoneOpen] = useState(false);
+      return (
+        <EpicCard
+          epic={epic()}
+          tasks={[open, closed]}
+          expanded
+          doneOpen={doneOpen}
+          onToggleDone={() => setDoneOpen((was) => !was)}
+          onToggleExpand={vi.fn()}
+          onAddTask={vi.fn()}
+          onEdit={vi.fn()}
+          onDelete={vi.fn()}
+        />
+      );
+    };
+    const user = userEvent.setup();
+    render(<Harness />);
+
+    expect(screen.queryByText("Shipped it")).toBeNull();
+    const divider = screen.getByRole("button", { name: /done/i });
+    expect(divider).toHaveAttribute("aria-expanded", "false");
+
+    await user.click(divider);
+    expect(screen.getByText("Shipped it")).toBeInTheDocument();
+  });
+
+  it("counts them while they are folded away", () => {
+    // Folding a section should not also hide how much is in it.
+    withTasks(
+      [open, closed, task({ id: "c", title: "Also done", lastCompletedOn: "2026-07-21" })],
+      {
+        onToggleDone: vi.fn(),
+      },
+    );
+
+    expect(screen.getByText("2")).toBeInTheDocument();
+  });
+
+  it("says nothing about Done when nothing is", () => {
+    withTasks([open], { onToggleDone: vi.fn() });
+
+    expect(screen.queryByRole("button", { name: /done/i })).toBeNull();
+  });
+
+  it("keeps a task inside its undo window out of Done", () => {
+    // Moving a row the instant it is ticked would make the undo button chase a
+    // row that had already left.
+    withTasks([open], { isCompleting: () => true, doneOpen: true, onToggleDone: vi.fn() });
+
+    expect(screen.getByText("Ship it")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: /complete ship it/i })).toBeChecked();
+    expect(screen.queryByRole("button", { name: /done/i })).toBeNull();
   });
 });

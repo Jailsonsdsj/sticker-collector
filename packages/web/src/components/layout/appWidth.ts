@@ -8,11 +8,15 @@
  *
  * So on a **desktop** it is one centred column. On a **tablet** it is not: an
  * iPad in either orientation is a touch device running the app full-screen, and
- * a 512px strip down the middle of a 1024px iPad is a phone emulator, not a
+ * a narrow strip down the middle of a 1024px iPad is a phone emulator, not a
  * layout. That distinction is made by input, not by width — see `.app-column`
  * in `styles/app.css`, which caps the width only under
  * `(pointer: fine) and (hover: hover)`. Width alone cannot tell a landscape
  * iPad from a small laptop; the pointer can.
+ *
+ * The cap itself is 49.92rem (799px), set in that stylesheet — wide enough that
+ * the album and weekly grids are not cramped on a monitor, narrow enough that
+ * the tab bar stays a reasonable reach across.
  *
  * Every part of the frame uses **this** constant — the content, the tab bar's
  * row, and the inside of a sheet — because the failure mode is one of them

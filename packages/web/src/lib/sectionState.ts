@@ -53,8 +53,18 @@ function read(): Record<string, boolean> {
 
 /** Whether a section shows its contents, given what the user has chosen. */
 export function sectionIsOpen(chosen: Record<string, boolean>, id: string): boolean {
-  return chosen[id] ?? SECTION_DEFAULTS[id] ?? true;
+  if (id in chosen) return Boolean(chosen[id]);
+  if (id in SECTION_DEFAULTS) return Boolean(SECTION_DEFAULTS[id]);
+
+  // Sections whose ids cannot be listed, because there is one per row: the
+  // "Done" divider inside each epic is `epic-done-<id>`. Finished subtasks are
+  // a record of an epic, not a list of what is left in it — the same reason
+  // Achievements and Completed today are folded.
+  const prefixed = PREFIX_DEFAULTS.find(([prefix]) => id.startsWith(prefix));
+  return prefixed ? prefixed[1] : true;
 }
+
+const PREFIX_DEFAULTS: [string, boolean][] = [["epic-done-", false]];
 
 export function useCollapsibleSections() {
   const [chosen, setChosen] = useState<Record<string, boolean>>(read);

@@ -1,5 +1,6 @@
 import type { Epic, EpicAccent, Task } from "@sticker-collector/shared";
 import type { CSSProperties } from "react";
+import { SectionHeading } from "./SectionHeading";
 import { Badge, Button, Checkbox, ProgressBar } from "./ui";
 import { cx } from "./ui/cx";
 
@@ -48,6 +49,9 @@ export interface EpicCardProps {
   onOpenTask?: (task: Task) => void;
   /** Tasks already ticked and inside their undo window. */
   isCompleting?: (task: Task) => boolean;
+  /** Whether the epic's finished subtasks are showing. */
+  doneOpen?: boolean;
+  onToggleDone?: () => void;
   expanded: boolean;
   onToggleExpand: () => void;
   onAddTask: () => void;
@@ -61,6 +65,8 @@ export function EpicCard({
   onCompleteTask,
   onOpenTask,
   isCompleting,
+  doneOpen = false,
+  onToggleDone,
   expanded,
   onToggleExpand,
   onAddTask,
@@ -68,6 +74,57 @@ export function EpicCard({
   onDelete,
 }: EpicCardProps) {
   const percent = epic.oneOffTotal === 0 ? 0 : (epic.oneOffDone / epic.oneOffTotal) * 100;
+
+  /**
+   * Finished means finished — `lastCompletedOn`, not a pending tick.
+   *
+   * A row inside its undo window stays where it is and merely shows a checked
+   * box: moving it into Done the instant it is ticked would make the undo
+   * button chase a row that had already left.
+   */
+  const done = tasks.filter((task) => Boolean(task.lastCompletedOn));
+  const open = tasks.filter((task) => !task.lastCompletedOn);
+
+  const row = (task: Task) => {
+    // Only a ONE-OFF is tickable from here. A routine belongs to a day: the API
+    // refuses a completion on a date its schedule does not cover, so a checkbox
+    // here would promise a tick that comes back 400 on most days. The week grid
+    // is where days are ticked.
+    const tickable = task.type === "oneoff" && !task.lastCompletedOn;
+    const ticked = Boolean(task.lastCompletedOn) || Boolean(isCompleting?.(task));
+
+    return (
+      <li key={task.id} className="flex items-center gap-2 rounded-lg bg-surface-1 px-3 py-2">
+        {tickable || ticked ? (
+          <Checkbox
+            size="sm"
+            label={`Complete ${task.title}`}
+            checked={ticked}
+            disabled={!onCompleteTask || ticked}
+            onChange={() => onCompleteTask?.(task)}
+          />
+        ) : (
+          <span aria-hidden className="font-numeric text-2xs text-ink-dim">
+            ↻
+          </span>
+        )}
+
+        {onOpenTask ? (
+          <button
+            type="button"
+            onClick={() => onOpenTask(task)}
+            className="min-w-0 flex-1 cursor-pointer truncate text-left font-body text-md outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan"
+          >
+            {task.title}
+          </button>
+        ) : (
+          <span className="min-w-0 flex-1 truncate font-body text-md">{task.title}</span>
+        )}
+
+        <span className="font-numeric text-2xs font-bold text-coin">+{task.rewardCoins}</span>
+      </li>
+    );
+  };
 
   return (
     <article
@@ -112,55 +169,25 @@ export function EpicCard({
           {tasks.length === 0 ? (
             <p className="font-body text-md text-ink-dim">Nothing in here yet.</p>
           ) : (
-            <ul className="flex flex-col gap-1">
-              {tasks.map((task) => {
-                // Only a ONE-OFF is tickable from here. A routine belongs to a
-                // day: the API refuses a completion on a date its schedule does
-                // not cover, so a checkbox here would promise a tick that comes
-                // back 400 on most days. The week grid is where days are ticked.
-                const tickable = task.type === "oneoff" && !task.lastCompletedOn;
-                const ticked = Boolean(task.lastCompletedOn) || Boolean(isCompleting?.(task));
+            <>
+              {/* What is LEFT, unheaded. A heading over the open work would be
+                  naming the obvious: the list is the epic. */}
+              {open.length > 0 && <ul className="flex flex-col gap-1">{open.map(row)}</ul>}
 
-                return (
-                  <li
-                    key={task.id}
-                    className="flex items-center gap-2 rounded-lg bg-surface-1 px-3 py-2"
+              {done.length > 0 && (
+                <div className={open.length > 0 ? "mt-3" : undefined}>
+                  <SectionHeading
+                    tone="completed"
+                    count={done.length}
+                    open={doneOpen}
+                    onToggle={onToggleDone}
                   >
-                    {tickable || ticked ? (
-                      <Checkbox
-                        size="sm"
-                        label={`Complete ${task.title}`}
-                        checked={ticked}
-                        disabled={!onCompleteTask || ticked}
-                        onChange={() => onCompleteTask?.(task)}
-                      />
-                    ) : (
-                      <span aria-hidden className="font-numeric text-2xs text-ink-dim">
-                        ↻
-                      </span>
-                    )}
-
-                    {onOpenTask ? (
-                      <button
-                        type="button"
-                        onClick={() => onOpenTask(task)}
-                        className="min-w-0 flex-1 cursor-pointer truncate text-left font-body text-md outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan"
-                      >
-                        {task.title}
-                      </button>
-                    ) : (
-                      <span className="min-w-0 flex-1 truncate font-body text-md">
-                        {task.title}
-                      </span>
-                    )}
-
-                    <span className="font-numeric text-2xs font-bold text-coin">
-                      +{task.rewardCoins}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
+                    Done
+                  </SectionHeading>
+                  {doneOpen && <ul className="flex flex-col gap-1">{done.map(row)}</ul>}
+                </div>
+              )}
+            </>
           )}
 
           <div className="mt-2 flex flex-wrap gap-2">
