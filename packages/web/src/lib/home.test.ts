@@ -285,7 +285,39 @@ describe("ordering", () => {
     ]);
   });
 
-  it("sorts today by title so the list is stable between renders", () => {
+  it("leads each section with the high-priority work", () => {
+    // Priority already tints the row; sorting by it is what makes the tint
+    // worth having, because the urgent work is at the top instead of wherever
+    // the alphabet put it.
+    const low = task({ id: "a", title: "Alpha", priority: "low" });
+    const high = task({ id: "z", title: "Zebra", priority: "high" });
+    const medium = task({ id: "m", title: "Middle", priority: "medium" });
+
+    const home = buildHome(
+      [occ("a", TODAY, "pending"), occ("z", TODAY, "pending"), occ("m", TODAY, "pending")],
+      [low, high, medium],
+      TODAY,
+      UTC,
+    );
+
+    expect(titles(home.forToday)).toEqual(["Zebra", "Middle", "Alpha"]);
+  });
+
+  it("sorts General by priority too", () => {
+    const home = buildHome(
+      [],
+      [
+        oneoff({ id: "a", title: "Alpha", priority: "low" }),
+        oneoff({ id: "z", title: "Zebra", priority: "high" }),
+      ],
+      TODAY,
+      UTC,
+    );
+
+    expect(titles(home.general)).toEqual(["Zebra", "Alpha"]);
+  });
+
+  it("breaks a priority tie on title, so the list is stable between renders", () => {
     const a = task({ id: "a", title: "Zebra" });
     const b = task({ id: "b", title: "Apple" });
     const home = buildHome(
@@ -296,6 +328,66 @@ describe("ordering", () => {
     );
 
     expect(titles(home.forToday)).toEqual(["Apple", "Zebra"]);
+  });
+
+  it("keeps the DAY first in the dated sections, and priority within it", () => {
+    // A missed Tuesday and a missed Thursday are not one item at two
+    // urgencies — they are different days, and the day is what is being read.
+    const low = task({ id: "a", title: "Alpha", priority: "low" });
+    const high = task({ id: "z", title: "Zebra", priority: "high" });
+
+    const home = buildHome(
+      [
+        // The high one slipped longer ago; the recent day still leads.
+        occ("z", addDays(TODAY, -3), "missed"),
+        occ("a", addDays(TODAY, -1), "missed"),
+        occ("z", addDays(TODAY, -1), "missed"),
+      ],
+      [low, high],
+      TODAY,
+      UTC,
+    );
+
+    expect(home.missed.map((i) => [i.scheduledOn, i.task.title])).toEqual([
+      [addDays(TODAY, -1), "Zebra"],
+      [addDays(TODAY, -1), "Alpha"],
+      [addDays(TODAY, -3), "Zebra"],
+    ]);
+  });
+
+  it("keeps the DAY first in the backlog too", () => {
+    // Same rule the other way round: a high-priority routine next Friday does
+    // not jump ahead of tomorrow's low one. The backlog is read as days.
+    const low = task({ id: "a", title: "Alpha", priority: "low" });
+    const high = task({ id: "z", title: "Zebra", priority: "high" });
+
+    const home = buildHome(
+      [occ("z", addDays(TODAY, 5), "pending"), occ("a", addDays(TODAY, 2), "pending")],
+      [low, high],
+      TODAY,
+      UTC,
+    );
+
+    expect(home.routineBacklog.map((i) => [i.scheduledOn, i.task.title])).toEqual([
+      [addDays(TODAY, 2), "Alpha"],
+      [addDays(TODAY, 5), "Zebra"],
+    ]);
+  });
+
+  it("leaves Completed today alphabetical", () => {
+    // Done work is a record, not a queue: nothing here needs doing, so
+    // shouting about a finished "high" helps nobody.
+    const home = buildHome(
+      [occ("a", TODAY, "done"), occ("z", TODAY, "done")],
+      [
+        task({ id: "a", title: "Alpha", priority: "low" }),
+        task({ id: "z", title: "Zebra", priority: "high" }),
+      ],
+      TODAY,
+      UTC,
+    );
+
+    expect(titles(home.completedToday)).toEqual(["Alpha", "Zebra"]);
   });
 });
 
