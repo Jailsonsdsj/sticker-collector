@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CompletionQueueProvider } from "../lib/completionQueue";
+import { today } from "../lib/timezone";
 import { Tasks } from "./Tasks";
 
 /**
@@ -252,4 +253,108 @@ describe("tapping a task", () => {
       expect(row).toBeChecked();
     });
   });
+});
+
+describe("which date a tick is sent for", () => {
+  it("closes an undated one-off on TODAY, even after it was ticked and untangled before", async () => {
+    // Unticking leaves the occurrence row behind as `pending`, so an undated
+    // one-off can carry yesterday's date around forever. Sending that back is
+    // the reported bug: "an undated task can only be completed today" on a task
+    // that looks perfectly ordinary.
+    const stale = addDays(TODAY, -3);
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      const read = (init?.method ?? "GET") === "GET";
+      if (read && url.startsWith("/api/occurrences"))
+        return json([
+          {
+            taskId: "t2",
+            scheduledOn: stale,
+            status: "pending",
+            completedAt: null,
+            rewardSnapshotCoins: null,
+          },
+        ]);
+      if (read && url.startsWith("/api/tasks")) return json(TASKS);
+      if (read && url.startsWith("/api/epics")) return json([]);
+      if (read && url.startsWith("/api/wallet")) return json({ balance: 0 });
+      return json({ ok: true });
+    });
+
+    // Asserted at the queue's own boundary rather than on the wire: the write
+    // is deferred by the undo window, and what matters here is the reference
+    // the row hands over.
+    const onCommit = vi.fn(async () => undefined);
+    const user = userEvent.setup();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/"]}>
+          <CompletionQueueProvider onCommit={onCommit}>
+            <Tasks />
+          </CompletionQueueProvider>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(screen.getAllByText("Buy milk").length).toBeGreaterThan(0));
+
+    await user.click(screen.getAllByRole("checkbox", { name: /buy milk/i })[0] as HTMLElement);
+
+    // The app's own today, not this file's UTC one: the point is that the
+    // stale row's date is not what gets sent.
+    await waitFor(() =>
+      expect(onCommit).toHaveBeenCalledWith({ taskId: "t2", scheduledOn: today() }),
+    );
+    expect(onCommit).not.toHaveBeenCalledWith({ taskId: "t2", scheduledOn: stale });
+  }, 10000);
+
+  it("keeps the occurrence's own date for a DATED one-off", async () => {
+    // The exception is undated one-offs only. A dated one is scheduled on its
+    // due date and nothing else, so forcing today would send a date the API
+    // refuses with "the task is not scheduled on that date".
+    // Relative to the app's own today, not this file's UTC one: on a machine
+    // west of UTC those differ by a day, and the test would pass by accident.
+    const due = addDays(today(), -1);
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      const read = (init?.method ?? "GET") === "GET";
+      if (read && url.startsWith("/api/occurrences"))
+        return json([
+          {
+            taskId: "t3",
+            scheduledOn: due,
+            status: "missed",
+            completedAt: null,
+            rewardSnapshotCoins: null,
+          },
+        ]);
+      if (read && url.startsWith("/api/tasks"))
+        return json([
+          task({
+            id: "t3",
+            title: "Post the form",
+            type: "oneoff",
+            weekdays: null,
+            dueAt: `${due}T09:00:00Z`,
+          }),
+        ]);
+      if (read && url.startsWith("/api/epics")) return json([]);
+      if (read && url.startsWith("/api/wallet")) return json({ balance: 0 });
+      return json({ ok: true });
+    });
+
+    const onCommit = vi.fn(async () => undefined);
+    const user = userEvent.setup();
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/"]}>
+          <CompletionQueueProvider onCommit={onCommit}>
+            <Tasks />
+          </CompletionQueueProvider>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(screen.getAllByText("Post the form").length).toBeGreaterThan(0));
+
+    await user.click(screen.getAllByRole("checkbox", { name: /post the form/i })[0] as HTMLElement);
+
+    await waitFor(() => expect(onCommit).toHaveBeenCalledWith({ taskId: "t3", scheduledOn: due }));
+  }, 10000);
 });

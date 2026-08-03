@@ -122,14 +122,20 @@ describe("requireAuth on a protected route (GET /api/me)", () => {
     const { token } = await login();
     const res = await app.fetch(get("/api/me", { Authorization: `Bearer ${token}` }), env);
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ userId: "u1" });
+    // The timezone rides along: the client resolves every local day from it,
+    // and reading the device's instead is a 400 on every completion for the
+    // hours the two disagree.
+    expect(await res.json()).toEqual({ userId: "u1", timezone: "UTC" });
   });
 
   it("reaches the route with the session cookie", async () => {
     const { cookie } = await login();
     const res = await app.fetch(get("/api/me", { Cookie: cookie }), env);
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ userId: "u1" });
+    // The timezone rides along: the client resolves every local day from it,
+    // and reading the device's instead is a 400 on every completion for the
+    // hours the two disagree.
+    expect(await res.json()).toEqual({ userId: "u1", timezone: "UTC" });
   });
 
   it("rejects a missing token with 401", async () => {
@@ -139,6 +145,63 @@ describe("requireAuth on a protected route (GET /api/me)", () => {
 
   it("rejects a garbage token with 401", async () => {
     const res = await app.fetch(get("/api/me", { Authorization: "Bearer not.a.jwt" }), env);
+    expect(res.status).toBe(401);
+  });
+});
+
+describe("PATCH /api/me — the timezone every local day is counted in", () => {
+  async function login(): Promise<{ token: string }> {
+    const authKey = await deriveAuthKey(PASSPHRASE, SALT, ITER);
+    const res = await app.fetch(post("/api/auth/login", { authKey }), env);
+    return (await res.json()) as { token: string };
+  }
+
+  const patch = (body: unknown, token: string) =>
+    app.fetch(
+      new Request("https://x/api/me", {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify(body),
+      }),
+      env,
+    );
+
+  it("stores a real zone and returns it", async () => {
+    const { token } = await login();
+
+    const res = await patch({ timezone: "America/Sao_Paulo" }, token);
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ userId: "u1", timezone: "America/Sao_Paulo" });
+
+    const read = await app.fetch(get("/api/me", { Authorization: `Bearer ${token}` }), env);
+    expect(await read.json()).toMatchObject({ timezone: "America/Sao_Paulo" });
+  });
+
+  it("refuses a zone the runtime does not know", async () => {
+    // A typo here moves every day boundary silently — a wrong "today" is not
+    // an error anywhere downstream, it is just wrong.
+    const { token } = await login();
+
+    expect((await patch({ timezone: "Mars/Olympus" }, token)).status).toBe(400);
+  });
+
+  it("refuses anything but a timezone", async () => {
+    const { token } = await login();
+
+    expect((await patch({ timezone: "" }, token)).status).toBe(400);
+    expect((await patch({ userId: "u2" }, token)).status).toBe(400);
+  });
+
+  it("requires a session", async () => {
+    const res = await app.fetch(
+      new Request("https://x/api/me", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ timezone: "UTC" }),
+      }),
+      env,
+    );
     expect(res.status).toBe(401);
   });
 });

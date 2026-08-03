@@ -22,6 +22,7 @@ import {
 } from "../lib/mutations";
 import { useEpics, useTasks } from "../lib/queries";
 import { useCollapsibleSections } from "../lib/sectionState";
+import { today } from "../lib/timezone";
 
 /**
  * Epics — grouping, progress, and the second door into the task form.
@@ -34,7 +35,7 @@ import { useCollapsibleSections } from "../lib/sectionState";
  * The three lists, and the order work moves through them.
  *
  * "Achievements" is deliberately last and starts folded: it is a record, not a
- * queue, and an epic finished in March should not push what is running today
+ * queue, and an epic finished in March should not push what is running localToday
  * off the first screenful — the same reasoning the home screen folds Missed and
  * the routine backlog.
  */
@@ -59,7 +60,7 @@ export function Epics() {
   // Ticking from here goes through the SAME undo queue as the home screen. A
   // second path that wrote immediately would make the identical action
   // reversible in one place and not the other.
-  const today = todayIn(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  const localToday = today();
 
   const [expanded, setExpanded] = useState<string | null>(null);
   const [editing, setEditing] = useState<{
@@ -186,13 +187,13 @@ export function Epics() {
                         // An undated one-off closes TODAY — the only date the
                         // API accepts for one.
                         queue.complete(
-                          { taskId: task.id, scheduledOn: today },
+                          { taskId: task.id, scheduledOn: localToday },
                           { title: task.title, coins: task.rewardCoins },
                         )
                       }
                       onOpenTask={(task) => setViewing(task)}
                       isCompleting={(task) =>
-                        queue.isPending({ taskId: task.id, scheduledOn: today })
+                        queue.isPending({ taskId: task.id, scheduledOn: localToday })
                       }
                       onEdit={() => setEditing({ epic, status: epic.status, nonce: Date.now() })}
                       onDelete={() => setDeleting(epic)}
@@ -232,7 +233,7 @@ export function Epics() {
           epic={epics.data?.find((candidate) => candidate.id === viewing.epicId) ?? null}
           done={
             Boolean(viewing.lastCompletedOn) ||
-            queue.isPending({ taskId: viewing.id, scheduledOn: today })
+            queue.isPending({ taskId: viewing.id, scheduledOn: localToday })
           }
           // Only a one-off can be closed from a list with no notion of a day:
           // the API refuses a routine on a date its schedule does not cover.
@@ -240,7 +241,7 @@ export function Epics() {
             viewing.type === "oneoff" && !viewing.lastCompletedOn
               ? () => {
                   queue.complete(
-                    { taskId: viewing.id, scheduledOn: today },
+                    { taskId: viewing.id, scheduledOn: localToday },
                     { title: viewing.title, coins: viewing.rewardCoins },
                   );
                   setViewing(null);

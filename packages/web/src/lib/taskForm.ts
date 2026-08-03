@@ -10,6 +10,7 @@ import {
   WEEKDAYS_MASK_NONE,
   type Weekday,
 } from "@sticker-collector/shared";
+import { today } from "./timezone";
 
 /**
  * The task form's state, as a reducer.
@@ -197,10 +198,7 @@ export function toPayload(state: TaskFormState): CreateTaskInput | null {
         dueAt: toDueAt(state.dueDate, state.dueTime),
         // Only an UNDATED one-off may be pinned: the API validates a fresh
         // completion against the schedule, and that is its single exception.
-        pinnedOn:
-          state.pinnedToday && !state.dueDate
-            ? todayIn(Intl.DateTimeFormat().resolvedOptions().timeZone)
-            : null,
+        pinnedOn: state.pinnedToday && !state.dueDate ? today() : null,
       };
 }
 
@@ -243,7 +241,7 @@ export function stateFromTask(task: Task): TaskFormState {
     rewardLocked: task.rewardCoins !== task.effortMinutes,
     // Pinned yesterday is not pinned today — the date is the whole reason the
     // flag is a date, so a stale pin reads as unpinned rather than as a choice.
-    pinnedToday: task.pinnedOn === todayIn(Intl.DateTimeFormat().resolvedOptions().timeZone),
+    pinnedToday: task.pinnedOn === today(),
     priority: task.priority,
     epicId: task.epicId,
   };
@@ -280,8 +278,8 @@ export function toPatch(state: TaskFormState, original: Task): UpdateTask | null
   // Pin/unpin, but only where it can mean anything: the completion guard lets
   // an arbitrary "today" through for undated one-offs alone.
   if (original.type === "oneoff" && !state.dueDate) {
-    const today = todayIn(Intl.DateTimeFormat().resolvedOptions().timeZone);
-    set("pinnedOn", state.pinnedToday ? today : null, original.pinnedOn);
+    const localToday = today();
+    set("pinnedOn", state.pinnedToday ? localToday : null, original.pinnedOn);
   }
 
   // The task's own type decides which schedule may be sent, not the form's.
