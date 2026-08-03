@@ -276,7 +276,7 @@ export function StickerViewer({ stickers, index, onIndex, onClose }: StickerView
               </h3>
             )}
             {current.description && (
-              <p className="mt-2 font-body text-md text-ink-secondary leading-relaxed">
+              <p className="mt-2 whitespace-pre-line font-body text-md text-ink-secondary leading-relaxed">
                 {current.description}
               </p>
             )}

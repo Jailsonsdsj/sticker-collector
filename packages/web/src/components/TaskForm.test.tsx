@@ -413,6 +413,17 @@ describe("editing — delete", () => {
   });
 });
 
+describe("the description field", () => {
+  it("is three times the primitive's default height", () => {
+    // A task's description is where the *how* goes — steps, links, the thing
+    // you will have forgotten by the time you come back to it. Two rows made a
+    // paragraph feel like the wrong place to put it.
+    setup();
+
+    expect(screen.getByLabelText(/description/i)).toHaveAttribute("rows", "6");
+  });
+});
+
 describe("which section a new one-off lands in", () => {
   const sections = () => screen.getByRole("tablist", { name: "Section" });
 

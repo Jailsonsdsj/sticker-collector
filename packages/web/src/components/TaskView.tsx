@@ -59,7 +59,11 @@ export function TaskView({
           {task.title}
         </h2>
         {task.description ? (
-          <p className="mt-2 font-body text-md text-ink-secondary leading-relaxed">
+          // `whitespace-pre-line`: the author typed those line breaks into a
+          // six-row textarea — a list of steps arrives as a list of steps, not
+          // as one run-on paragraph. `pre-line` and not `pre-wrap` so runs of
+          // spaces still collapse; it is prose, not code.
+          <p className="mt-2 whitespace-pre-line font-body text-md text-ink-secondary leading-relaxed">
             {task.description}
           </p>
         ) : (
@@ -92,14 +96,20 @@ export function TaskView({
       )}
 
       <div className="mt-auto flex flex-col gap-2 pt-4">
-        {onToggleDone && (
-          <Button block tone={done ? "neutral" : "lime"} onClick={onToggleDone}>
-            {done ? "Reopen" : "Done"}
+        {/* Done and Edit share a row: they are the two things you came here to
+            do, and stacking them pushed Delete up towards the thumb. `flex-1`
+            on each half rather than a grid, so Edit takes the whole row on its
+            own when the task cannot be closed from here. */}
+        <div className="flex gap-2">
+          {onToggleDone && (
+            <Button className="flex-1" tone={done ? "neutral" : "lime"} onClick={onToggleDone}>
+              {done ? "Reopen" : "Done"}
+            </Button>
+          )}
+          <Button className="flex-1" variant="outline" tone="cyan" onClick={onEdit}>
+            Edit
           </Button>
-        )}
-        <Button block variant="outline" tone="cyan" onClick={onEdit}>
-          Edit
-        </Button>
+        </div>
         {/* The same two-step delete the edit form uses, rather than a second
             one worded differently: one affordance, one confirmation, one place
             to fix it. */}

@@ -52,7 +52,12 @@ export function ErrorLogPanel() {
       {entries.length === 0 ? (
         <EmptyState title="Nothing has failed" description="Requests that fail land here." />
       ) : (
-        <ul className="flex flex-col gap-2">
+        // A window on the log, not the whole of it. Fifty entries ran to
+        // several screens and pushed everything below it — the backup panel
+        // included — off the end of Settings. It scrolls on its own, and
+        // `overscroll-contain` stops reaching the bottom from dragging the
+        // page along with it.
+        <ul className="flex max-h-80 flex-col gap-2 overflow-y-auto overscroll-contain pr-1">
           {entries.map((entry) => (
             <li
               // Two failures can share a millisecond; the path tells them apart.

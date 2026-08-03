@@ -110,6 +110,12 @@ export function TaskForm({
       <Textarea
         id="task-description"
         label="Description"
+        // Six rows, three times the primitive's default two. A task's
+        // description is where the *how* goes — steps, links, the thing you
+        // will have forgotten by the time you come back to it — and two rows
+        // made a paragraph feel like the wrong place to put it. The sheet
+        // scrolls, so the extra height costs nothing above it.
+        rows={6}
         placeholder="Notes, context, links…"
         value={state.description}
         onChange={(e) => dispatch({ kind: "description", value: e.target.value })}

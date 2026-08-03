@@ -54,6 +54,19 @@ describe("the error log in Settings", () => {
     expect(await screen.findByText("POST /api/live")).toBeInTheDocument();
   });
 
+  it("scrolls inside its own box instead of running down the screen", () => {
+    // Fifty entries ran to several screens and pushed everything below it —
+    // the backup panel included — off the end of Settings.
+    for (let i = 0; i < 20; i++) fail({ path: `/api/${i}` });
+    render(<ErrorLogPanel />);
+
+    const list = screen.getByRole("list");
+    expect(list.className).toContain("max-h-80");
+    expect(list.className).toContain("overflow-y-auto");
+    // Reaching the bottom must not drag the page along with it.
+    expect(list.className).toContain("overscroll-contain");
+  });
+
   it("clears the log, on the device as well as on the screen", async () => {
     const user = userEvent.setup();
     fail();
