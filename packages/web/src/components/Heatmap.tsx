@@ -10,6 +10,8 @@ import { Button } from "./ui";
 export interface HeatmapProps {
   days: readonly DayTally[];
   today: LocalDate;
+  /** Opens that day's review. Absent leaves the cells inert pictures. */
+  onSelectDay?: (date: LocalDate) => void;
 }
 
 /**
@@ -68,7 +70,7 @@ const LEVEL_INK: Record<string, string> = {
   "4": "var(--color-ink-inverse)",
 };
 
-export function Heatmap({ days, today }: HeatmapProps) {
+export function Heatmap({ days, today, onSelectDay }: HeatmapProps) {
   // Opens on today's month, which is the one the user is living in — not on the
   // oldest month in a year of history.
   const [month, setMonth] = useState(() => monthOf(today));
@@ -186,7 +188,35 @@ export function Heatmap({ days, today }: HeatmapProps) {
           // about a day nobody has data for.
           const level = day ? String(heatLevel(day)) : "empty";
 
-          return (
+          const label = labelFor(date, day);
+          const shape = `flex aspect-square items-center justify-center rounded-md font-numeric text-2xs${
+            date === today ? " ring-2 ring-ring-today" : ""
+          }`;
+          const paint = { background: LEVEL_COLOUR[level], color: LEVEL_INK[level] };
+
+          // A day with nothing finished opens nothing: a dialog reading "you
+          // finished nothing that day" is a punishment, not a review.
+          const reviewable = Boolean(onSelectDay) && (day?.done ?? 0) > 0;
+
+          return reviewable ? (
+            <button
+              key={date}
+              type="button"
+              data-date={date}
+              data-level={level}
+              data-col={weekdayOf(date)}
+              title={label}
+              // The name says what is in the day AND that it opens. A cell that
+              // reads only as a picture gives a screen reader no reason to
+              // press it.
+              aria-label={`${label}. Review this day`}
+              onClick={() => onSelectDay?.(date)}
+              className={`${shape} cursor-pointer outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan`}
+              style={paint}
+            >
+              {date.slice(8)}
+            </button>
+          ) : (
             <span
               key={date}
               // A cell is a small picture of one day. Without a role the label
@@ -196,12 +226,10 @@ export function Heatmap({ days, today }: HeatmapProps) {
               data-date={date}
               data-level={day ? level : "none"}
               data-col={weekdayOf(date)}
-              title={labelFor(date, day)}
-              aria-label={labelFor(date, day)}
-              className={`flex aspect-square items-center justify-center rounded-md font-numeric text-2xs${
-                date === today ? " ring-2 ring-ring-today" : ""
-              }`}
-              style={{ background: LEVEL_COLOUR[level], color: LEVEL_INK[level] }}
+              title={label}
+              aria-label={label}
+              className={shape}
+              style={paint}
             >
               {date.slice(8)}
             </span>

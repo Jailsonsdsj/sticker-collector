@@ -4,6 +4,26 @@ import { backdropClose, useModal } from "./useModal";
 
 export type DialogTone = "default" | "danger";
 
+/**
+ * How much room the panel gets.
+ *
+ * `md` is a confirmation: a sentence and two buttons, and going wider would
+ * make a one-line question look like a form. `lg` is for a dialog that carries
+ * a *list* — the daily review — where the extra width is what stops long task
+ * titles truncating.
+ *
+ * Two named sizes rather than a `className` override: two `max-w-*` utilities
+ * on one element are decided by stylesheet order, not by which was passed last,
+ * so an override would work or not depending on how Tailwind happened to emit
+ * them.
+ */
+export type DialogSize = "md" | "lg";
+
+const SIZE: Record<DialogSize, string> = {
+  md: "max-w-[min(28rem,calc(100vw-2.75rem))]",
+  lg: "max-w-[min(36rem,calc(100vw-2.75rem))]",
+};
+
 /** Destructive dialogs wear the magenta border and the darker ground, so the
  *  weight of the decision is legible before the copy is read. */
 const TONE: Record<DialogTone, { panel: string; title: string }> = {
@@ -22,6 +42,7 @@ export interface DialogProps {
   onClose?: () => void;
   title?: ReactNode;
   tone?: DialogTone;
+  size?: DialogSize;
   /** Actions row, pinned to the bottom of the panel. */
   footer?: ReactNode;
   className?: string;
@@ -33,6 +54,7 @@ export function Dialog({
   onClose,
   title,
   tone = "default",
+  size = "md",
   footer,
   className,
   children,
@@ -53,7 +75,8 @@ export function Dialog({
         } as CSSProperties
       }
       className={cx(
-        "m-auto max-w-[min(28rem,calc(100vw-2.75rem))] border p-5 text-ink",
+        "m-auto border p-5 text-ink",
+        SIZE[size],
         "rounded-4xl shadow-lg animate-dialog-in",
         "backdrop:animate-scrim-in backdrop:bg-scrim-modal",
         "open:flex open:flex-col open:gap-4",
