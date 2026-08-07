@@ -159,23 +159,44 @@ export function Tasks() {
     const future = item.scheduledOn !== null && item.scheduledOn > today;
     const waiting = queue.isPending(ref);
 
-    // Only an undated one-off can be pinned: a fresh completion is validated
-    // against the schedule, and that is its single exception. The swipe still
-    // responds on the others and says why, rather than reading as broken.
+    // Only an undated one-off can be *pinned* to today. A left swipe on
+    // anything else still stops it — that part always applies — so the notice
+    // only appears for a task that is not in progress either, where the gesture
+    // would otherwise do nothing at all.
+    const pinnable = item.task.type === "oneoff" && !item.task.dueAt;
     const pinBlocked =
-      item.task.type === "routine"
-        ? "Routines follow their own schedule."
-        : item.task.dueAt
-          ? "This one already has a due date."
-          : undefined;
+      pinnable || item.task.startedAt
+        ? undefined
+        : item.task.type === "routine"
+          ? "Routines follow their own schedule."
+          : "This one already has a due date.";
 
     return (
       <SwipeRow
         key={item.key}
         disabled={selecting}
         pinBlockedReason={pinBlocked}
-        onPin={() => updateTask.mutate({ id: item.task.id, patch: { pinnedOn: today } })}
-        onDelete={() => deleteTask.mutate(item.task.id)}
+        // Right starts it. Left brings it back to today, which also stops it —
+        // a task cannot be both "in progress" and "waiting for today", and the
+        // opposite swipe is how each is undone.
+        onStart={() =>
+          updateTask.mutate({
+            id: item.task.id,
+            patch: { startedAt: new Date().toISOString() },
+          })
+        }
+        onPin={() =>
+          updateTask.mutate({
+            id: item.task.id,
+            // A routine cannot be pinned, but it can be stopped: sending only
+            // the fields that apply keeps the API from refusing the whole
+            // gesture.
+            patch:
+              item.task.type === "oneoff" && !item.task.dueAt
+                ? { startedAt: null, pinnedOn: today }
+                : { startedAt: null },
+          })
+        }
       >
         <TaskRow
           title={item.task.title}
@@ -373,9 +394,18 @@ export function Tasks() {
 
       {!loading && !failed && !empty && (
         <div className="flex flex-col gap-6">
-          {/* Order is what you act on first: today's work, then the loose
-              captures, then what slipped. Completed today sits below them as a
-              record, and the fortnight ahead is reference material. */}
+          {/* Order is what you act on first: what is already underway, then
+              today's work, then the loose captures, then what slipped.
+              Completed today sits below them as a record, and the fortnight
+              ahead is reference material. */}
+          <Section
+            tone="progress"
+            title="In progress"
+            items={sections.inProgress}
+            render={renderRow}
+            open={folds.isOpen("progress")}
+            onToggle={() => folds.toggle("progress")}
+          />
           <Section
             tone="today"
             title="For today"

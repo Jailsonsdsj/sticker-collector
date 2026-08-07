@@ -21,6 +21,10 @@ export const PATCHABLE = [
   "endsOn",
   "dueAt",
   "pinnedOn",
+  // Unlike a pin, this is allowed on every kind of task: starting something
+  // says nothing about which day it may be completed on, so none of the
+  // scheduling rules apply to it.
+  "startedAt",
 ] as const;
 
 export type PatchField = (typeof PATCHABLE)[number];
@@ -149,6 +153,7 @@ export function toTask(row: TaskRow, lastCompletedOn: string | null = null): Tas
     endsOn: row.endsOn,
     dueAt: row.dueAt,
     pinnedOn: row.pinnedOn,
+    startedAt: row.startedAt,
     createdAt: row.createdAt,
     deletedAt: row.deletedAt,
     lastCompletedOn,

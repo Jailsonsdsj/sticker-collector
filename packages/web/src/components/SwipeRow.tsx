@@ -1,26 +1,27 @@
 import { type ReactNode, type PointerEvent as ReactPointerEvent, useRef, useState } from "react";
-import { claimsGesture, rowOffset, SWIPE_REVEAL_PX, swipeIntent } from "../lib/swipe";
-import { Button } from "./ui";
+import { claimsGesture, rowOffset, swipeIntent } from "../lib/swipe";
 import { cx } from "./ui/cx";
 
 /**
- * Swipe a task row: right to pull it into today, left to delete it.
+ * Swipe a task row between the two lists you actually move work through: right
+ * starts it, left pulls it into today.
  *
- * The two directions behave differently on purpose. **Right commits at once** —
- * pinning is reversible, so a confirmation would be friction for a decision
- * that costs nothing. **Left opens the row and leaves it open**, holding a
- * Delete button out from underneath. Deleting is the one action here that a
- * stray gesture could trigger and the user cannot undo, so it takes a
- * deliberate press on a real button, not merely a long enough swipe.
+ * **Both directions commit at once**, and both are reversible by the opposite
+ * swipe — which is why neither asks. Delete used to live on the left, behind a
+ * revealed button, precisely because it was the one thing here a stray gesture
+ * could do and the user could not undo; it has moved to the task view, where it
+ * still asks before it acts. Nothing on this row is destructive any more.
  *
- * The gesture is an accelerator, never the only route: delete lives in the edit
- * form and so does the pin. A swipe cannot be performed with a keyboard, so
- * anything reachable only this way would be unreachable for some people.
+ * The gesture is an accelerator, never the only route: both moves exist in the
+ * task view too. A swipe cannot be performed with a keyboard, so anything
+ * reachable only this way would be unreachable for some people.
  */
 export interface SwipeRowProps {
   children: ReactNode;
+  /** Left: into For today. */
   onPin?: () => void;
-  onDelete?: () => void;
+  /** Right: into In progress. */
+  onStart?: () => void;
   /**
    * Why this row cannot be pinned, if it cannot.
    *
@@ -37,26 +38,21 @@ export interface SwipeRowProps {
 export function SwipeRow({
   children,
   onPin,
-  onDelete,
+  onStart,
   pinBlockedReason,
   disabled = false,
 }: SwipeRowProps) {
   const start = useRef<{ x: number; y: number } | null>(null);
   const [drag, setDrag] = useState(0);
-  const [open, setOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   const close = () => {
     start.current = null;
     setDrag(0);
-    setOpen(false);
   };
 
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (disabled || event.pointerType === "mouse") return;
-    // An open row is dismissed by touching it, the way a tap anywhere else
-    // closes any other transient affordance.
-    if (open) return close();
     start.current = { x: event.clientX, y: event.clientY };
     setNotice(null);
   };
@@ -78,37 +74,41 @@ export function SwipeRow({
     start.current = null;
     setDrag(0);
 
-    if (intent === "delete") setOpen(true);
+    // Right starts it; left moves it into today. Both are reversible by the
+    // opposite swipe, so neither asks first.
+    if (intent === "start") onStart?.();
     else if (intent === "pin") {
       if (pinBlockedReason) setNotice(pinBlockedReason);
       else onPin?.();
     }
   };
 
-  const offset = open ? -SWIPE_REVEAL_PX : drag;
+  const offset = drag;
 
   return (
     <div className="relative">
-      {/* Underneath the row, uncovered as it moves aside. */}
+      {/* Underneath the row, uncovered as it moves aside. Each side names the
+          list the row is heading for, so the gesture explains itself before it
+          commits. */}
       <div className="absolute inset-0 flex items-center justify-between">
         <span
           aria-hidden
           className={cx(
-            "px-5 font-body text-sm font-bold text-today transition-opacity",
+            "px-5 font-body text-sm font-bold text-cyan transition-opacity",
             offset > 0 ? "opacity-100" : "opacity-0",
+          )}
+        >
+          In progress
+        </span>
+        <span
+          aria-hidden
+          className={cx(
+            "px-5 font-body text-sm font-bold text-today transition-opacity",
+            offset < 0 ? "opacity-100" : "opacity-0",
           )}
         >
           Today
         </span>
-
-        {/* A real button, not a label: the swipe reveals it, the press deletes.
-            Rendered only once the row is open so it is not an invisible target
-            sitting under every row in the list. */}
-        {open && (
-          <Button size="sm" tone="magenta" className="mr-3" onClick={() => onDelete?.()}>
-            Delete
-          </Button>
-        )}
       </div>
 
       <div

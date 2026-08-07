@@ -1,7 +1,14 @@
 import type { CSSProperties, ReactNode } from "react";
 import { cx } from "./ui/cx";
 
-export type SectionTone = "missed" | "general" | "today" | "backlog" | "completed" | "epic";
+export type SectionTone =
+  | "missed"
+  | "general"
+  | "today"
+  | "progress"
+  | "backlog"
+  | "completed"
+  | "epic";
 
 /** Each section wears its own accent, per the design: Missed magenta, Today
  *  cyan, Backlog muted — so the eye finds the urgent one first. */
@@ -11,6 +18,9 @@ const TONE: Record<SectionTone, string> = {
   // backlog so the eye still lands on Missed and For today first.
   general: "--color-backlog",
   today: "--color-today",
+  // Work already underway wears cyan — the same accent the swipe shows on its
+  // way there.
+  progress: "--color-cyan",
   backlog: "--color-backlog",
   // Done work reads as earned, which is the same green the wallet pays in.
   completed: "--color-earn",

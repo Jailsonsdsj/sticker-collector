@@ -4,6 +4,7 @@ import { localDateIn } from "@sticker-collector/shared";
 /**
  * The five home sections (prd/02-tasks.md §Home):
  *
+ *   0. In progress      — anything started, whatever day it belongs to
  *   1. Missed          — routine occurrences from earlier days, still open
  *   2. General         — every one-off, dated or not
  *   3. For today       — today's routine occurrences, plus pinned captures
@@ -28,6 +29,7 @@ export interface HomeItem {
 }
 
 export interface HomeSections {
+  inProgress: HomeItem[];
   missed: HomeItem[];
   general: HomeItem[];
   forToday: HomeItem[];
@@ -68,6 +70,7 @@ export function buildHome(
 ): HomeSections {
   const byId = new Map(tasks.map((t) => [t.id, t]));
 
+  const inProgress: HomeItem[] = [];
   const missed: HomeItem[] = [];
   const general: HomeItem[] = [];
   const forToday: HomeItem[] = [];
@@ -105,7 +108,27 @@ export function buildHome(
       continue;
     }
 
-    // 2. One-offs are General regardless of their due date — a dated one-off is
+    // 2. Started work outranks the day it belongs to — but **once**.
+    //
+    //    `startedAt` is a property of the TASK, and a routine is many rows: one
+    //    per day in the window. Sending every one of them here put the same
+    //    title in the list five times over, which is what starting a routine
+    //    looked like from the outside.
+    //
+    //    A routine therefore contributes only TODAY's occurrence. Its other
+    //    days keep their own meaning — a Tuesday that was missed is still
+    //    missed — and a routine not scheduled today contributes nothing, which
+    //    is also the honest answer: there is no day to tick.
+    //
+    //    A one-off has a single occurrence, so it comes here whatever date it
+    //    carries.
+    if (task.startedAt && (task.type === "oneoff" || occurrence.scheduledOn === today)) {
+      inProgress.push(item);
+      seen.add(task.id);
+      continue;
+    }
+
+    // 3. One-offs are General regardless of their due date — a dated one-off is
     //    still a one-off, and splitting them by date is what the old Backlog
     //    did.
     if (task.type === "oneoff") {
@@ -137,11 +160,13 @@ export function buildHome(
     if (task.lastCompletedOn || seen.has(task.id)) continue;
 
     const item = { key: task.id, task, occurrence: null, scheduledOn: null, done: false };
-    if (task.pinnedOn === today) forToday.push(item);
+    if (task.startedAt) inProgress.push(item);
+    else if (task.pinnedOn === today) forToday.push(item);
     else general.push(item);
   }
 
   return {
+    inProgress: inProgress.sort(byPriority),
     // Most recent first: yesterday's slip is the one you are most likely to
     // still care about.
     missed: missed.sort(byDateDesc),

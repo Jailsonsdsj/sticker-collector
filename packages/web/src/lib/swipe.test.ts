@@ -34,15 +34,15 @@ describe("what a released gesture means", () => {
     expect(swipeIntent(SWIPE_COMMIT_PX - 1, 0)).toBeNull();
   });
 
-  it("right is a pin, left is a delete", () => {
-    expect(swipeIntent(SWIPE_COMMIT_PX, 0)).toBe("pin");
-    expect(swipeIntent(-SWIPE_COMMIT_PX, 0)).toBe("delete");
-    expect(swipeIntent(200, 0)).toBe("pin");
-    expect(swipeIntent(-200, 0)).toBe("delete");
+  it("right starts the task, left moves it to today", () => {
+    expect(swipeIntent(SWIPE_COMMIT_PX, 0)).toBe("start");
+    expect(swipeIntent(-SWIPE_COMMIT_PX, 0)).toBe("pin");
+    expect(swipeIntent(200, 0)).toBe("start");
+    expect(swipeIntent(-200, 0)).toBe("pin");
   });
 
   it("is nothing when the finger mostly went down the page", () => {
-    // A long diagonal scroll must not delete a task on the way past.
+    // A long diagonal scroll must not move a task on the way past.
     expect(swipeIntent(-100, 300)).toBeNull();
   });
 });

@@ -65,8 +65,9 @@ Every task is either a **routine** or a **one-off**. The choice is made at creat
 
 **The home screen**
 
-Five sections, in this order:
+Six sections, in this order:
 
+0. **In progress** — anything with a `startedAt`. A routine contributes **only today's occurrence**: `startedAt` belongs to the task and a routine is one row per day, so listing every one of them put the same title on screen five times. Its other days keep their own meaning (a Tuesday that was missed is still missed), and a started routine that is not scheduled today shows nothing here — there would be no day to tick. A one-off is a single row, so it appears here whatever date it carries. Unlike a pin, this is an **instant and it does not expire**: a pin is a claim about *today* and is worthless tomorrow, while starting something is a claim about the task, and putting a half-finished job back in the general pile every morning is exactly what marking it started is for. It outranks every section but *Completed today*.
 1. **For today** — today's routine occurrences, plus any capture pinned to
    today. **Only an undated one-off can be pinned**: a fresh completion is
    validated against the schedule, and the undated one-off is its single
@@ -81,7 +82,7 @@ Five sections, in this order:
    the section is a record of today's effort rather than of today's schedule.
 5. **Routine backlog** — routine occurrences scheduled ahead.
 
-**For today, General and Completed today open by default; Missed and the
+**In progress, For today, General and Completed today open by default; Missed and the
 routine backlog start folded.** The two folded ones are reference rather than
 work in hand — what already slipped, and a fortnight that has not happened —
 and either one open pushes today's actual list off the first screenful. The
@@ -98,9 +99,19 @@ two urgencies. *Completed today* stays alphabetical — it is a record, and
 nothing in it needs doing.
 
 **An item appears in exactly one section**, decided by precedence: completed
-today wins over everything, then for-today, then missed, then general, then the
-backlog. Without that rule a one-off pinned to today qualifies for two sections
+today wins over everything, then in progress, then for-today, then missed, then
+general, then the backlog. Without that rule a one-off pinned to today qualifies for two sections
 and renders twice.
+
+**Swiping a row moves it between the two lists work actually passes through:**
+right starts it (into *In progress*), left brings it into *For today* — and
+stops it, because a task cannot be both underway and merely planned. Both
+directions commit at once and each undoes the other, which is why neither asks.
+**Delete is not on the row any more**: it was the one gesture here that a stray
+touch could trigger and the user could not undo, and it lives in the task view,
+where it still asks first. Only an undated one-off can be *pinned*, so a left
+swipe on anything else only stops it; when there is nothing to stop either, the
+row says why rather than doing nothing.
 
 Completing anything moves it to *Completed today* immediately, and undoing
 inside the undo window moves it back. "For today" therefore counts what is

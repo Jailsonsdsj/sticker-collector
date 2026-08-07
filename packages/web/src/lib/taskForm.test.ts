@@ -299,6 +299,7 @@ const existing = (over: Partial<Task> = {}): Task => ({
   endsOn: null,
   dueAt: null,
   pinnedOn: null,
+  startedAt: null,
   createdAt: "2026-07-01T00:00:00Z",
   deletedAt: null,
   lastCompletedOn: null,

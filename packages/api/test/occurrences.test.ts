@@ -149,8 +149,12 @@ describe("zero writes — the whole point of lazy materialisation", () => {
 });
 
 describe("generation", () => {
+  // These fixtures name **fixed August dates**, so the task has to have existed
+  // then: a routine's schedule starts no earlier than the day it was created.
+  // Creating them "now" made the whole block pass only until the real calendar
+  // moved past those dates — which it did, on 2026-08-06.
   it("produces a Mon–Fri routine and skips weekends", async () => {
-    await createTask(monFri());
+    await createOldTask(monFri());
     // 2026-08-03 is a Monday.
     const got = await fetchWindow("2026-08-03", "2026-08-09");
     expect(got.map((o) => o.scheduledOn)).toEqual([
@@ -163,13 +167,13 @@ describe("generation", () => {
   });
 
   it("produces a Sat-only routine", async () => {
-    await createTask(monFri({ weekdays: maskFromDays([SAT]) }));
+    await createOldTask(monFri({ weekdays: maskFromDays([SAT]) }));
     const got = await fetchWindow("2026-08-03", "2026-08-16");
     expect(got.map((o) => o.scheduledOn)).toEqual(["2026-08-08", "2026-08-15"]);
   });
 
   it("clips to startsOn and endsOn", async () => {
-    await createTask(monFri({ startsOn: "2026-08-05", endsOn: "2026-08-06" }));
+    await createOldTask(monFri({ startsOn: "2026-08-05", endsOn: "2026-08-06" }));
     const got = await fetchWindow("2026-08-03", "2026-08-14");
     expect(got.map((o) => o.scheduledOn)).toEqual(["2026-08-05", "2026-08-06"]);
   });
@@ -189,7 +193,7 @@ describe("generation", () => {
   });
 
   it("returns results sorted by date", async () => {
-    await createTask(monFri());
+    await createOldTask(monFri());
     const got = await fetchWindow("2026-08-03", "2026-08-21");
     const dates = got.map((o) => o.scheduledOn);
     expect([...dates].sort()).toEqual(dates);
@@ -381,7 +385,7 @@ describe("scoping and guards", () => {
   });
 
   it("generates nothing for a soft-deleted routine", async () => {
-    const task = await createTask(monFri());
+    const task = await createOldTask(monFri());
     expect((await fetchWindow("2026-08-03", "2026-08-09")).length).toBe(5);
 
     await call("DELETE", `/api/tasks/${task.id}`);
