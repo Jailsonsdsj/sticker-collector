@@ -104,6 +104,7 @@ describe("the defaults table", () => {
       "epics-next",
       "general",
       "missed",
+      "progress",
       "today",
     ]);
   });
@@ -114,6 +115,8 @@ describe("the defaults table", () => {
     // running today.
     expect(SECTION_DEFAULTS["epics-achieved"]).toBe(false);
     expect(SECTION_DEFAULTS["epics-active"]).toBe(true);
+    // What you are in the middle of is work in hand by definition.
+    expect(SECTION_DEFAULTS.progress).toBe(true);
     expect(SECTION_DEFAULTS["epics-next"]).toBe(true);
   });
 

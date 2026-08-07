@@ -165,6 +165,8 @@ export const updateTaskSchema = z
     dueAt: instantSchema.nullish(),
     /** Set to today to pin, null to unpin. */
     pinnedOn: localDateSchema.nullish(),
+    /** Set to start the task, null to stop. See `taskSchema.startedAt`. */
+    startedAt: instantSchema.nullish(),
   })
   .partial()
   .refine((t) => Object.keys(t).length > 0, { message: "no fields to update" })
@@ -206,6 +208,20 @@ export const taskSchema = z.object({
    * to tell a deliberate pin from a forgotten one.
    */
   pinnedOn: localDateSchema.nullable(),
+  /**
+   * When work on this task started, or null.
+   *
+   * **An instant, not a date, and it does not expire.** A pin is a claim about
+   * *today* — "I will do this today" — and is worthless tomorrow, which is why
+   * it is a date. Starting something is a claim about the task: it stays
+   * started across midnight, because putting a half-finished job back in the
+   * general pile every morning is exactly the thing a person is trying to
+   * avoid by marking it started at all.
+   *
+   * Kept as the instant rather than a boolean so "since when" is answerable
+   * without a second column.
+   */
+  startedAt: instantSchema.nullable(),
   createdAt: instantSchema,
   deletedAt: instantSchema.nullable(),
   /**

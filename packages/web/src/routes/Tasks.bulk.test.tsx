@@ -1,7 +1,7 @@
 import type { Occurrence, Task } from "@sticker-collector/shared";
 import { addDays, todayIn, WEEKDAYS_MASK_WEEKDAYS } from "@sticker-collector/shared";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router";
@@ -35,6 +35,7 @@ const task = (over: Partial<Task>): Task => ({
   endsOn: null,
   dueAt: null,
   pinnedOn: null,
+  startedAt: null,
   createdAt: "2026-07-01T00:00:00Z",
   deletedAt: null,
   lastCompletedOn: null,
@@ -411,5 +412,91 @@ describe("yesterday, read back on the first visit of the day", () => {
 
     await waitFor(() => expect(screen.getAllByText("Buy milk").length).toBeGreaterThan(0));
     expect(screen.queryByText("Yesterday")).not.toBeInTheDocument();
+  });
+});
+
+describe("swiping a row between the two lists", () => {
+  const swipe = (row: HTMLElement, dx: number) => {
+    fireEvent.pointerDown(row, { pointerType: "touch", clientX: 0, clientY: 0 });
+    fireEvent.pointerMove(row, { pointerType: "touch", clientX: dx, clientY: 0 });
+    fireEvent.pointerUp(row, { pointerType: "touch", clientX: dx, clientY: 0 });
+  };
+
+  const rowFor = (title: string) =>
+    (screen.getAllByText(title)[0] as HTMLElement).closest("[class*='touch-pan-y']") as HTMLElement;
+
+  const patchFor = (id: string) => {
+    const call = fetchMock.mock.calls.find(
+      ([url, init]) => url === `/api/tasks/${id}` && init?.method === "PATCH",
+    );
+    return call ? JSON.parse(call[1].body as string) : null;
+  };
+
+  const open = async () => {
+    render(<Tasks />, { wrapper });
+    await waitFor(() => expect(screen.getAllByText("Buy milk").length).toBeGreaterThan(0));
+  };
+
+  it("starts the task on a swipe right", async () => {
+    await open();
+
+    swipe(rowFor("Buy milk"), 120);
+
+    await waitFor(() => expect(patchFor("t2")?.startedAt).toEqual(expect.any(String)));
+  });
+
+  it("brings it back to today on a swipe left, and stops it", async () => {
+    // A task cannot be both "in progress" and "waiting for today", and the
+    // opposite swipe is how each is undone.
+    await open();
+
+    swipe(rowFor("Buy milk"), -120);
+
+    await waitFor(() =>
+      expect(patchFor("t2")).toEqual({ startedAt: null, pinnedOn: expect.any(String) }),
+    );
+  });
+
+  it("never deletes anything", async () => {
+    // Delete used to live on the left. It moved to the task view, where it
+    // still asks first.
+    await open();
+
+    swipe(rowFor("Buy milk"), -120);
+    swipe(rowFor("Buy milk"), 120);
+
+    expect(screen.queryByRole("button", { name: /delete/i })).not.toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === "DELETE")).toBe(false);
+  });
+
+  it("stops a started routine without trying to pin it", async () => {
+    // Only an undated one-off can be pinned; sending a pin for a routine would
+    // have the API refuse the whole gesture, stopping included.
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      const read = (init?.method ?? "GET") === "GET";
+      if (read && url.startsWith("/api/occurrences")) return json(OCCURRENCES);
+      if (read && url.startsWith("/api/tasks"))
+        return json([task({ id: "t1", startedAt: "2026-08-01T09:00:00Z", weekdays: 0b1111111 })]);
+      if (read && url.startsWith("/api/epics")) return json([]);
+      if (read && url.startsWith("/api/wallet")) return json({ balance: 0 });
+      return json({ ok: true });
+    });
+    render(<Tasks />, { wrapper });
+    await waitFor(() => expect(screen.getAllByText("Stretch").length).toBeGreaterThan(0));
+
+    swipe(rowFor("Stretch"), -120);
+
+    await waitFor(() => expect(patchFor("t1")).toEqual({ startedAt: null }));
+  });
+
+  it("says why instead, for a routine that was never started", async () => {
+    // Nothing to stop and nothing to pin: the gesture would do nothing at all,
+    // which reads as broken.
+    await open();
+
+    swipe(rowFor("Stretch"), -120);
+
+    expect(await screen.findByRole("status")).toHaveTextContent(/routines follow their own/i);
+    expect(patchFor("t1")).toBeNull();
   });
 });

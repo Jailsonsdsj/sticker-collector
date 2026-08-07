@@ -21,6 +21,7 @@ function task(over: Partial<Task> = {}): Task {
     endsOn: null,
     dueAt: null,
     pinnedOn: null,
+    startedAt: null,
     createdAt: "2026-07-01T00:00:00Z",
     deletedAt: null,
     lastCompletedOn: null,
@@ -249,6 +250,128 @@ describe("pinning to today", () => {
   });
 });
 
+describe("in progress", () => {
+  const STARTED = "2026-08-01T09:00:00Z";
+
+  it("lists a started ROUTINE once, not once per day", () => {
+    // The bug this exists for: `startedAt` belongs to the task, and a routine
+    // is one row per day in the window. Every one of them arrived in the list,
+    // so starting a routine put the same title on screen five times.
+    const routine = task({ id: "r", title: "Stretch", startedAt: STARTED });
+
+    const home = buildHome(
+      [
+        occ("r", addDays(TODAY, -2), "missed"),
+        occ("r", TODAY, "pending"),
+        occ("r", addDays(TODAY, 1), "pending"),
+        occ("r", addDays(TODAY, 2), "pending"),
+      ],
+      [routine],
+      TODAY,
+      UTC,
+    );
+
+    expect(home.inProgress).toHaveLength(1);
+    expect(home.inProgress[0]?.scheduledOn).toBe(TODAY);
+  });
+
+  it("leaves that routine's other days where they belong", () => {
+    // A Tuesday that was missed is still missed; starting the routine says
+    // nothing about a day that has already gone.
+    const routine = task({ id: "r", title: "Stretch", startedAt: STARTED });
+
+    const home = buildHome(
+      [
+        occ("r", addDays(TODAY, -2), "missed"),
+        occ("r", TODAY, "pending"),
+        occ("r", addDays(TODAY, 3), "pending"),
+      ],
+      [routine],
+      TODAY,
+      UTC,
+    );
+
+    expect(home.missed).toHaveLength(1);
+    expect(home.routineBacklog).toHaveLength(1);
+  });
+
+  it("shows nothing for a started routine that is not scheduled today", () => {
+    // There is no day to tick, and a row that cannot be ticked is a row that
+    // reads as broken.
+    const routine = task({ id: "r", title: "Stretch", startedAt: STARTED });
+
+    const home = buildHome([occ("r", addDays(TODAY, 2), "pending")], [routine], TODAY, UTC);
+
+    expect(home.inProgress).toEqual([]);
+    expect(home.routineBacklog).toHaveLength(1);
+  });
+
+  it("keeps a started DATED one-off here, whatever day it is due", () => {
+    // A one-off is a single row, so there is nothing to duplicate — and its due
+    // date is not a reason to bury the thing you are in the middle of.
+    const dated = oneoff({
+      id: "d",
+      title: "Post the form",
+      dueAt: `${addDays(TODAY, 4)}T09:00:00Z`,
+      startedAt: STARTED,
+    });
+
+    const home = buildHome([occ("d", addDays(TODAY, 4), "pending")], [dated], TODAY, UTC);
+
+    expect(titles(home.inProgress)).toEqual(["Post the form"]);
+    expect(home.general).toEqual([]);
+  });
+
+  it("takes a started task out of whichever list it was in", () => {
+    // "In progress" is a claim about the task, not about today: a routine
+    // begun this morning and a one-off begun last week belong together.
+    const routine = task({ id: "r", title: "Stretch", startedAt: STARTED });
+    const capture = oneoff({ id: "o", title: "Buy milk", startedAt: STARTED });
+
+    const home = buildHome([occ("r", TODAY, "pending")], [routine, capture], TODAY, UTC);
+
+    expect(titles(home.inProgress)).toEqual(["Buy milk", "Stretch"]);
+    expect(home.forToday).toEqual([]);
+    expect(home.general).toEqual([]);
+  });
+
+  it("does not expire overnight, the way a pin does", () => {
+    // A pin is a claim about today and is worthless tomorrow. Putting a
+    // half-finished job back in the general pile every morning is exactly what
+    // marking it started is for.
+    const capture = oneoff({ id: "o", startedAt: "2026-07-01T09:00:00Z" });
+
+    const home = buildHome([], [capture], TODAY, UTC);
+
+    expect(home.inProgress).toHaveLength(1);
+    expect(home.general).toEqual([]);
+  });
+
+  it("still leaves a finished one out of it", () => {
+    // Completed today wins over everything, including work that was started.
+    const capture = oneoff({ id: "o", startedAt: STARTED });
+
+    const home = buildHome([occ("o", TODAY, "done")], [capture], TODAY, UTC);
+
+    expect(home.inProgress).toEqual([]);
+    expect(home.completedToday).toHaveLength(1);
+  });
+
+  it("leads with the high-priority work, like every other section", () => {
+    const home = buildHome(
+      [],
+      [
+        oneoff({ id: "a", title: "Alpha", priority: "low", startedAt: STARTED }),
+        oneoff({ id: "z", title: "Zebra", priority: "high", startedAt: STARTED }),
+      ],
+      TODAY,
+      UTC,
+    );
+
+    expect(titles(home.inProgress)).toEqual(["Zebra", "Alpha"]);
+  });
+});
+
 describe("ordering", () => {
   it("puts the most recent slip at the top of Missed", () => {
     const t = task({ id: "t1" });
@@ -392,8 +515,9 @@ describe("ordering", () => {
 });
 
 describe("empty", () => {
-  it("returns five empty sections for a new user", () => {
+  it("returns every section, empty, for a new user", () => {
     expect(buildHome([], [], TODAY, UTC)).toEqual({
+      inProgress: [],
       missed: [],
       general: [],
       forToday: [],

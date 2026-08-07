@@ -135,3 +135,67 @@ describe("everything else", () => {
     expect((await rowOf(created.id))?.pinned_on).toBeNull();
   });
 });
+
+describe("starting a task", () => {
+  it("can be started and stopped, whatever kind of task it is", async () => {
+    // Unlike a pin, this says nothing about which day the task may be
+    // completed on, so none of the scheduling rules apply to it.
+    const routine = (await (
+      await create({
+        title: "Stretch",
+        type: "routine",
+        effortMinutes: 15,
+        weekdays: 0b1111111,
+      })
+    ).json()) as { id: string };
+
+    const started = await patch(routine.id, { startedAt: "2026-08-06T09:00:00Z" });
+    expect(started.status).toBe(200);
+    expect((await started.json()) as { startedAt: string | null }).toMatchObject({
+      startedAt: "2026-08-06T09:00:00Z",
+    });
+
+    const stopped = await patch(routine.id, { startedAt: null });
+    expect(((await stopped.json()) as { startedAt: string | null }).startedAt).toBeNull();
+  });
+
+  it("can be started and pinned in one request", async () => {
+    // The home screen's left swipe sends both at once: a task cannot be in
+    // progress and waiting for today at the same time.
+    const created = (await (
+      await create({ title: "Buy milk", type: "oneoff", effortMinutes: 15 })
+    ).json()) as { id: string };
+    await patch(created.id, { startedAt: "2026-08-06T09:00:00Z" });
+
+    const response = await patch(created.id, { startedAt: null, pinnedOn: TODAY });
+
+    expect(response.status).toBe(200);
+    expect((await response.json()) as Record<string, unknown>).toMatchObject({
+      startedAt: null,
+      pinnedOn: TODAY,
+    });
+  });
+
+  it("refuses a value that is not an instant", async () => {
+    const created = (await (
+      await create({ title: "Buy milk", type: "oneoff", effortMinutes: 15 })
+    ).json()) as { id: string };
+
+    expect((await patch(created.id, { startedAt: "yesterday" })).status).toBe(400);
+  });
+
+  it("is not accepted at creation", async () => {
+    // Nothing is in progress the moment it is captured, and `createTaskSchema`
+    // is strict — a field it does not know is a typo, not a feature.
+    expect(
+      (
+        await create({
+          title: "Buy milk",
+          type: "oneoff",
+          effortMinutes: 15,
+          startedAt: "2026-08-06T09:00:00Z",
+        })
+      ).status,
+    ).toBe(400);
+  });
+});

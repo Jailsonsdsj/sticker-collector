@@ -24,6 +24,8 @@ const KEY = "sc_section_open";
  * off the first screenful.
  */
 export const SECTION_DEFAULTS: Record<string, boolean> = {
+  // What you are in the middle of, above what you merely planned.
+  progress: true,
   today: true,
   general: true,
   missed: false,

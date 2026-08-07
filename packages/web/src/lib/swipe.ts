@@ -19,16 +19,7 @@ export const SWIPE_COMMIT_PX = 72;
  */
 export const SWIPE_CLAIM_PX = 12;
 
-/**
- * Where the row rests once a left swipe has opened it.
- *
- * The row stays here, holding the Delete button out from under itself, until
- * the button is pressed or the row is dismissed. Wide enough for a 44px target
- * plus breathing room on either side.
- */
-export const SWIPE_REVEAL_PX = 104;
-
-export type SwipeIntent = "pin" | "delete" | null;
+export type SwipeIntent = "start" | "pin" | null;
 
 /**
  * Is this gesture the row's, or the scroller's?
@@ -54,11 +45,18 @@ export function swipeDirection(dx: number, dy: number): -1 | 0 | 1 {
   return dx > 0 ? 1 : -1;
 }
 
-/** What a released gesture means to a task row, or null if it was not far enough. */
+/**
+ * What a released gesture means to a task row, or null if it was not far
+ * enough.
+ *
+ * Right **starts** the task, left pulls it into **today**. Left used to delete,
+ * which is why the row no longer opens and holds a button: neither of these is
+ * destructive, and both are undone by swiping the other way.
+ */
 export function swipeIntent(dx: number, dy: number): SwipeIntent {
   const direction = swipeDirection(dx, dy);
   if (direction === 0) return null;
-  return direction > 0 ? "pin" : "delete";
+  return direction > 0 ? "start" : "pin";
 }
 
 /**

@@ -133,6 +133,9 @@ export const task = sqliteTable(
     // about today, and tomorrow it should stop being true without anyone
     // having to remember to clear it.
     pinnedOn: text("pinned_on"),
+    /** ISO instant when work started, or null. Does not expire; see the shared
+     *  read model for why it is not a date. */
+    startedAt: text("started_at"),
     createdAt: text("created_at").notNull(),
     deletedAt: text("deleted_at"),
   },
