@@ -42,7 +42,7 @@ export function WeeklyGrid({ routines, accentOf, today, onChangeMask, disabled }
   }
 
   return (
-    <WeekGridShell today={today}>
+    <WeekGridShell today={today} rows={routines.length}>
       {routines.map((task) => {
         const mask = task.weekdays ?? 0;
         // A routine with no days is not a routine — `weekdayMaskSchema` is
@@ -97,7 +97,9 @@ function Row({
             fill
             className="w-full"
             checked={on}
-            ring={index === todayIndex}
+            // A scheduled day is the answer to "does this run?", so it carries
+            // the heavier border. Today is the column outline's job now.
+            strong={on}
             disabled={disabled || (on && lastRemaining)}
             label={`${task.title} — ${WEEKDAYS[index]}`}
             onChange={() => onChangeMask(task.id, maskToggleDay(mask, index as Weekday))}

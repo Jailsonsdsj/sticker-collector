@@ -241,3 +241,59 @@ describe("the epic colour", () => {
     expect(label.className).toContain("break-words");
   });
 });
+
+/** The box a checkbox actually draws — the input itself is `sr-only`. */
+const box = (title: string, day: string) =>
+  cell(title, day).parentElement?.querySelector("span[aria-hidden]") as HTMLElement;
+
+describe("saying which day is today", () => {
+  it("draws one outline around today's column, not a halo per cell", () => {
+    // Seven small halos down a column read as seven separate states rather
+    // than one day, and "is this row's box for today?" took counting.
+    const { container } = render(
+      <WeeklyGrid
+        routines={[routine({ weekdays: maskFromDays([0, 1]) })]}
+        today={MONDAY}
+        onChangeMask={vi.fn()}
+      />,
+    );
+
+    const outline = container.querySelector("[class*='border-ring-today']") as HTMLElement;
+    expect(outline).not.toBeNull();
+    // Monday is the second grid column (the first holds the row labels), and
+    // it spans the header plus the one task row.
+    expect(outline.style.gridColumn).toBe("2 / 3");
+    expect(outline.style.gridRow).toBe("1 / 3");
+    // Out of flow, or it would occupy those cells and shove every column along
+    // by one — which is exactly what the first attempt did.
+    expect(outline.className).toContain("absolute");
+    expect(outline.className).toContain("pointer-events-none");
+  });
+
+  it("moves with the day", () => {
+    const { container } = render(
+      <WeeklyGrid
+        routines={[routine({ weekdays: maskFromDays([0]) })]}
+        // 2026-08-06 is a Thursday: index 3, so the fifth grid column.
+        today="2026-08-06"
+        onChangeMask={vi.fn()}
+      />,
+    );
+
+    expect(
+      (container.querySelector("[class*='border-ring-today']") as HTMLElement).style.gridColumn,
+    ).toBe("5 / 6");
+  });
+});
+
+describe("saying which days the routine runs", () => {
+  it("gives a scheduled day a heavier edge than an unscheduled one", () => {
+    // An empty box meant two things — "not this routine's day" and "this
+    // routine's day, not done" — and at the same weight they looked alike.
+    setup([routine({ weekdays: maskFromDays([0]) })]);
+
+    expect(box("Stretch", "Mon").className).toContain("border-[3px]");
+    expect(box("Stretch", "Tue").className).toContain("border-2");
+    expect(box("Stretch", "Tue").className).not.toContain("border-[3px]");
+  });
+});

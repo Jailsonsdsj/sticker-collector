@@ -13,9 +13,14 @@ import { afterEach } from "vitest";
  * The margin matters as much as the number: set this *at* `testTimeout` and a
  * retrying query stops failing fast and blows the test timeout instead, which
  * is a worse failure — it reports "timed out in 5000ms" and names no element.
- * 3 s here against 20 s there leaves room for both to do their job.
+ * 5 s here against 20 s there leaves room for both to do their job.
+ *
+ * **5 s, not 3.** It was 3000, which is exactly `UNDO_WINDOW_MS`: a test that
+ * waits for a deferred completion to commit was racing the timeout that was
+ * supposed to be its safety net, and failed roughly one run in three. A
+ * deadline equal to the thing it is waiting for is not a deadline.
  */
-configure({ asyncUtilTimeout: 3000 });
+configure({ asyncUtilTimeout: 5000 });
 
 // React Testing Library leaves the last render mounted; without this a stray
 // query in the next test can match the previous test's DOM and pass for the

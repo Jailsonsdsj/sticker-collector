@@ -179,3 +179,29 @@ describe("the grid itself", () => {
     expect(onToggle).toHaveBeenCalledWith("t1", "2026-08-03", true);
   });
 });
+
+const boxOf = (day: string, title = "Stretch") =>
+  cell(day, title).parentElement?.querySelector("span[aria-hidden]") as HTMLElement;
+
+describe("telling a scheduled day from an unscheduled one", () => {
+  it("gives the scheduled day the heavier edge, and the unscheduled one the muted dot", () => {
+    // The confusion this fixes: an empty box on a day the routine does not run
+    // looked like an empty box on a day it does.
+    setup();
+
+    expect(boxOf("Mon").className).toContain("border-[3px]");
+    // Muted cells keep their own hairline treatment — they are inert, and a
+    // heavy edge on something you cannot tick is a promise the grid breaks.
+    expect(boxOf("Sat").className).not.toContain("border-[3px]");
+  });
+
+  it("outlines today's column once, rather than ringing each cell", () => {
+    setup();
+
+    const outlines = document.querySelectorAll("[class*='border-ring-today']");
+    expect(outlines).toHaveLength(1);
+    // Header plus one task row, and out of flow so it takes no cells.
+    expect((outlines[0] as HTMLElement).style.gridRow).toBe("1 / 3");
+    expect((outlines[0] as HTMLElement).className).toContain("absolute");
+  });
+});
