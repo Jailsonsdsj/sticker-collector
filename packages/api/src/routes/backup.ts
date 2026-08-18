@@ -8,6 +8,7 @@ import { eq, inArray } from "drizzle-orm";
 import { Hono } from "hono";
 import { db } from "../db/client";
 import { album, epic, holding, ledger, occurrence, sticker, task, user } from "../db/schema";
+import { selectIn } from "../lib/selectIn";
 import { idempotency } from "../middleware/idempotency";
 import { requireAuth } from "../middleware/require-auth";
 
@@ -20,19 +21,6 @@ backupRoutes.use("*", requireAuth);
  * whole rows, and a task row is 16 columns, so the safe chunk is small.
  */
 const MAX_PARAMS = 100;
-
-/**
- * D1's parameter ceiling applies to reads as much as writes: `IN (?, ?, …)`
- * with 200 ids is 200 variables, and the query is rejected outright. Every
- * scoped SELECT below goes through this.
- */
-async function selectIn<T>(ids: string[], run: (batch: string[]) => Promise<T[]>): Promise<T[]> {
-  const results: T[] = [];
-  for (let i = 0; i < ids.length; i += MAX_PARAMS) {
-    results.push(...(await run(ids.slice(i, i + MAX_PARAMS))));
-  }
-  return results;
-}
 
 function chunkFor<T extends Record<string, unknown>>(rows: T[]): T[][] {
   if (rows.length === 0) return [];

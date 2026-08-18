@@ -19,6 +19,7 @@ import { Hono } from "hono";
 import { db } from "../db/client";
 import { album, holding, ledger, occurrence, sticker, task } from "../db/schema";
 import { scheduleOf } from "../lib/occurrences";
+import { selectIn } from "../lib/selectIn";
 import { listGeneratingTasks } from "../lib/tasks";
 import { timeZoneOf } from "../lib/user";
 import { requireAuth } from "../middleware/require-auth";
@@ -61,19 +62,20 @@ reportRoutes.get("/momentum", async (c) => {
   // live task ids are what scopes this. A deleted task's history stays in the
   // table and is simply not asked for.
   const taskIds = tasks.map((task) => task.id);
-  const rows =
-    taskIds.length === 0
-      ? []
-      : await database
-          .select({ taskId: occurrence.taskId, scheduledOn: occurrence.scheduledOn })
-          .from(occurrence)
-          .where(
-            and(
-              inArray(occurrence.taskId, taskIds),
-              eq(occurrence.status, "done"),
-              gte(occurrence.scheduledOn, from),
-            ),
-          );
+  // Chunked against D1's 100-parameter ceiling — the same reason the home
+  // screen's window is.
+  const rows = await selectIn(taskIds, (batch) =>
+    database
+      .select({ taskId: occurrence.taskId, scheduledOn: occurrence.scheduledOn })
+      .from(occurrence)
+      .where(
+        and(
+          inArray(occurrence.taskId, batch),
+          eq(occurrence.status, "done"),
+          gte(occurrence.scheduledOn, from),
+        ),
+      ),
+  );
 
   const completions = new Map<string, Set<LocalDate>>();
   for (const row of rows) {
