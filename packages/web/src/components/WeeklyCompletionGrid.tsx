@@ -79,7 +79,7 @@ export function WeeklyCompletionGrid({
         </span>
       </div>
 
-      <WeekGridShell today={today}>
+      <WeekGridShell today={today} rows={routines.length}>
         {routines.map((task) => (
           <Row
             key={task.id}
@@ -136,7 +136,10 @@ function Row({
             className="w-full"
             muted={!runs}
             checked={runs && ticked}
-            ring={date === today}
+            // Scheduled but not yet ticked is the state that has to read as
+            // "this is expected of you": a heavier border, so it is not
+            // mistaken for a day the routine does not run.
+            strong={runs}
             disabled={future}
             label={`${task.title} — ${WEEKDAYS[index]}`}
             onChange={(next) => onToggle(task.id, date, next)}

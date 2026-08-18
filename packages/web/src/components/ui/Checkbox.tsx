@@ -14,8 +14,18 @@ const BASE =
   "peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-cyan " +
   "peer-disabled:opacity-40";
 
-const CHECKED = "border-2 border-lime bg-lime text-ink-inverse";
-const UNCHECKED = "border-2 border-check-off bg-transparent text-transparent";
+const CHECKED = "border-lime bg-lime text-ink-inverse";
+const UNCHECKED = "border-check-off bg-transparent text-transparent";
+
+/**
+ * How heavy the box's edge is.
+ *
+ * `strong` is for a box whose day is actually scheduled — in the weekly grids
+ * an empty box means two different things, "not today's job" and "today's job,
+ * not done yet", and at 2px they looked the same. Border widths are not
+ * tokenised yet (backlog TD-03), which is why these are literals.
+ */
+const WEIGHT = { normal: "border-2", strong: "border-[3px]" } as const;
 /** A day the routine is not scheduled on: present, inert, and visibly so. */
 const MUTED = "border border-cell-idle bg-transparent text-ink-ghost peer-disabled:opacity-100";
 
@@ -25,8 +35,8 @@ export interface CheckboxProps
   size?: CheckboxSize;
   /** Unscheduled — renders a dot and does not respond. */
   muted?: boolean;
-  /** Today's column in the weekly grid wears a cyan halo. */
-  ring?: boolean;
+  /** A heavier edge, for a box whose day the routine actually runs on. */
+  strong?: boolean;
   /**
    * Stretch the box to the label's width.
    *
@@ -46,7 +56,7 @@ export function Checkbox({
   checked = false,
   size = "md",
   muted = false,
-  ring = false,
+  strong = false,
   fill = false,
   label,
   onChange,
@@ -80,13 +90,11 @@ export function Checkbox({
       />
       <span
         aria-hidden
-        style={{
-          ...(ring ? { boxShadow: "0 0 0 2px var(--color-ring-today)" } : {}),
-          ...style,
-        }}
+        style={style}
         className={cx(
           BASE,
           SIZE[size],
+          WEIGHT[strong && !muted ? "strong" : "normal"],
           muted ? MUTED : checked ? CHECKED : UNCHECKED,
           fill && "w-full",
         )}

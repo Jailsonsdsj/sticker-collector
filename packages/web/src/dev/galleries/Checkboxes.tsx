@@ -20,7 +20,7 @@ export function Checkboxes() {
           <Checkbox muted label="Unscheduled" />
           <Checkbox checked disabled label="Checked, disabled" />
           <Checkbox disabled label="Disabled" />
-          <Checkbox ring label="Today" />
+          <Checkbox strong label="Scheduled, not done" />
         </Row>
 
         <Row label="sizes">
@@ -53,7 +53,7 @@ export function Checkboxes() {
                 size="sm"
                 className="w-full"
                 muted={!SCHEDULED[i]}
-                ring={i === TODAY}
+                strong={SCHEDULED[i]}
                 checked={done[i]}
                 label={`${d} — Stretch`}
                 onChange={(next) => setDone((prev) => prev.map((v, idx) => (idx === i ? next : v)))}
