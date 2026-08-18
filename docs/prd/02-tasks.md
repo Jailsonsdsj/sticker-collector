@@ -57,7 +57,7 @@ Every task is either a **routine** or a **one-off**. The choice is made at creat
    Wednesday as missed — the task did not exist then. An explicit `startsOn` in
    the future still wins; one in the past is clamped, because backdating a
    routine cannot retroactively create days you failed to do it on.
-1. An occurrence not completed by end of day becomes **missed**. It leaves the Today list and moves to a separate section.
+1. An occurrence not completed by end of day becomes **missed**. It leaves the Today list and, from the home screen, leaves altogether: missed days are read and ticked on the Week tab. The status itself is unchanged — it is still derived, still completable, and still what the reports count.
 2. A missed occurrence remains completable and pays its snapshotted reward in full.
 3. After **seven days** a missed occurrence is **archived**: no longer completable, still counted in reports.
 4. A dated one-off does not archive. It persists until completed or deleted.
@@ -67,25 +67,26 @@ Every task is either a **routine** or a **one-off**. The choice is made at creat
 
 Six sections, in this order:
 
-0. **In progress** — anything with a `startedAt`. A routine contributes **only today's occurrence**: `startedAt` belongs to the task and a routine is one row per day, so listing every one of them put the same title on screen five times. Its other days keep their own meaning (a Tuesday that was missed is still missed), and a started routine that is not scheduled today shows nothing here — there would be no day to tick. A one-off is a single row, so it appears here whatever date it carries. Unlike a pin, this is an **instant and it does not expire**: a pin is a claim about *today* and is worthless tomorrow, while starting something is a claim about the task, and putting a half-finished job back in the general pile every morning is exactly what marking it started is for. It outranks every section but *Completed today*.
+0. **In progress** — anything with a `startedAt`. A routine contributes **only today's occurrence**: `startedAt` belongs to the task and a routine is one row per day, so listing every one of them put the same title on screen five times. Its other days keep their own meaning (tomorrow is still backlog, and a day already gone is the Week tab's), and a started routine that is not scheduled today shows nothing here — there would be no day to tick. A one-off is a single row, so it appears here whatever date it carries. Unlike a pin, this is an **instant and it does not expire**: a pin is a claim about *today* and is worthless tomorrow, while starting something is a claim about the task, and putting a half-finished job back in the general pile every morning is exactly what marking it started is for. It outranks every section but *Completed today*.
 1. **For today** — today's routine occurrences, plus any capture pinned to
    today. **Only an undated one-off can be pinned**: a fresh completion is
    validated against the schedule, and the undated one-off is its single
    exception, so pinning anything else would put a row in today's list that the
    API then refuses to tick. The pin is a **date**, not a boolean, so it expires
    by itself — pinned yesterday is not pinned today.
-2. **General** — every one-off, dated or not. A due date does not move a one-off
-   out of here; it is still a thing you capture once and do once.
-3. **Missed** — routine occurrences from earlier days, still open.
+2. **Missed** — a one-off whose **due date has gone**. Judged on `dueAt`, never on a leftover occurrence: unticking leaves a pending row behind, and an *undated* capture has no deadline to have missed. Most overdue first — the one that slipped furthest is the one most likely to have been forgotten.
+3. **General** — every other one-off, dated or not. A due date still in the
+   future does not move a one-off out of here; it is a thing you capture once
+   and do once.
 4. **Completed today** — anything finished today, whatever day it was scheduled
    for. A routine missed on Monday and ticked on Thursday belongs here, because
    the section is a record of today's effort rather than of today's schedule.
 5. **Routine backlog** — routine occurrences scheduled ahead.
 
-**In progress, For today, General and Completed today open by default; Missed and the
-routine backlog start folded.** The two folded ones are reference rather than
-work in hand — what already slipped, and a fortnight that has not happened —
-and either one open pushes today's actual list off the first screenful. The
+**In progress, For today, General and Completed today open by default; Missed
+and the routine backlog start folded.** Both are reference rather than work in
+hand — what already slipped, and a fortnight that has not happened — and either
+one open pushes today's actual list off the first screenful. The
 choice is remembered per device, and only for sections the user has actually
 toggled, so a default can be changed later and still reach anyone who never
 expressed a preference.
@@ -97,6 +98,15 @@ sections keep the **day** as the primary key and order by priority *within* a
 day: a missed Tuesday and a missed Thursday are different days, not one item at
 two urgencies. *Completed today* stays alphabetical — it is a record, and
 nothing in it needs doing.
+
+**A routine's gone days are not on this screen.** A routine leaves one open
+occurrence per day it was not ticked, so a handful of daily habits filled the
+home screen with a week of history that grew every morning — reference material,
+on the screen whose job is what is left today. Those days are still completable,
+on the **Week tab**, where a week is the unit and ticking a past box is the whole
+point. *Missed* therefore holds overdue **captures** only: there is exactly one
+of each, it will not reappear tomorrow, and it is the thing most likely to have
+been forgotten.
 
 **An item appears in exactly one section**, decided by precedence: completed
 today wins over everything, then in progress, then for-today, then missed, then

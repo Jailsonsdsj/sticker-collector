@@ -50,8 +50,12 @@ const oneoff = (over: Partial<Task> = {}) =>
 
 const titles = (items: { task: Task }[]) => items.map((i) => i.task.title);
 
-describe("the five sections", () => {
-  it("splits a routine's occurrences across missed, today and the backlog", () => {
+describe("the sections", () => {
+  it("splits a routine's occurrences across today and the backlog, and drops the days that have gone", () => {
+    // A day that has gone is not this screen's business. Every routine leaves
+    // one row per day it was not ticked, so a handful of daily habits filled
+    // the home screen with a week of history that grew every morning. Those
+    // days are still completable — on the Week tab.
     const t = task({ id: "t1" });
     const home = buildHome(
       [
@@ -64,9 +68,13 @@ describe("the five sections", () => {
       UTC,
     );
 
-    expect(home.missed.map((i) => i.scheduledOn)).toEqual([addDays(TODAY, -2)]);
     expect(home.forToday.map((i) => i.scheduledOn)).toEqual([TODAY]);
     expect(home.routineBacklog.map((i) => i.scheduledOn)).toEqual([addDays(TODAY, 3)]);
+    // Nowhere else either: a routine's gone day is not quietly folded into
+    // General, and Missed is for overdue captures, not for routines.
+    expect([...home.general, ...home.missed, ...home.inProgress, ...home.completedToday]).toEqual(
+      [],
+    );
   });
 
   it("puts every one-off in General, dated or not", () => {
@@ -145,7 +153,6 @@ describe("completed today", () => {
     const home = buildHome([occ("t1", addDays(TODAY, -3), "done")], [t], TODAY, UTC);
 
     expect(home.completedToday).toHaveLength(1);
-    expect(home.missed).toEqual([]);
   });
 
   it("leaves out work completed on a previous day", () => {
@@ -158,7 +165,6 @@ describe("completed today", () => {
     );
 
     expect(home.completedToday).toEqual([]);
-    expect(home.missed).toEqual([]); // done is not missed
   });
 
   it("reads the instant in the user's timezone, not UTC", () => {
@@ -250,6 +256,84 @@ describe("pinning to today", () => {
   });
 });
 
+describe("missed — an overdue capture", () => {
+  it("holds a one-off whose due date has gone", () => {
+    // There is exactly one of it, it will not reappear tomorrow, and it is the
+    // thing most likely to have been forgotten.
+    const overdue = oneoff({
+      id: "o",
+      title: "File the forms",
+      dueAt: `${addDays(TODAY, -3)}T09:00:00Z`,
+    });
+
+    const home = buildHome([occ("o", addDays(TODAY, -3), "missed")], [overdue], TODAY, UTC);
+
+    expect(titles(home.missed)).toEqual(["File the forms"]);
+    expect(home.general).toEqual([]);
+  });
+
+  it("leaves one due today or later in General", () => {
+    const today = oneoff({ id: "a", title: "Due today", dueAt: `${TODAY}T09:00:00Z` });
+    const later = oneoff({ id: "b", title: "Due later", dueAt: `${addDays(TODAY, 4)}T09:00:00Z` });
+
+    const home = buildHome(
+      [occ("a", TODAY, "pending"), occ("b", addDays(TODAY, 4), "pending")],
+      [today, later],
+      TODAY,
+      UTC,
+    );
+
+    expect(titles(home.general)).toEqual(["Due later", "Due today"]);
+    expect(home.missed).toEqual([]);
+  });
+
+  it("never holds a routine, however long ago the day was", () => {
+    // The rule that changed: a week of routine days is reference material, and
+    // it belongs on the Week tab.
+    const routine = task({ id: "r", title: "Stretch" });
+
+    const home = buildHome([occ("r", addDays(TODAY, -4), "missed")], [routine], TODAY, UTC);
+
+    expect(home.missed).toEqual([]);
+  });
+
+  it("never lists an undated capture, however old its leftover row", () => {
+    // Unticking leaves a pending occurrence behind, so an undated one-off
+    // ticked and untangled last week carries a stale date around. It has no
+    // deadline, so it cannot have missed one.
+    const undated = oneoff({ id: "u", title: "Buy milk" });
+
+    const home = buildHome([occ("u", addDays(TODAY, -6), "pending")], [undated], TODAY, UTC);
+
+    expect(home.missed).toEqual([]);
+    expect(titles(home.general)).toEqual(["Buy milk"]);
+  });
+
+  it("lets a finished one go, and never lists an undated capture", () => {
+    const overdue = oneoff({ id: "o", dueAt: `${addDays(TODAY, -2)}T09:00:00Z` });
+    const undated = oneoff({ id: "u", title: "Buy milk" });
+
+    const home = buildHome([occ("o", addDays(TODAY, -2), "done")], [overdue, undated], TODAY, UTC);
+
+    expect(home.missed).toEqual([]);
+    expect(titles(home.general)).toEqual(["Buy milk"]);
+  });
+
+  it("puts the one that slipped furthest at the top", () => {
+    const old = oneoff({ id: "a", title: "Oldest", dueAt: `${addDays(TODAY, -9)}T09:00:00Z` });
+    const recent = oneoff({ id: "b", title: "Newest", dueAt: `${addDays(TODAY, -1)}T09:00:00Z` });
+
+    const home = buildHome(
+      [occ("a", addDays(TODAY, -9), "missed"), occ("b", addDays(TODAY, -1), "missed")],
+      [old, recent],
+      TODAY,
+      UTC,
+    );
+
+    expect(titles(home.missed)).toEqual(["Oldest", "Newest"]);
+  });
+});
+
 describe("in progress", () => {
   const STARTED = "2026-08-01T09:00:00Z";
 
@@ -276,8 +360,8 @@ describe("in progress", () => {
   });
 
   it("leaves that routine's other days where they belong", () => {
-    // A Tuesday that was missed is still missed; starting the routine says
-    // nothing about a day that has already gone.
+    // Starting a routine says nothing about the days around it: tomorrow is
+    // still backlog, and a day that has gone is still the Week tab's business.
     const routine = task({ id: "r", title: "Stretch", startedAt: STARTED });
 
     const home = buildHome(
@@ -291,7 +375,7 @@ describe("in progress", () => {
       UTC,
     );
 
-    expect(home.missed).toHaveLength(1);
+    expect(home.inProgress).toHaveLength(1);
     expect(home.routineBacklog).toHaveLength(1);
   });
 
@@ -373,26 +457,6 @@ describe("in progress", () => {
 });
 
 describe("ordering", () => {
-  it("puts the most recent slip at the top of Missed", () => {
-    const t = task({ id: "t1" });
-    const home = buildHome(
-      [
-        occ("t1", addDays(TODAY, -5), "missed"),
-        occ("t1", addDays(TODAY, -1), "missed"),
-        occ("t1", addDays(TODAY, -3), "missed"),
-      ],
-      [t],
-      TODAY,
-      UTC,
-    );
-
-    expect(home.missed.map((i) => i.scheduledOn)).toEqual([
-      addDays(TODAY, -1),
-      addDays(TODAY, -3),
-      addDays(TODAY, -5),
-    ]);
-  });
-
   it("sorts the backlog by date, soonest first", () => {
     const t = task({ id: "t1" });
     const home = buildHome(
@@ -453,28 +517,27 @@ describe("ordering", () => {
     expect(titles(home.forToday)).toEqual(["Apple", "Zebra"]);
   });
 
-  it("keeps the DAY first in the dated sections, and priority within it", () => {
-    // A missed Tuesday and a missed Thursday are not one item at two
-    // urgencies — they are different days, and the day is what is being read.
+  it("keeps the DAY first in the backlog, and priority within it", () => {
+    // Two different days are not one item at two urgencies — the day is what is
+    // being read, and priority orders what falls on the same one.
     const low = task({ id: "a", title: "Alpha", priority: "low" });
     const high = task({ id: "z", title: "Zebra", priority: "high" });
 
     const home = buildHome(
       [
-        // The high one slipped longer ago; the recent day still leads.
-        occ("z", addDays(TODAY, -3), "missed"),
-        occ("a", addDays(TODAY, -1), "missed"),
-        occ("z", addDays(TODAY, -1), "missed"),
+        occ("z", addDays(TODAY, 3), "pending"),
+        occ("a", addDays(TODAY, 1), "pending"),
+        occ("z", addDays(TODAY, 1), "pending"),
       ],
       [low, high],
       TODAY,
       UTC,
     );
 
-    expect(home.missed.map((i) => [i.scheduledOn, i.task.title])).toEqual([
-      [addDays(TODAY, -1), "Zebra"],
-      [addDays(TODAY, -1), "Alpha"],
-      [addDays(TODAY, -3), "Zebra"],
+    expect(home.routineBacklog.map((i) => [i.scheduledOn, i.task.title])).toEqual([
+      [addDays(TODAY, 1), "Zebra"],
+      [addDays(TODAY, 1), "Alpha"],
+      [addDays(TODAY, 3), "Zebra"],
     ]);
   });
 

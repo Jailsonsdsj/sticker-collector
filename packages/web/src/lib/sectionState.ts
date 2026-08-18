@@ -27,8 +27,10 @@ export const SECTION_DEFAULTS: Record<string, boolean> = {
   // What you are in the middle of, above what you merely planned.
   progress: true,
   today: true,
-  general: true,
+  // Overdue captures: worth surfacing, but they are behind rather than ahead,
+  // so they do not lead.
   missed: false,
+  general: true,
   completed: true,
   backlog: false,
   // Epics: what is running and what is next are work in hand; finished epics

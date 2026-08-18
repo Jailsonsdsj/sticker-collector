@@ -48,10 +48,14 @@ const TASKS: Task[] = [
 ];
 
 // The same routine on three different days: three rows, one task.
-const OCCURRENCES: Occurrence[] = [-2, -1, 0].map((offset) => ({
+//
+// Today and the two days AHEAD. Days that have gone are no longer on this
+// screen — they belong to the Week tab — so a fixture built from them would
+// render one row and prove nothing about selecting by task.
+const OCCURRENCES: Occurrence[] = [0, 1, 2].map((offset) => ({
   taskId: "t1",
   scheduledOn: addDays(TODAY, offset),
-  status: offset === 0 ? "pending" : "missed",
+  status: "pending",
   completedAt: null,
   rewardSnapshotCoins: null,
 }));
@@ -103,10 +107,11 @@ async function enterSelection() {
   render(<Tasks />, { wrapper });
   await waitFor(() => expect(screen.getByText("Buy milk")).toBeInTheDocument());
 
-  // Missed starts folded — it is reference, not work in hand — and these tests
-  // are about a routine spanning several days, most of which are missed ones.
-  const missed = screen.queryByRole("button", { name: /Missed/ });
-  if (missed && missed.getAttribute("aria-expanded") === "false") await user.click(missed);
+  // The routine backlog starts folded — it is a fortnight that has not happened
+  // — and these tests are about a routine spanning several days, which is what
+  // that section holds now that days already gone live on the Week tab.
+  const backlog = screen.queryByRole("button", { name: /Routine backlog/ });
+  if (backlog && backlog.getAttribute("aria-expanded") === "false") await user.click(backlog);
 
   await user.click(screen.getByRole("button", { name: "Select" }));
   return user;
@@ -352,6 +357,8 @@ describe("which date a tick is sent for", () => {
         </MemoryRouter>
       </QueryClientProvider>,
     );
+    // An overdue capture lives under Missed now, which starts folded.
+    await user.click(await screen.findByRole("button", { name: /Missed/ }));
     await waitFor(() => expect(screen.getAllByText("Post the form").length).toBeGreaterThan(0));
 
     await user.click(screen.getAllByRole("checkbox", { name: /post the form/i })[0] as HTMLElement);

@@ -20,7 +20,7 @@ describe("defaults", () => {
     // happened. Either one open pushes today's list off the first screenful.
     const { result } = renderHook(() => useCollapsibleSections());
 
-    expect(result.current.isOpen("missed")).toBe(false);
+    expect(result.current.isOpen("backlog")).toBe(false);
     expect(result.current.isOpen("backlog")).toBe(false);
   });
 
@@ -34,8 +34,8 @@ describe("choices", () => {
   it("override the default in both directions", () => {
     const { result } = renderHook(() => useCollapsibleSections());
 
-    act(() => result.current.toggle("missed")); // closed by default → open
-    expect(result.current.isOpen("missed")).toBe(true);
+    act(() => result.current.toggle("backlog")); // closed by default → open
+    expect(result.current.isOpen("backlog")).toBe(true);
 
     act(() => result.current.toggle("today")); // open by default → closed
     expect(result.current.isOpen("today")).toBe(false);
@@ -86,11 +86,11 @@ describe("stored values that cannot be trusted", () => {
   });
 
   it("drop entries that are not booleans", () => {
-    localStorage.setItem(KEY, JSON.stringify({ today: "nope", missed: true }));
+    localStorage.setItem(KEY, JSON.stringify({ today: "nope", backlog: true }));
 
     const { result } = renderHook(() => useCollapsibleSections());
     expect(result.current.isOpen("today")).toBe(true); // falls back to the default
-    expect(result.current.isOpen("missed")).toBe(true); // the valid entry survives
+    expect(result.current.isOpen("backlog")).toBe(true); // the valid entry survives
   });
 });
 
@@ -134,7 +134,7 @@ describe("the defaults table", () => {
   });
 
   it("is what sectionIsOpen falls back to", () => {
-    expect(sectionIsOpen({}, "missed")).toBe(false);
-    expect(sectionIsOpen({ missed: true }, "missed")).toBe(true);
+    expect(sectionIsOpen({}, "backlog")).toBe(false);
+    expect(sectionIsOpen({ backlog: true }, "backlog")).toBe(true);
   });
 });

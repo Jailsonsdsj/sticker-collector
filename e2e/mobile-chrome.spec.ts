@@ -58,9 +58,9 @@ test("Cancel is actually legible, not 6% white", async ({ page }) => {
 });
 
 test("sections open or fold according to what they are for", async ({ page }) => {
-  // Work in hand is open; reference is folded. Missed is what already slipped
-  // and the backlog is a fortnight that has not happened — either one open
-  // pushes today's actual list off the first screenful.
+  // Work in hand is open; reference is folded. The routine backlog is a
+  // fortnight that has not happened, and open it pushes today's actual list off
+  // the first screenful.
   await login(page);
 
   await expect(page.getByRole("button", { name: /For today/ })).toHaveAttribute(
@@ -71,10 +71,15 @@ test("sections open or fold according to what they are for", async ({ page }) =>
     "aria-expanded",
     "true",
   );
-  await expect(page.getByRole("button", { name: /Missed/ })).toHaveAttribute(
+  await expect(page.getByRole("button", { name: /Routine backlog/ })).toHaveAttribute(
     "aria-expanded",
     "false",
   );
+
+  // The seed has no overdue capture, and a routine's gone days belong to the
+  // Week tab — so there is nothing for Missed to hold and it does not render.
+  // An empty section drawing a heading would be furniture.
+  await expect(page.getByRole("button", { name: /Missed/ })).toHaveCount(0);
 });
 
 test("a section folds away and stays folded", async ({ page }) => {
@@ -103,12 +108,12 @@ test("unfolding a section that starts closed is remembered too", async ({ page }
   // sentence the user cannot answer back to.
   await login(page);
 
-  const missed = page.getByRole("button", { name: /Missed/ });
-  await missed.click();
-  await expect(missed).toHaveAttribute("aria-expanded", "true");
+  const backlog = page.getByRole("button", { name: /Routine backlog/ });
+  await backlog.click();
+  await expect(backlog).toHaveAttribute("aria-expanded", "true");
 
   await page.reload();
-  await expect(page.getByRole("button", { name: /Missed/ })).toHaveAttribute(
+  await expect(page.getByRole("button", { name: /Routine backlog/ })).toHaveAttribute(
     "aria-expanded",
     "true",
   );

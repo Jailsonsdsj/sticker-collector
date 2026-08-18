@@ -395,9 +395,11 @@ export function Tasks() {
       {!loading && !failed && !empty && (
         <div className="flex flex-col gap-6">
           {/* Order is what you act on first: what is already underway, then
-              today's work, then the loose captures, then what slipped.
-              Completed today sits below them as a record, and the fortnight
-              ahead is reference material. */}
+              today's work, then the loose captures. Completed today sits below
+              them as a record, and the fortnight ahead is reference material.
+              A routine's gone days are not here at all — they are the Week
+              tab's business, where a week is the unit — but an overdue capture
+              is, because there is only ever one of it. */}
           <Section
             tone="progress"
             title="In progress"
@@ -415,20 +417,20 @@ export function Tasks() {
             onToggle={() => folds.toggle("today")}
           />
           <Section
-            tone="general"
-            title="General"
-            items={sections.general}
-            render={renderRow}
-            open={folds.isOpen("general")}
-            onToggle={() => folds.toggle("general")}
-          />
-          <Section
             tone="missed"
             title="Missed"
             items={sections.missed}
             render={renderRow}
             open={folds.isOpen("missed")}
             onToggle={() => folds.toggle("missed")}
+          />
+          <Section
+            tone="general"
+            title="General"
+            items={sections.general}
+            render={renderRow}
+            open={folds.isOpen("general")}
+            onToggle={() => folds.toggle("general")}
           />
           <Section
             tone="completed"
