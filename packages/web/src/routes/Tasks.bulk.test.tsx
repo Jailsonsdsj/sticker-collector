@@ -205,11 +205,12 @@ describe("leaving the mode", () => {
     expect(screen.getByText("0 selected")).toBeInTheDocument();
   });
 
-  it("restores quick-add and completion", async () => {
+  it("restores the search, the New task button and completion", async () => {
     const user = await enterSelection();
     await user.click(screen.getByRole("button", { name: "Cancel" }));
 
-    expect(screen.getByRole("textbox", { name: /quick-add/i })).toBeInTheDocument();
+    expect(screen.getByRole("searchbox", { name: /search tasks/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /New task/ })).toBeInTheDocument();
     expect(screen.getAllByRole("checkbox", { name: "Stretch" }).length).toBeGreaterThan(0);
   });
 });
@@ -505,5 +506,113 @@ describe("swiping a row between the two lists", () => {
 
     expect(await screen.findByRole("status")).toHaveTextContent(/routines follow their own/i);
     expect(patchFor("t1")).toBeNull();
+  });
+});
+
+describe("the way in", () => {
+  it("offers one door, called New task", async () => {
+    // The one-line quick-add above it created an undated one-off with a default
+    // effort — the same thing this form produces, with a section and a priority
+    // the capture box could not ask for. Two doors to one room, and the smaller
+    // one could not say where the task landed.
+    const user = userEvent.setup();
+    render(<Tasks />, { wrapper });
+    await waitFor(() => expect(screen.getAllByText("Buy milk").length).toBeGreaterThan(0));
+
+    expect(screen.queryByRole("textbox", { name: /quick-add/i })).not.toBeInTheDocument();
+    const button = screen.getByRole("button", { name: /New task/ });
+    expect(button).toHaveTextContent(/^＋ New task$/);
+
+    await user.click(button);
+    expect(document.querySelector("dialog[open]")).not.toBeNull();
+  });
+});
+
+describe("searching the list", () => {
+  const open = async () => {
+    const user = userEvent.setup();
+    render(<Tasks />, { wrapper });
+    await waitFor(() => expect(screen.getAllByText("Buy milk").length).toBeGreaterThan(0));
+    return user;
+  };
+
+  const field = () => screen.getByRole("searchbox", { name: /search tasks/i });
+
+  it("narrows the list as it is typed, with nothing to submit", async () => {
+    const user = await open();
+
+    await user.type(field(), "milk");
+
+    // No Enter, no button: the list has already narrowed.
+    expect(screen.getAllByText("Buy milk").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Stretch")).not.toBeInTheDocument();
+  });
+
+  it("sits above the New task button", async () => {
+    // This screen is read far more often than it is added to.
+    await open();
+
+    const position = field().compareDocumentPosition(
+      screen.getByRole("button", { name: /New task/ }),
+    );
+    expect(position & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("opens the folded sections, so a match cannot hide in one", async () => {
+    // A routine scheduled only on days AHEAD lives in the routine backlog,
+    // which starts folded. A search that skipped it would report "no matches"
+    // for a task that is right there.
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      const read = (init?.method ?? "GET") === "GET";
+      if (read && url.startsWith("/api/occurrences"))
+        return json([
+          {
+            taskId: "t1",
+            scheduledOn: addDays(TODAY, 2),
+            status: "pending",
+            completedAt: null,
+            rewardSnapshotCoins: null,
+          },
+        ]);
+      if (read && url.startsWith("/api/tasks")) return json(TASKS);
+      if (read && url.startsWith("/api/epics")) return json([]);
+      if (read && url.startsWith("/api/wallet")) return json({ balance: 0 });
+      return json({ ok: true });
+    });
+    const user = userEvent.setup();
+    render(<Tasks />, { wrapper });
+    await waitFor(() => expect(screen.getAllByText("Buy milk").length).toBeGreaterThan(0));
+
+    // Folded to begin with.
+    expect(screen.queryByText("Stretch")).not.toBeInTheDocument();
+
+    await user.type(field(), "stretch");
+
+    expect(screen.getAllByText("Stretch").length).toBeGreaterThan(0);
+  });
+
+  it("says so when nothing matches, and offers the way back", async () => {
+    const user = await open();
+
+    await user.type(field(), "xylophone");
+
+    expect(screen.getByText("No task matches that")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /clear the search/i }));
+    expect(screen.getAllByText("Buy milk").length).toBeGreaterThan(0);
+  });
+
+  it("clears from the field's own button", async () => {
+    const user = await open();
+    await user.type(field(), "milk");
+
+    await user.click(screen.getByRole("button", { name: "Clear" }));
+
+    expect(field()).toHaveValue("");
+    expect(screen.getAllByText("Stretch").length).toBeGreaterThan(0);
+  });
+
+  it("offers no Clear until there is something to clear", async () => {
+    await open();
+    expect(screen.queryByRole("button", { name: "Clear" })).not.toBeInTheDocument();
   });
 });

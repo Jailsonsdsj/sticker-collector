@@ -88,7 +88,11 @@ export function initialState(options: { epicId?: string | null } = {}): TaskForm
     // typing before Save would even light up, for a number most tasks were
     // going to be anyway.
     effortMinutes: String(DEFAULT_EFFORT_MINUTES),
-    rewardCoins: "",
+    // Filled, not merely placeholdered: a coin IS a minute, and an empty box
+    // under a filled one reads as a decision still to make. It keeps mirroring
+    // the effort until the user types over it — `rewardLocked` is what stops
+    // that, and typing here is what sets it.
+    rewardCoins: String(DEFAULT_EFFORT_MINUTES),
     rewardLocked: false,
     pinnedToday: false,
     priority: "medium",

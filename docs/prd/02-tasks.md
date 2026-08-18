@@ -113,6 +113,20 @@ today wins over everything, then in progress, then for-today, then missed, then
 general, then the backlog. Without that rule a one-off pinned to today qualifies for two sections
 and renders twice.
 
+**One way in.** The screen has a search field and a **New task** button; the
+one-line quick-add above it is gone. It created an undated one-off at the
+default effort — the same thing the form produces, minus the section and the
+priority the capture box could not ask for — and two doors to one room meant the
+smaller one could not say where the task landed. The form opens with **General**
+selected (capture is the common case) and both **effort and reward filled at 30**:
+a coin is a minute, and an empty reward box under a filled effort box reads as a
+decision still to make. The reward keeps mirroring the effort until it is typed
+over, and only then is it *sent* — otherwise the server inherits it.
+
+**A search field sits above the button.** It filters every section by title as
+it is typed, with nothing to submit, and opens the folded sections while a query
+is active so a match cannot hide in one.
+
 **Swiping a row moves it between the two lists work actually passes through:**
 right starts it (into *In progress*), left brings it into *For today* — and
 stops it, because a task cannot be both underway and merely planned. Both

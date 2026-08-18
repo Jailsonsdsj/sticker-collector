@@ -47,7 +47,9 @@ describe("initial state — the done-when", () => {
     // quick-add, so the full form is not a worse capture than the one-line box
     // beside it.
     expect(s.effortMinutes).toBe(String(DEFAULT_EFFORT_MINUTES));
-    expect(s.rewardCoins).toBe("");
+    // Filled too: a coin is a minute, and an empty box under a filled one reads
+    // as a decision still to make.
+    expect(s.rewardCoins).toBe(String(DEFAULT_EFFORT_MINUTES));
     expect(s.weekdays).toBe(0);
     expect(s.dueDate).toBe("");
     expect(s.epicId).toBeNull();
@@ -66,14 +68,22 @@ describe("the default effort", () => {
     expect(DEFAULT_EFFORT_MINUTES).toBe(30);
   });
 
-  it("carries into the payload, and lets the server inherit the reward", () => {
-    const payload = toPayload({ ...initialState(), title: "Water the plants" });
+  it("shows the reward but lets the server inherit it", () => {
+    const state = { ...initialState(), title: "Water the plants" };
 
-    // `rewardCoins` is deliberately absent, not zero: `createTaskSchema` says
-    // "omit to inherit the effort", so a form nobody touched is 30 minutes and
-    // 30 coins without this file restating the rule.
-    expect(payload).toMatchObject({ effortMinutes: 30 });
-    expect(payload?.rewardCoins).toBeUndefined();
+    // The box is filled — 30 minutes is 30 coins — but until the user types
+    // over it the reward is not *sent*: `createTaskSchema` says "omit to
+    // inherit the effort", and an untouched form should not start asserting a
+    // number it merely echoed.
+    expect(state.rewardCoins).toBe("30");
+    expect(toPayload(state)).toMatchObject({ effortMinutes: 30 });
+    expect(toPayload(state)?.rewardCoins).toBeUndefined();
+  });
+
+  it("sends the reward once it has been typed over", () => {
+    const overridden = reduce({ ...initialState(), title: "X" }, { kind: "reward", value: "100" });
+
+    expect(toPayload(overridden)?.rewardCoins).toBe(100);
   });
 });
 

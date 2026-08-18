@@ -224,3 +224,37 @@ const byDateAsc = (a: HomeItem, b: HomeItem) =>
  *  fortnight ahead fills the Backlog. */
 export const HOME_WINDOW_BACK = 7;
 export const HOME_WINDOW_FORWARD = 14;
+
+/**
+ * Narrowing the whole screen to what matches a search.
+ *
+ * Applied to the built sections rather than to the tasks going in, so a match
+ * keeps the section it belongs to: finding a routine tells you it is in the
+ * backlog, not merely that it exists. Sections that end up empty render
+ * nothing, so the shape of the answer is the answer.
+ *
+ * **Title only.** Matching descriptions as well would put rows on screen with
+ * no visible reason to be there, and the honest fix for that — highlighting the
+ * matched text inside a collapsed description — is a different feature.
+ */
+export function filterHome(sections: HomeSections, query: string): HomeSections {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return sections;
+
+  const keep = (items: HomeItem[]) =>
+    items.filter((item) => item.task.title.toLowerCase().includes(needle));
+
+  return {
+    inProgress: keep(sections.inProgress),
+    missed: keep(sections.missed),
+    forToday: keep(sections.forToday),
+    general: keep(sections.general),
+    completedToday: keep(sections.completedToday),
+    routineBacklog: keep(sections.routineBacklog),
+  };
+}
+
+/** Whether any section has anything in it — "no matches" needs saying. */
+export function isEmpty(sections: HomeSections): boolean {
+  return Object.values(sections).every((items) => items.length === 0);
+}

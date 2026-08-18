@@ -77,16 +77,16 @@ describe("the done-when — epic pre-fill", () => {
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ epicId: "e2" }));
   });
 
-  it("arrives blank but for the default effort, when opened from the main button", async () => {
+  it("arrives blank but for the default effort and its reward, when opened from the main button", async () => {
     const u = userEvent.setup();
     const { onSubmit, save } = setup();
 
     expect(screen.getByLabelText(/title/i)).toHaveValue("");
     expect(screen.getByLabelText(/description/i)).toHaveValue("");
     expect(screen.getByLabelText(/url/i)).toHaveValue("");
-    // Effort arrives at the default; everything else is blank.
+    // Effort and its reward arrive at the default; everything else is blank.
     expect(screen.getByLabelText(/^effort/i)).toHaveValue("30");
-    expect(screen.getByLabelText(/reward/i)).toHaveValue("");
+    expect(screen.getByLabelText(/reward/i)).toHaveValue("30");
     expect(screen.getByRole("button", { name: "None" })).toHaveAttribute("aria-pressed", "true");
     // A blank form is a one-off, so there is no weekday picker to be blank.
     expect(screen.getByRole("tab", { name: "· One-off" })).toHaveAttribute("aria-selected", "true");
@@ -428,16 +428,19 @@ describe("the description field", () => {
 describe("which section a new one-off lands in", () => {
   const sections = () => screen.getByRole("tablist", { name: "Section" });
 
-  it("offers the two lists by name, and starts on General", async () => {
+  it("offers the two lists by name, General first and selected", async () => {
+    // Capture is the common case, and the first tab being the selected one is
+    // what makes a two-option switch readable at a glance.
     setup();
 
-    // It used to be a checkbox called "Do this today", which asked the user to
-    // work out where an unticked box put the task.
+    const labels = within(sections())
+      .getAllByRole("tab")
+      .map((tab) => tab.textContent);
+    expect(labels).toEqual(["General", "For today"]);
     expect(within(sections()).getByRole("tab", { name: "General" })).toHaveAttribute(
       "aria-selected",
       "true",
     );
-    expect(within(sections()).getByRole("tab", { name: "For today" })).toBeInTheDocument();
   });
 
   it("pins to today when For today is chosen", async () => {

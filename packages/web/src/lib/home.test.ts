@@ -1,6 +1,6 @@
 import { addDays, type Occurrence, type Task } from "@sticker-collector/shared";
 import { describe, expect, it } from "vitest";
-import { buildHome } from "./home";
+import { buildHome, filterHome, isEmpty } from "./home";
 
 const TODAY = "2026-08-05";
 const UTC = "UTC";
@@ -587,5 +587,61 @@ describe("empty", () => {
       routineBacklog: [],
       completedToday: [],
     });
+  });
+});
+
+describe("searching", () => {
+  const sections = () =>
+    buildHome(
+      [occ("r", TODAY, "pending")],
+      [
+        task({ id: "r", title: "Morning run" }),
+        oneoff({ id: "a", title: "Buy milk" }),
+        oneoff({ id: "b", title: "Read the running manual" }),
+      ],
+      TODAY,
+      UTC,
+    );
+
+  it("keeps a match in the section it belongs to", () => {
+    // Filtering the built sections rather than the tasks going in: finding a
+    // routine tells you it is today's, not merely that it exists.
+    const found = filterHome(sections(), "run");
+
+    expect(titles(found.forToday)).toEqual(["Morning run"]);
+    expect(titles(found.general)).toEqual(["Read the running manual"]);
+  });
+
+  it("ignores case and surrounding space", () => {
+    expect(titles(filterHome(sections(), "  MILK ").general)).toEqual(["Buy milk"]);
+  });
+
+  it("matches part of a word, not only the start", () => {
+    expect(titles(filterHome(sections(), "ilk").general)).toEqual(["Buy milk"]);
+  });
+
+  it("returns the sections untouched when there is nothing to search for", () => {
+    // Not merely equal — the same object, so an empty box costs no work.
+    const all = sections();
+    expect(filterHome(all, "   ")).toBe(all);
+  });
+
+  it("comes back empty when nothing matches, which is a different thing from having no tasks", () => {
+    const found = filterHome(sections(), "xylophone");
+
+    expect(isEmpty(found)).toBe(true);
+    expect(isEmpty(sections())).toBe(false);
+  });
+
+  it("does not read descriptions", () => {
+    // A row on screen with no visible reason to be there is worse than a miss.
+    const withNotes = buildHome(
+      [],
+      [oneoff({ id: "a", title: "Buy milk", description: "from the corner shop" })],
+      TODAY,
+      UTC,
+    );
+
+    expect(isEmpty(filterHome(withNotes, "corner"))).toBe(true);
   });
 });

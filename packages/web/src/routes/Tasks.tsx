@@ -2,25 +2,31 @@ import { addDays, type Epic, type Task, todayIn } from "@sticker-collector/share
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate } from "react-router";
 import { DailyReviewDialog } from "../components/DailyReviewDialog";
-import { QuickAdd } from "../components/QuickAdd";
 import { SectionHeading, type SectionTone } from "../components/SectionHeading";
 import { SelectionBar } from "../components/SelectionBar";
 import { SwipeRow } from "../components/SwipeRow";
 import { TaskForm } from "../components/TaskForm";
 import { TaskRow } from "../components/TaskRow";
+import { TaskSearch } from "../components/TaskSearch";
 import { TaskView } from "../components/TaskView";
 import { Button, Dialog, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { WalletCard } from "../components/WalletCard";
 import { ApiError } from "../lib/api";
 import { type CompletionRef, usePendingCompletions } from "../lib/completionQueue";
 import { buildReview, type DailyReview, markReviewed, shouldReview } from "../lib/dailyReview";
-import { buildHome, HOME_WINDOW_BACK, HOME_WINDOW_FORWARD, type HomeItem } from "../lib/home";
+import {
+  buildHome,
+  filterHome,
+  HOME_WINDOW_BACK,
+  HOME_WINDOW_FORWARD,
+  type HomeItem,
+  isEmpty,
+} from "../lib/home";
 import {
   useBulkDeleteTasks,
   useBulkDuplicateTasks,
   useCreateTask,
   useDeleteTask,
-  useQuickAdd,
   useUncompleteOccurrence,
   useUpdateTask,
 } from "../lib/mutations";
@@ -51,7 +57,6 @@ export function Tasks() {
   const tasks = useTasks();
   const epics = useEpics();
   const wallet = useWallet();
-  const quickAdd = useQuickAdd();
   const createTask = useCreateTask();
   const [formOpen, setFormOpen] = useState(false);
   // The form seeds its state once on mount, so each open needs a fresh mount.
@@ -65,6 +70,8 @@ export function Tasks() {
    */
   const [viewing, setViewing] = useState<{ item: HomeItem; ref: CompletionRef } | null>(null);
   const [review, setReview] = useState<DailyReview | null>(null);
+  /** Narrows every section as it is typed; never submitted. */
+  const [query, setQuery] = useState("");
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
   const uncomplete = useUncompleteOccurrence();
@@ -93,6 +100,16 @@ export function Tasks() {
     () => buildHome(occurrences.data ?? [], tasks.data ?? [], today, timeZone),
     [occurrences.data, tasks.data, today, timeZone],
   );
+
+  /**
+   * What the screen actually shows.
+   *
+   * Filtering the built sections rather than the tasks going in keeps a match
+   * in the section it belongs to — finding a routine tells you it is in the
+   * backlog, not merely that it exists.
+   */
+  const visible = useMemo(() => filterHome(sections, query), [sections, query]);
+  const searching = query.trim() !== "";
 
   const epicById = useMemo(
     () => new Map((epics.data ?? []).map((e: Epic) => [e.id, e])),
@@ -133,8 +150,9 @@ export function Tasks() {
   // sections are built from `?? []`, so a dead network would otherwise render
   // "Nothing to do yet" to someone with a full day ahead of them.
   const failed = !loading && (occurrences.isError || tasks.isError);
-  const empty =
-    !loading && !failed && Object.values(sections).every((section) => section.length === 0);
+  const empty = !loading && !failed && isEmpty(sections);
+  /** Searched, and nothing came back — different from having no tasks at all. */
+  const noMatches = !loading && !failed && !empty && isEmpty(visible);
 
   const renderRow = (item: HomeItem) => {
     const epic = item.task.epicId ? epicById.get(item.task.epicId) : undefined;
@@ -262,17 +280,23 @@ export function Tasks() {
         />
       ) : (
         <>
-          <QuickAdd onAdd={(title) => quickAdd.mutateAsync(title)} pending={quickAdd.isPending} />
+          {/* Above the buttons: this screen is read far more often than it is
+              added to. */}
+          <TaskSearch value={query} onChange={setQuery} />
 
           <div className="mb-5 flex gap-2">
-            {/* Deferred from T-09: the full form is one tap away, per the spec. */}
+            {/* The only way in now. The one-line quick-add sat above it and
+                created an undated one-off with a default effort — the same
+                thing this form produces in two more taps, with a section and a
+                priority the capture box could not ask for. Two doors to one
+                room, and the smaller one could not say where the task landed. */}
             <Button
               variant="outline"
               tone="violet"
               className="flex-1"
               onClick={() => setFormOpen(true)}
             >
-              ＋ New task — full form
+              ＋ New task
             </Button>
             <Button variant="outline" tone="neutral" onClick={() => setSelecting(true)}>
               Select
@@ -392,7 +416,20 @@ export function Tasks() {
         />
       )}
 
-      {!loading && !failed && !empty && (
+      {noMatches && (
+        <EmptyState
+          icon="⌕"
+          title="No task matches that"
+          description="Search looks at titles only."
+          action={
+            <Button variant="outline" tone="neutral" onClick={() => setQuery("")}>
+              Clear the search
+            </Button>
+          }
+        />
+      )}
+
+      {!loading && !failed && !empty && !noMatches && (
         <div className="flex flex-col gap-6">
           {/* Order is what you act on first: what is already underway, then
               today's work, then the loose captures. Completed today sits below
@@ -403,49 +440,49 @@ export function Tasks() {
           <Section
             tone="progress"
             title="In progress"
-            items={sections.inProgress}
+            items={visible.inProgress}
             render={renderRow}
-            open={folds.isOpen("progress")}
+            open={searching || folds.isOpen("progress")}
             onToggle={() => folds.toggle("progress")}
           />
           <Section
             tone="today"
             title="For today"
-            items={sections.forToday}
+            items={visible.forToday}
             render={renderRow}
-            open={folds.isOpen("today")}
+            open={searching || folds.isOpen("today")}
             onToggle={() => folds.toggle("today")}
           />
           <Section
             tone="missed"
             title="Missed"
-            items={sections.missed}
+            items={visible.missed}
             render={renderRow}
-            open={folds.isOpen("missed")}
+            open={searching || folds.isOpen("missed")}
             onToggle={() => folds.toggle("missed")}
           />
           <Section
             tone="general"
             title="General"
-            items={sections.general}
+            items={visible.general}
             render={renderRow}
-            open={folds.isOpen("general")}
+            open={searching || folds.isOpen("general")}
             onToggle={() => folds.toggle("general")}
           />
           <Section
             tone="completed"
             title="Completed today"
-            items={sections.completedToday}
+            items={visible.completedToday}
             render={renderRow}
-            open={folds.isOpen("completed")}
+            open={searching || folds.isOpen("completed")}
             onToggle={() => folds.toggle("completed")}
           />
           <Section
             tone="backlog"
             title="Routine backlog"
-            items={sections.routineBacklog}
+            items={visible.routineBacklog}
             render={renderRow}
-            open={folds.isOpen("backlog")}
+            open={searching || folds.isOpen("backlog")}
             onToggle={() => folds.toggle("backlog")}
           />
         </div>

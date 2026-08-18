@@ -4,11 +4,17 @@ import { Chip, Field, Input, Tabs } from "../ui";
 
 // One-off first, and it is also `initialState`'s default — the first tab being
 // the selected one is the whole point of the order.
-/** The two lists an undated one-off can land in, named as the home screen
- *  names them. */
+/**
+ * The two lists an undated one-off can land in, named as the home screen names
+ * them.
+ *
+ * **General first, and selected**: capture is the common case, and the first
+ * tab being the selected one is what makes a two-option switch readable at a
+ * glance. Committing a new task to today is the deliberate half.
+ */
 const SECTIONS = [
-  { value: "today" as const, label: "For today", tone: "lime" as const },
   { value: "general" as const, label: "General", tone: "cyan" as const },
+  { value: "today" as const, label: "For today", tone: "lime" as const },
 ];
 
 const TYPES = [
