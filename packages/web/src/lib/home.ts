@@ -5,7 +5,7 @@ import { localDateIn } from "@sticker-collector/shared";
  * The five home sections (prd/02-tasks.md §Home):
  *
  *   0. In progress      — anything started, whatever day it belongs to
- *   1. Missed          — routine occurrences from earlier days, still open
+ *   1. Missed          — one-offs whose due date has gone
  *   2. General         — every one-off, dated or not
  *   3. For today       — today's routine occurrences, plus pinned captures
  *   4. Routine backlog — routine occurrences scheduled ahead
@@ -116,9 +116,10 @@ export function buildHome(
     //    looked like from the outside.
     //
     //    A routine therefore contributes only TODAY's occurrence. Its other
-    //    days keep their own meaning — a Tuesday that was missed is still
-    //    missed — and a routine not scheduled today contributes nothing, which
-    //    is also the honest answer: there is no day to tick.
+    //    days keep their own meaning — tomorrow is still backlog, and a day
+    //    that has gone belongs to the Week tab — and a routine not scheduled
+    //    today contributes nothing, which is also the honest answer: there is
+    //    no day to tick.
     //
     //    A one-off has a single occurrence, so it comes here whatever date it
     //    carries.
@@ -128,20 +129,35 @@ export function buildHome(
       continue;
     }
 
-    // 3. One-offs are General regardless of their due date — a dated one-off is
-    //    still a one-off, and splitting them by date is what the old Backlog
-    //    did.
+    // 3. A one-off whose due date has GONE is missed; every other one-off is
+    //    General.
+    //
+    //    This is the only thing that can be missed now. A routine leaves one
+    //    open day per day it was not ticked, and a week of those buried the
+    //    screen — they are read and ticked on the Week tab instead. An overdue
+    //    capture is different: there is exactly one of it, it is not going to
+    //    reappear tomorrow, and it is the thing most likely to have been
+    //    forgotten.
     if (task.type === "oneoff") {
-      general.push(item);
+      // `task.dueAt`, not merely an old occurrence date: an UNDATED capture
+      // cannot be overdue. Unticking leaves a pending row behind, so without
+      // this a one-off ticked and untangled last week would reappear as
+      // "missed" — a deadline it never had.
+      if (task.dueAt && occurrence.scheduledOn < today) missed.push(item);
+      else general.push(item);
       seen.add(task.id);
       continue;
     }
 
-    // 3-5. Routines split by day.
+    // 3-4. Routines split by day — and a day that has GONE is not one of them.
+    //
+    // Every routine leaves one missed row per day it was not ticked, so a
+    // handful of daily habits filled the screen with a week of history that
+    // grew every morning: reference material, on the screen whose job is what
+    // is left today. Those days are still completable, on the Week tab, where a
+    // week is the unit and ticking a past box is the point.
     if (occurrence.scheduledOn === today) forToday.push(item);
-    else if (occurrence.scheduledOn < today) {
-      if (occurrence.status === "missed") missed.push(item);
-    } else routineBacklog.push(item);
+    else if (occurrence.scheduledOn > today) routineBacklog.push(item);
   }
 
   // Undated one-offs have no occurrence until they are ticked, so they cannot
@@ -167,9 +183,9 @@ export function buildHome(
 
   return {
     inProgress: inProgress.sort(byPriority),
-    // Most recent first: yesterday's slip is the one you are most likely to
-    // still care about.
-    missed: missed.sort(byDateDesc),
+    // Most overdue first: the one that slipped furthest is the one most likely
+    // to have been forgotten.
+    missed: missed.sort(byDateAsc),
     general: general.sort(byPriority),
     forToday: forToday.sort(byPriority),
     routineBacklog: routineBacklog.sort(byDateAsc),
@@ -197,22 +213,48 @@ const byPriority = (a: HomeItem, b: HomeItem) =>
 /**
  * Dated sections lead with the date and fall back to priority.
  *
- * A missed Tuesday and a missed Thursday are not the same item at different
- * urgencies — they are different days, and the day is the thing being read.
- * Within one day, priority orders them.
+ * Two different days are not the same item at two urgencies — the day is the
+ * thing being read. Within one day, priority orders them.
  */
 const byDateAsc = (a: HomeItem, b: HomeItem) =>
   (a.scheduledOn ?? "").localeCompare(b.scheduledOn ?? "") || byPriority(a, b);
 
-/**
- * Only the DATE reverses. Negating the whole comparison would reverse the
- * tiebreak with it, and put the *low*-priority item first within a day — a
- * section that reads high-first everywhere except here.
- */
-const byDateDesc = (a: HomeItem, b: HomeItem) =>
-  -(a.scheduledOn ?? "").localeCompare(b.scheduledOn ?? "") || byPriority(a, b);
-
 /** How wide a window the home screen needs: seven days back covers everything
- *  still missed (day 8 archives), and a fortnight ahead fills the Backlog. */
+ *  still open (day 8 archives) — the Week tab reads that history — and a
+ *  fortnight ahead fills the Backlog. */
 export const HOME_WINDOW_BACK = 7;
 export const HOME_WINDOW_FORWARD = 14;
+
+/**
+ * Narrowing the whole screen to what matches a search.
+ *
+ * Applied to the built sections rather than to the tasks going in, so a match
+ * keeps the section it belongs to: finding a routine tells you it is in the
+ * backlog, not merely that it exists. Sections that end up empty render
+ * nothing, so the shape of the answer is the answer.
+ *
+ * **Title only.** Matching descriptions as well would put rows on screen with
+ * no visible reason to be there, and the honest fix for that — highlighting the
+ * matched text inside a collapsed description — is a different feature.
+ */
+export function filterHome(sections: HomeSections, query: string): HomeSections {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return sections;
+
+  const keep = (items: HomeItem[]) =>
+    items.filter((item) => item.task.title.toLowerCase().includes(needle));
+
+  return {
+    inProgress: keep(sections.inProgress),
+    missed: keep(sections.missed),
+    forToday: keep(sections.forToday),
+    general: keep(sections.general),
+    completedToday: keep(sections.completedToday),
+    routineBacklog: keep(sections.routineBacklog),
+  };
+}
+
+/** Whether any section has anything in it — "no matches" needs saying. */
+export function isEmpty(sections: HomeSections): boolean {
+  return Object.values(sections).every((items) => items.length === 0);
+}
