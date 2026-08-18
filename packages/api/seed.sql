@@ -48,8 +48,13 @@ INSERT INTO task (
   ('task_run',    'user_local', 'epic_health', 'Morning run',     '3km around the park',  30, 30, 'medium', 'routine', 62,  '2026-07-01', NULL, '2026-07-01T00:00:00Z'),
   ('task_read',   'user_local', NULL,          'Read 20 pages',   NULL,                   30, 30, 'low',    'routine', 127, '2026-07-01', NULL, '2026-07-01T00:00:00Z'),
   ('task_tidy',   'user_local', 'epic_health', 'Tidy the desk',   NULL,                   15, 15, 'low',    'routine', 62,  '2026-07-01', NULL, '2026-07-01T00:00:00Z'),
-  ('task_taxes',  'user_local', NULL,          'File Q3 taxes',   'Before the deadline',  90, 90, 'high',   'oneoff',  NULL, NULL,        '2026-07-31T17:00:00Z', '2026-07-01T00:00:00Z'),
-  ('task_dentist','user_local', NULL,          'Book dentist',    NULL,                   15, 15, 'medium', 'oneoff',  NULL, NULL,        '2026-07-15T09:00:00Z', '2026-07-01T00:00:00Z');
+  -- Due dates are RELATIVE, like the history below. Hard-coded ones went stale:
+  -- the home window reaches seven days back, so a one-off due last month
+  -- generates no occurrence, lands in no section, and the General heading
+  -- disappears — which is a fixture rotting, not a bug, and it failed the e2e
+  -- suite weeks after anyone touched either.
+  ('task_taxes',  'user_local', NULL,          'File Q3 taxes',   'Before the deadline',  90, 90, 'high',   'oneoff',  NULL, NULL,        strftime('%Y-%m-%dT17:00:00Z', 'now', '+3 day'), '2026-07-01T00:00:00Z'),
+  ('task_dentist','user_local', NULL,          'Book dentist',    NULL,                   15, 15, 'medium', 'oneoff',  NULL, NULL,        strftime('%Y-%m-%dT09:00:00Z', 'now', '+1 day'), '2026-07-01T00:00:00Z');
 
 -- Fifty days of history for "Read 20 pages" (weekday mask 127, so every day is
 -- scheduled), and the ledger rows that paid for them.
