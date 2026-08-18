@@ -10,6 +10,7 @@ import {
   type OccurrenceRow,
   windowDays,
 } from "../lib/occurrences";
+import { selectIn } from "../lib/selectIn";
 import { listGeneratingTasks } from "../lib/tasks";
 import { timeZoneOf } from "../lib/user";
 import { idempotency } from "../middleware/idempotency";
@@ -52,24 +53,23 @@ occurrenceRoutes.get("/", async (c) => {
   const tasks = await listGeneratingTasks(database, userId);
   if (tasks.length === 0) return c.json([]);
 
-  const stored: OccurrenceRow[] = await database
-    .select({
-      taskId: occurrence.taskId,
-      scheduledOn: occurrence.scheduledOn,
-      status: occurrence.status,
-      completedAt: occurrence.completedAt,
-      rewardSnapshotCoins: occurrence.rewardSnapshotCoins,
-    })
-    .from(occurrence)
-    .where(
-      and(
-        inArray(
-          occurrence.taskId,
-          tasks.map((t) => t.id),
-        ),
-        between(occurrence.scheduledOn, from, to),
-      ),
-    );
+  // Chunked, because `IN (?, …)` counts against D1's 100-parameter ceiling:
+  // with a hundred live tasks this statement was rejected outright and the
+  // whole home screen answered 500.
+  const stored: OccurrenceRow[] = await selectIn(
+    tasks.map((t) => t.id),
+    (batch) =>
+      database
+        .select({
+          taskId: occurrence.taskId,
+          scheduledOn: occurrence.scheduledOn,
+          status: occurrence.status,
+          completedAt: occurrence.completedAt,
+          rewardSnapshotCoins: occurrence.rewardSnapshotCoins,
+        })
+        .from(occurrence)
+        .where(and(inArray(occurrence.taskId, batch), between(occurrence.scheduledOn, from, to))),
+  );
 
   return c.json(materialiseWindow({ tasks, stored, timeZone, today, from, to }));
 });

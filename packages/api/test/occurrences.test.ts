@@ -109,8 +109,12 @@ async function storeOccurrence(
     .run();
 }
 
+let userId: string;
+
 beforeEach(async () => {
-  token = (await makeUser()).token;
+  const user = await makeUser();
+  userId = user.id;
+  token = user.token;
   today = todayIn("UTC");
 });
 
@@ -420,5 +424,63 @@ describe("scoping and guards", () => {
       `/api/occurrences?from=2026-01-01&to=${addDays("2026-01-01", 365)}`,
     );
     expect(res.status).toBe(200);
+  });
+});
+
+describe("a user with a lot of tasks", () => {
+  /** Inserted straight into D1: the point is the SIZE of the id list, and 150
+   *  round trips through the create route would only make the test slow. */
+  async function seedTasks(count: number): Promise<string[]> {
+    const ids: string[] = [];
+    for (let i = 0; i < count; i++) {
+      const id = crypto.randomUUID();
+      await env.DB.prepare(
+        `INSERT INTO task (id,user_id,title,effort_minutes,reward_coins,priority,type,weekdays,created_at)
+         VALUES (?,?,?,?,?,?,?,?,?)`,
+      )
+        .bind(id, userId, `Task ${i}`, 15, 15, "medium", "routine", 0b1111111, TS)
+        .run();
+      ids.push(id);
+    }
+    return ids;
+  }
+
+  it("still answers the window past D1's parameter ceiling", async () => {
+    // The reported 500. `IN (?, …)` counts against the same 100-parameter
+    // limit as a write, so scoping the window by the user's live task ids meant
+    // the home screen stopped loading the day the hundredth task was created —
+    // with `too many SQL variables`, from a request that looks entirely
+    // ordinary.
+    await seedTasks(150);
+
+    const res = await call("GET", `/api/occurrences?from=${today}&to=${addDays(today, 6)}`);
+
+    expect(res.status).toBe(200);
+    const got = (await res.json()) as unknown[];
+    // Seven days times 150 daily routines, all materialised, none written.
+    expect(got).toHaveLength(150 * 7);
+  });
+
+  it("reads the STORED rows for every one of them, not just the first chunk", async () => {
+    // Chunking that quietly returns only the first batch looks identical on a
+    // freshly generated window — every day is materialised either way. It is
+    // the completions that vanish: past the ninetieth task, ticked days would
+    // come back pending and their coins would look unearned.
+    const ids = await seedTasks(150);
+    for (const id of ids) await storeOccurrence(id, today, "done", 15);
+
+    const got = (await (
+      await call("GET", `/api/occurrences?from=${today}&to=${today}`)
+    ).json()) as Array<{ status: string }>;
+
+    expect(got).toHaveLength(150);
+    expect(got.every((row) => row.status === "done")).toBe(true);
+  });
+
+  it("reports on them too", async () => {
+    // Same ceiling, same failure, one screen further along.
+    await seedTasks(150);
+
+    expect((await call("GET", "/api/reports/momentum")).status).toBe(200);
   });
 });
