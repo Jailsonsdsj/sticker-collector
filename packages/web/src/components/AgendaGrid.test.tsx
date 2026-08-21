@@ -380,3 +380,37 @@ describe("ticking a block", () => {
     expect(screen.getByRole("button", { name: /^Gym/ })).toBeDisabled();
   });
 });
+
+describe("a long title", () => {
+  // `truncate` IS the behaviour under test, and jsdom has no layout to observe
+  // it any other way. A day column is narrow and the names sharing one are the
+  // ones most alike, so the cut lands exactly where the difference is.
+  const LONG = "English study — listening practice and vocabulary review";
+
+  it("is shown in full, not cut off with an ellipsis", () => {
+    view({
+      routines: [routine({ title: LONG, slots: [{ weekday: 0, startMin: 600, endMin: 660 }] })],
+    });
+
+    expect(screen.getByText(LONG).className).not.toContain("truncate");
+    expect(screen.getByText(LONG).className).toContain("break-words");
+  });
+
+  it("is not clipped by the block it sits in", () => {
+    // The wrap is pointless if the button hides the second line.
+    view({
+      routines: [routine({ title: LONG, slots: [{ weekday: 0, startMin: 600, endMin: 660 }] })],
+    });
+
+    expect(screen.getByRole("button", { name: new RegExp(`^${LONG}`) }).className).not.toContain(
+      "overflow-hidden",
+    );
+  });
+
+  it("keeps the time on one line", () => {
+    // Four digits and a dash; a wrapped range reads as two separate times.
+    view({ routines: [routine({ slots: [{ weekday: 0, startMin: 600, endMin: 660 }] })] });
+
+    expect(screen.getByText("10:00–11:00").className).toContain("truncate");
+  });
+});

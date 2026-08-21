@@ -115,7 +115,10 @@ export function TaskRow({
             type="button"
             onClick={titleAction}
             className={cx(
-              "block w-full cursor-pointer truncate text-left font-body text-lg leading-tight font-semibold outline-none",
+              // Wraps rather than truncates, like the plain title below it and
+              // the weekly grid: a cut-off title hides the word that tells two
+              // similar tasks apart, and a taller row is the cheaper price.
+              "block w-full cursor-pointer text-left font-body text-lg leading-tight font-semibold break-words outline-none",
               "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan",
               done ? "text-ink-dim line-through" : "text-ink",
             )}
@@ -125,7 +128,7 @@ export function TaskRow({
         ) : (
           <div
             className={cx(
-              "font-body text-lg leading-tight font-semibold",
+              "font-body text-lg leading-tight font-semibold break-words",
               done ? "text-ink-dim line-through" : "text-ink",
             )}
           >

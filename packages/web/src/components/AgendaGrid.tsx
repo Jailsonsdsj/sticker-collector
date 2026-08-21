@@ -430,7 +430,10 @@ function Block({
         } as CSSProperties
       }
       className={cx(
-        "min-w-0 overflow-hidden rounded-lg border-l-[3px] px-2 py-1 text-left",
+        // No `overflow-hidden`: the title wraps, and clipping it here would
+        // undo that. The hour rows are `minmax(2.75rem, auto)`, so a block that
+        // needs two lines grows its row rather than spilling into the next one.
+        "min-w-0 rounded-lg border-l-[3px] px-2 py-1 text-left",
         "[border-left-color:var(--ui-epic)] outline-none",
         "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan",
         onToggle && !future && "cursor-pointer",
@@ -441,14 +444,19 @@ function Block({
         running && "ring-2 ring-ring-today",
       )}
     >
+      {/* The whole title, wrapped. A day column is narrow and the names that
+          share a column are the ones most alike — "English study" and "English
+          homework" truncate to the same three words. */}
       <span
         className={cx(
-          "block truncate font-body text-2xs font-semibold",
+          "block font-body text-2xs font-semibold break-words",
           done ? "text-ink-secondary line-through" : "text-ink",
         )}
       >
         {block.task.title}
       </span>
+      {/* The clock stays on one line: it is four digits and a dash, and a
+          wrapped time range reads as two times. */}
       <span className="block truncate font-numeric text-3xs text-ink-muted">{when}</span>
     </button>
   );
