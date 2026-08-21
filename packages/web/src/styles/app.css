@@ -154,11 +154,14 @@ body {
 
 @media (pointer: fine) and (hover: hover) {
   .app-column {
-    /* 49.92rem: the original 32rem, +30%, then +20% again. The first pass held
-       the column to a large phone, which was tighter than a desktop needs —
-       album grids and the weekly grid both have room to breathe here. Touch
-       devices are unaffected: they never enter this query. */
-    max-width: 49.92rem;
+    /* 64.896rem: the original 32rem, +30%, +20%, +30% again — twice where it
+       started. Each pass was asked for after living with the one before it, so
+       the number is a record of that rather than a guess. It now exceeds the
+       64rem the layout used to stretch to unaided, which means the cap earns
+       its keep only on a genuinely wide monitor; the centring and the side
+       rules are what it still does everywhere else. Touch devices are
+       unaffected: they never enter this query. */
+    max-width: 64.896rem;
   }
 
   .app-column-framed {

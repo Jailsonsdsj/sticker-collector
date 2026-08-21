@@ -116,7 +116,11 @@ function WeekAgenda({ blocks, hours, range, today, marker, ...rest }: LayoutProp
 
   return (
     <div
-      className="relative grid gap-1"
+      // `gap-x` only. A row gap sits BETWEEN tracks and belongs to no hour, so
+      // an hour measured 48px on screen while a percentage offset inside it
+      // resolved against the 44px track — the now line landed at 44/48 of the
+      // way into every hour. Blocks carry their own `mb-1` instead.
+      className="relative grid gap-x-1"
       style={{
         gridTemplateColumns: "3.5rem repeat(7, 1fr)",
         gridTemplateRows: `auto repeat(${hours.length}, minmax(2.75rem, auto))`,
@@ -169,7 +173,26 @@ function WeekAgenda({ blocks, hours, range, today, marker, ...rest }: LayoutProp
         />
       ))}
 
-      <NowLine marker={marker} range={range} column="2 / -1" headerRows={1} />
+      {/* A tick every quarter hour. The hour rule alone made 14:30 read as "a
+          bit past 14:00" — there was nothing between the labels to measure
+          against. Repeating every 25% of the track, which IS a quarter hour
+          now that the row gap is gone. */}
+      {hours.map((hour, row) => (
+        <span
+          key={`quarters-${hour}`}
+          aria-hidden
+          className="pointer-events-none opacity-20 [background-image:repeating-linear-gradient(to_bottom,var(--color-border)_0_1px,transparent_1px_25%)]"
+          style={{ gridColumn: "2 / -1", gridRow: row + 2 }}
+        />
+      ))}
+
+      <NowLine
+        marker={marker}
+        range={range}
+        column="2 / -1"
+        headerRows={1}
+        minutesNow={rest.minutesNow}
+      />
 
       {blocks.map((block) => (
         <Block
@@ -267,7 +290,9 @@ function DayAgenda({
         <p className="font-body text-md text-ink-dim">Nothing scheduled.</p>
       ) : (
         <div
-          className="relative grid gap-1"
+          // `gap-x` only — see the week layout: a row gap makes an hour taller
+          // than the track a position inside it is measured against.
+          className="relative grid gap-x-1"
           style={{
             gridTemplateColumns: "3.5rem 1fr",
             gridTemplateRows: `repeat(${hours.length}, minmax(2.75rem, auto))`,
@@ -293,7 +318,24 @@ function DayAgenda({
             />
           ))}
 
-          {onToday && <NowLine marker={marker} range={range} column="2" headerRows={0} />}
+          {hours.map((hour, row) => (
+            <span
+              key={`quarters-${hour}`}
+              aria-hidden
+              className="pointer-events-none opacity-20 [background-image:repeating-linear-gradient(to_bottom,var(--color-border)_0_1px,transparent_1px_25%)]"
+              style={{ gridColumn: 2, gridRow: row + 1 }}
+            />
+          ))}
+
+          {onToday && (
+            <NowLine
+              marker={marker}
+              range={range}
+              column="2"
+              headerRows={0}
+              minutesNow={rest.minutesNow}
+            />
+          )}
 
           {day.map((block) => (
             <Block
@@ -343,12 +385,14 @@ function NowLine({
   range,
   column,
   headerRows,
+  minutesNow,
 }: {
   marker: { hour: number; fraction: number } | null;
   range: { from: number; to: number };
   column: string;
   /** Rows above the first hour — the week layout has a weekday header. */
   headerRows: number;
+  minutesNow: number;
 }) {
   if (!marker) return null;
 
@@ -362,7 +406,18 @@ function NowLine({
         gridRow: marker.hour - range.from + 1 + headerRows,
         top: `${marker.fraction * 100}%`,
       }}
-    />
+    >
+      {/* The clock, on the line itself. Position alone was ambiguous: a line
+          24px under a label reading "14:00" is 14:30, and the only way to know
+          that was to measure it. Centred on the line rather than sitting under
+          it, so it marks the same minute the line does. */}
+      <span
+        data-testid="now-time"
+        className="-translate-y-1/2 absolute top-0 left-0 rounded-xs bg-cyan px-1 font-numeric text-3xs font-bold text-void"
+      >
+        {minutesToClock(minutesNow)}
+      </span>
+    </span>
   );
 }
 
@@ -455,7 +510,7 @@ function Block({
         // No `overflow-hidden`: the title wraps, and clipping it here would
         // undo that. The hour rows are `minmax(2.75rem, auto)`, so a block that
         // needs two lines grows its row rather than spilling into the next one.
-        "min-w-0 rounded-lg border-l-[3px] px-2 py-1 text-left",
+        "mb-1 min-w-0 rounded-lg border-l-[3px] px-2 py-1 text-left",
         "[border-left-color:var(--ui-epic)] outline-none",
         "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan",
         onOpen && "cursor-pointer",
