@@ -234,6 +234,42 @@ export async function slotsFor(
   return map;
 }
 
+/**
+ * Every other live routine that has times, with them — the set a proposed slot
+ * has to fit between.
+ *
+ * A join rather than `slotsFor`, and deliberately not driven by a list of ids:
+ * the caller wants "everything else", and turning that into `IN (?, …)` would
+ * put an unbounded id list back under D1's 100-parameter ceiling (TD-35) for no
+ * gain. Only routines with slots can clash, and the join drops the rest.
+ */
+export async function otherRoutineSlots(
+  database: Db,
+  userId: string,
+  exceptTaskId?: string,
+): Promise<{ id: string; title: string; slots: RoutineSlot[] }[]> {
+  const rows = await database
+    .select({
+      id: task.id,
+      title: task.title,
+      weekday: routineSlot.weekday,
+      startMin: routineSlot.startMin,
+      endMin: routineSlot.endMin,
+    })
+    .from(routineSlot)
+    .innerJoin(task, eq(task.id, routineSlot.taskId))
+    .where(and(liveTasks(userId), eq(task.type, "routine")));
+
+  const byTask = new Map<string, { id: string; title: string; slots: RoutineSlot[] }>();
+  for (const row of rows) {
+    if (row.id === exceptTaskId) continue;
+    const entry = byTask.get(row.id) ?? { id: row.id, title: row.title, slots: [] };
+    entry.slots.push({ weekday: row.weekday, startMin: row.startMin, endMin: row.endMin });
+    byTask.set(row.id, entry);
+  }
+  return [...byTask.values()];
+}
+
 /** The rows for one task's slots, ready to insert. */
 export function slotRows(taskId: string, slots: readonly RoutineSlot[]) {
   return slots.map((slot) => ({

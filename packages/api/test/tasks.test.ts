@@ -500,6 +500,110 @@ describe("when a routine runs — its slots", () => {
     expect(res.status).toBe(400);
   });
 
+  it("refuses a slot that lands on another routine's", async () => {
+    // The agenda puts two slots in one cell on top of each other, so a saved
+    // clash is a task that vanishes from the day it was scheduled on.
+    await createRoutine({ title: "Gym", weekdays: 1, slots: [slot(0, 600, 660)] });
+
+    const res = await call("POST", "/api/tasks", {
+      ...ROUTINE,
+      title: "Piano",
+      weekdays: 1,
+      slots: [slot(0, 630, 690)],
+    });
+
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { error: string }).error).toContain("Gym");
+  });
+
+  it("does not create the task it refused", async () => {
+    // 409 before the INSERT: D1 has no transaction to roll one back with.
+    await createRoutine({ title: "Gym", weekdays: 1, slots: [slot(0, 600, 660)] });
+
+    await call("POST", "/api/tasks", {
+      ...ROUTINE,
+      title: "Piano",
+      weekdays: 1,
+      slots: [slot(0, 630, 690)],
+    });
+
+    const list = (await (await call("GET", "/api/tasks")).json()) as { title: string }[];
+    expect(list.map((t) => t.title)).not.toContain("Piano");
+  });
+
+  it("allows back-to-back slots, which are not an overlap", async () => {
+    await createRoutine({ title: "Gym", weekdays: 1, slots: [slot(0, 600, 660)] });
+
+    const res = await call("POST", "/api/tasks", {
+      ...ROUTINE,
+      title: "Shower",
+      weekdays: 1,
+      slots: [slot(0, 660, 700)],
+    });
+
+    expect(res.status).toBe(201);
+  });
+
+  it("allows the same hour on a different day", async () => {
+    await createRoutine({ title: "Gym", weekdays: 1, slots: [slot(0, 600, 660)] });
+
+    const res = await call("POST", "/api/tasks", {
+      ...ROUTINE,
+      title: "Piano",
+      weekdays: 2,
+      slots: [slot(1, 600, 660)],
+    });
+
+    expect(res.status).toBe(201);
+  });
+
+  it("refuses a patch that moves a routine onto another one", async () => {
+    await createRoutine({ title: "Gym", weekdays: 1, slots: [slot(0, 600, 660)] });
+    const piano = await createRoutine({ title: "Piano", weekdays: 1, slots: [slot(0, 900, 960)] });
+
+    const res = await call("PATCH", `/api/tasks/${piano.id}`, { slots: [slot(0, 630, 690)] });
+
+    expect(res.status).toBe(409);
+  });
+
+  it("leaves the patched task untouched when it refuses", async () => {
+    await createRoutine({ title: "Gym", weekdays: 1, slots: [slot(0, 600, 660)] });
+    const piano = await createRoutine({ title: "Piano", weekdays: 1, slots: [slot(0, 900, 960)] });
+
+    await call("PATCH", `/api/tasks/${piano.id}`, { title: "Renamed", slots: [slot(0, 630, 690)] });
+
+    const read = (await (await call("GET", `/api/tasks/${piano.id}`)).json()) as {
+      title: string;
+      slots: unknown[];
+    };
+    expect(read.title).toBe("Piano");
+    expect(read.slots).toEqual([slot(0, 900, 960)]);
+  });
+
+  it("does not report a routine against itself", async () => {
+    // Re-saving a routine without moving it is the commonest patch there is.
+    const gym = await createRoutine({ title: "Gym", weekdays: 1, slots: [slot(0, 600, 660)] });
+
+    const res = await call("PATCH", `/api/tasks/${gym.id}`, { slots: [slot(0, 600, 660)] });
+
+    expect(res.status).toBe(200);
+  });
+
+  it("ignores a deleted routine's slots", async () => {
+    // A soft-deleted routine is off the agenda, so its hour is free again.
+    const gym = await createRoutine({ title: "Gym", weekdays: 1, slots: [slot(0, 600, 660)] });
+    await call("DELETE", `/api/tasks/${gym.id}`);
+
+    const res = await call("POST", "/api/tasks", {
+      ...ROUTINE,
+      title: "Piano",
+      weekdays: 1,
+      slots: [slot(0, 600, 660)],
+    });
+
+    expect(res.status).toBe(201);
+  });
+
   it("replaces the whole set on a patch", async () => {
     // `slots` is the set, not a delta: partial editing of one weekday would
     // need a second endpoint to say which one.

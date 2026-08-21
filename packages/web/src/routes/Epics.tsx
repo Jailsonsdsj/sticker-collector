@@ -227,6 +227,10 @@ export function Epics() {
         open={addingTo !== null}
         defaultEpicId={addingTo?.epicId ?? null}
         epics={epics.data ?? []}
+        // Every routine, not just this epic's: a clash is a clash whichever
+        // epic the other task belongs to, and without the list the form cannot
+        // say so before the Worker 409s.
+        routines={tasks.data ?? []}
         onClose={() => setAddingTo(null)}
         onSubmit={(payload) => createTask.mutateAsync(payload)}
       />
@@ -272,6 +276,7 @@ export function Epics() {
         // sheet always sends a diff through `onUpdate`.
         onSubmit={(payload) => createTask.mutateAsync(payload)}
         epics={epics.data ?? []}
+        routines={tasks.data ?? []}
         onClose={() => setOpenTask(null)}
         onUpdate={(patch) =>
           openTask ? updateTask.mutateAsync({ id: openTask.task.id, patch }) : Promise.resolve()

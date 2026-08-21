@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { WEEKDAYS_MASK_ALL, WEEKDAYS_MASK_WEEKDAYS } from "./recurrence";
 import {
   clockToMinutes,
+  describeConflicts,
   describeSlot,
   findSlotConflicts,
   minutesToClock,
@@ -181,3 +182,49 @@ describe("times as words and back", () => {
     expect(describeSlot(slot(6, "08:00", "09:00"))).toBe("Sun 08:00–09:00");
   });
 });
+
+describe("the refusal, in words", () => {
+  const gym = { id: "gym", title: "Gym", slots: [slot(0, "12:00", "14:00")] };
+
+  it("says nothing when nothing clashes", () => {
+    expect(describeConflicts([])).toBeNull();
+  });
+
+  it("names the task and the hour it already holds", () => {
+    // "Overlaps Gym" leaves you hunting for which day and when.
+    const message = describeConflicts(findSlotConflicts([slot(0, "13:00", "13:30")], [gym]));
+
+    expect(message).toContain("Gym");
+    expect(message).toContain("Mon 12:00–14:00");
+  });
+
+  it("names a task once, however many days it clashes on", () => {
+    // A Mon–Fri routine against another Mon–Fri routine is five conflicts and
+    // one problem; listing the name five times reads as five problems.
+    const weekly = {
+      id: "w",
+      title: "Standup",
+      slots: [slot(0, "09:00", "09:15"), slot(1, "09:00", "09:15")],
+    };
+    const conflicts = findSlotConflicts(
+      [slot(0, "09:00", "10:00"), slot(1, "09:00", "10:00")],
+      [weekly],
+    );
+
+    expect(conflicts).toHaveLength(2);
+    expect(message(describeConflicts(conflicts)).match(/Standup/g)).toHaveLength(1);
+  });
+
+  it("lists every task that is in the way", () => {
+    const other = { id: "x", title: "Standup", slots: [slot(0, "13:30", "13:45")] };
+    const conflicts = findSlotConflicts([slot(0, "12:00", "14:00")], [gym, other]);
+
+    expect(message(describeConflicts(conflicts))).toMatch(/Gym.*Standup|Standup.*Gym/);
+  });
+});
+
+/** Non-null, or the assertion below fails on a type rather than a fact. */
+function message(text: string | null): string {
+  if (text === null) throw new Error("expected a conflict message");
+  return text;
+}

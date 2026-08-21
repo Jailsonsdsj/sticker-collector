@@ -6,6 +6,7 @@ import {
   blocksOn,
   hourRows,
   isNow,
+  laneOut,
   minutesNowIn,
   nowMarker,
   openingHour,
@@ -281,5 +282,68 @@ describe("which hour the grid opens on", () => {
 
   it("is null when the day is empty", () => {
     expect(openingHour(null, [])).toBeNull();
+  });
+});
+
+describe("two blocks at the same hour", () => {
+  const at = (id: string, weekday: number, startMin: number, endMin: number) => ({
+    task: routine({ id, slots: [{ weekday, startMin, endMin }] }),
+    slot: { weekday, startMin, endMin },
+    date: "2026-08-17" as const,
+    done: false,
+  });
+
+  it("sit side by side rather than on top of each other", () => {
+    // Grid items sharing a cell stack, so the later one covers the earlier and
+    // a task vanishes from the day it was scheduled on.
+    const placed = laneOut([at("a", 0, 600, 660), at("b", 0, 630, 690)]);
+
+    expect(placed.map((block) => [block.task.id, block.lane, block.lanes])).toEqual([
+      ["a", 0, 2],
+      ["b", 1, 2],
+    ]);
+  });
+
+  it("leaves a day with no clash at full width", () => {
+    const placed = laneOut([at("a", 0, 600, 660), at("b", 0, 900, 960)]);
+
+    expect(placed.every((block) => block.lanes === 1)).toBe(true);
+  });
+
+  it("treats back to back as no clash", () => {
+    // Half-open, like every other slot comparison here.
+    const placed = laneOut([at("a", 0, 600, 660), at("b", 0, 660, 720)]);
+
+    expect(placed.every((block) => block.lanes === 1)).toBe(true);
+  });
+
+  it("reuses a column once its block has ended", () => {
+    // a 09–10, b 09:30–11, c 10–10:30: c fits back in a's column.
+    const placed = laneOut([at("a", 0, 540, 600), at("b", 0, 570, 660), at("c", 0, 600, 630)]);
+
+    expect(placed.find((block) => block.task.id === "c")?.lane).toBe(0);
+    expect(placed.every((block) => block.lanes === 2)).toBe(true);
+  });
+
+  it("splits a day into independent groups across a gap", () => {
+    // A morning clash must not narrow an evening block that clashes with
+    // nothing.
+    const placed = laneOut([at("a", 0, 540, 600), at("b", 0, 550, 610), at("c", 0, 1200, 1260)]);
+
+    expect(placed.find((block) => block.task.id === "c")?.lanes).toBe(1);
+  });
+
+  it("keeps days apart", () => {
+    // Same hour, different day, is not an overlap.
+    const placed = laneOut([at("a", 0, 600, 660), at("b", 1, 600, 660)]);
+
+    expect(placed.every((block) => block.lanes === 1)).toBe(true);
+  });
+
+  it("handles three at once", () => {
+    const placed = laneOut([at("a", 0, 600, 700), at("b", 0, 610, 700), at("c", 0, 620, 700)]);
+
+    expect(placed.map((block) => block.lane)).toEqual([0, 1, 2]);
+    expect(placed.every((block) => block.lanes === 3)).toBe(true);
   });
 });

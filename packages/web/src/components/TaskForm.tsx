@@ -1,5 +1,5 @@
 import type { CreateTaskInput, Epic, Task, UpdateTask } from "@sticker-collector/shared";
-import { findSlotConflicts } from "@sticker-collector/shared";
+import { describeConflicts, findSlotConflicts } from "@sticker-collector/shared";
 import { useMemo, useReducer, useState } from "react";
 import {
   initialState,
@@ -39,8 +39,9 @@ export interface TaskFormProps {
    * Every other routine's times, so a clash can be pointed out while it is
    * being made rather than discovered on the agenda.
    *
-   * Optional: a caller with no list simply gets no warning, which is what the
-   * epic screen does.
+   * Optional, but every caller should pass it: without the list the form
+   * cannot refuse a clash and the Worker's 409 becomes the first the user hears
+   * of it, after the save.
    */
   routines?: Task[];
   /** Set when opened from an epic — the one thing that is not blank. */
@@ -64,13 +65,11 @@ export function TaskForm({
   const [saving, setSaving] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
 
-  const problem = validate(state);
-
   /**
    * What the times entered here run into.
    *
-   * Recomputed as they are typed — a warning that arrives on submit is a
-   * warning about a decision already made. Editing a routine never reports it
+   * Recomputed as they are typed — a refusal that arrives on submit is a
+   * refusal of a decision already made. Editing a routine never reports it
    * against itself.
    */
   const conflicts = useMemo(
@@ -82,9 +81,21 @@ export function TaskForm({
       ),
     [state, routines, task?.id],
   );
+
+  // Blocking, not advisory: the agenda draws two slots in one cell on top of
+  // each other, so saving a clash hides one of the two tasks. The Worker
+  // refuses it too — this is the copy of the rule that can explain itself
+  // before the request is sent.
+  //
+  // The message itself belongs to `ScheduleFields`, beside the times that
+  // caused it. Repeating it in the footer would put the same sentence on screen
+  // twice; all this needs from it is whether to hold the button.
+  const clash = describeConflicts(conflicts) !== null;
+  const problem = validate(state);
+
   const patch = task ? toPatch(state, task) : null;
   // Editing with nothing changed is not an error, but there is nothing to send.
-  const nothingToSave = task ? patch === null : problem !== null;
+  const nothingToSave = clash || (task ? patch === null : problem !== null);
 
   async function save() {
     if (saving || nothingToSave) return;

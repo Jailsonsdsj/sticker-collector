@@ -70,7 +70,8 @@ Every task is either a **routine** or a **one-off**. The choice is made at creat
 - **One slot per weekday**, enforced by the schema and by a unique index. `occurrence` is unique on (task, date) and the coin ledger hangs off that pair, so a second block on the same day would be a completion the database cannot record.
 - **Overnight is refused, not split.** 22:00 → 01:00 is two blocks on two days; inventing the second would put the task on a day the user never chose.
 - Slots are **optional**: every routine that predates this has none, and the agenda simply does not show it.
-- **Overlaps are a warning, never a refusal.** Two things at nine on a Monday is a mess a person may knowingly want, and an app that forbids it is an app that gets lied to.
+- **Overlaps are refused.** Two routines in one slot cannot both be drawn: the agenda puts them in the same cell and the second covers the first, so one task disappears from the day it was scheduled on. This began as a *warning* — "two things at nine on a Monday is a mess a person may knowingly want" — and the warning was wrong, because what it permitted was not a visible mess but an invisible task. The form disables Save and names the clash; the Worker answers **409** on create and on patch, and refuses *before* it writes, since D1 has no transaction to undo a half-applied change with. Back-to-back is not an overlap: slots are half-open, so 09:00–10:00 and 10:00–11:00 sit together happily.
+- **Refusing a new clash does not undo an old one.** Slots saved before the rule can still collide, so the agenda lays overlapping blocks **side by side** within their day rather than on top of each other — a task you cannot see is a task you cannot fix.
 
 **The home screen**
 
