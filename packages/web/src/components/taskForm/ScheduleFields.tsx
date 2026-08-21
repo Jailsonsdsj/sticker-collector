@@ -1,4 +1,10 @@
-import { maskHasDay, type SlotConflict, WEEKDAYS, type Weekday } from "@sticker-collector/shared";
+import {
+  describeConflicts,
+  maskHasDay,
+  type SlotConflict,
+  WEEKDAYS,
+  type Weekday,
+} from "@sticker-collector/shared";
 import type { TaskFormAction, TaskFormState } from "../../lib/taskForm";
 import { Chip, Field, Input, Tabs } from "../ui";
 import { WEEKDAY_INDICES } from "../weekGrid/WeekGridShell";
@@ -39,7 +45,7 @@ export function ScheduleFields({
   dispatch: (action: TaskFormAction) => void;
   /** True while editing: the choice is fixed at creation and the API refuses it. */
   typeLocked?: boolean;
-  /** What the times entered here run into. A warning, never a refusal. */
+  /** What the times entered here run into. Blocks the save. */
   conflicts?: SlotConflict[];
 }) {
   return (
@@ -190,7 +196,11 @@ function SlotFields({
                 className="min-w-0 flex-1 rounded-lg border border-surface-4 bg-panel px-2 py-1.5 font-numeric text-md text-ink outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan"
               />
               {clash && (
-                <span aria-hidden title={`Overlaps ${clash.withTaskTitle}`} className="text-coin">
+                <span
+                  aria-hidden
+                  title={`Clashes with ${clash.withTaskTitle}`}
+                  className="text-prio-high-fg"
+                >
                   ⚠
                 </span>
               )}
@@ -200,12 +210,12 @@ function SlotFields({
       </div>
 
       {conflicts.length > 0 && (
-        <p role="status" className="mt-2 font-body text-sm text-coin">
-          {/* A warning, not a refusal: two things at nine on a Monday is a mess
-              a person may knowingly want, and an app that forbids it is an app
-              that gets lied to. Save stays enabled. */}
-          Overlaps {[...new Set(conflicts.map((conflict) => conflict.withTaskTitle))].join(", ")}.
-          You can still save it.
+        // A refusal, not a warning, and Save is disabled behind it: the agenda
+        // draws two slots in one cell on top of each other, so a saved clash is
+        // a task that disappears from the day it was scheduled on. `alert`
+        // rather than `status` for the same reason — this one needs answering.
+        <p role="alert" className="mt-2 font-body text-sm text-prio-high-fg">
+          {describeConflicts(conflicts)}
         </p>
       )}
     </Field>

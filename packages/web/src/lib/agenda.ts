@@ -92,9 +92,71 @@ export function agendaBlocks(
   );
 }
 
-/** The blocks for one day, earliest first. */
-export function blocksOn(blocks: readonly AgendaBlock[], weekday: Weekday): AgendaBlock[] {
+/** The blocks for one day, earliest first. Generic so a laned list stays
+ *  laned — narrowing to `AgendaBlock` here would drop the lane silently. */
+export function blocksOn<T extends AgendaBlock>(blocks: readonly T[], weekday: Weekday): T[] {
   return blocks.filter((block) => block.slot.weekday === weekday);
+}
+
+/** A block, plus which of its day's parallel columns it belongs in. */
+export interface PlacedBlock extends AgendaBlock {
+  /** 0-based column within the overlapping group. */
+  lane: number;
+  /** How many columns that group needs. 1 when nothing overlaps. */
+  lanes: number;
+}
+
+/**
+ * Side by side, not on top of each other.
+ *
+ * Two slots at the same hour on the same day are the same grid cell, and grid
+ * items sharing a cell stack — the later one simply covers the earlier, so a
+ * task disappears from the day it was scheduled on. Saving a new clash is
+ * refused now, but the rule cannot reach data that already exists, and a task
+ * you cannot see is a task you cannot fix.
+ *
+ * The usual calendar layout: a run of blocks that transitively overlap forms a
+ * group, each block takes the first free column in it, and the group's width is
+ * split between the columns it needed. A day with no clashes is untouched —
+ * every block gets `lanes: 1` and the full width.
+ */
+export function laneOut(blocks: readonly AgendaBlock[]): PlacedBlock[] {
+  const placed: PlacedBlock[] = [];
+
+  for (const weekday of new Set(blocks.map((block) => block.slot.weekday))) {
+    const day = blocks
+      .filter((block) => block.slot.weekday === weekday)
+      .sort((a, b) => a.slot.startMin - b.slot.startMin || a.slot.endMin - b.slot.endMin);
+
+    // One group at a time, flushed when a block starts after everything so far
+    // has ended — that gap is what makes the next run independent of this one.
+    let group: PlacedBlock[] = [];
+    let laneEnds: number[] = [];
+
+    const flush = () => {
+      for (const block of group) block.lanes = laneEnds.length;
+      placed.push(...group);
+      group = [];
+      laneEnds = [];
+    };
+
+    for (const block of day) {
+      if (laneEnds.length > 0 && block.slot.startMin >= Math.max(...laneEnds)) flush();
+
+      // The first column already free at this minute. Half-open, so a block
+      // starting exactly when another ends reuses its column.
+      let lane = laneEnds.findIndex((end) => end <= block.slot.startMin);
+      if (lane === -1) lane = laneEnds.length;
+
+      laneEnds[lane] = block.slot.endMin;
+      group.push({ ...block, lane, lanes: 1 });
+    }
+    flush();
+  }
+
+  return placed.sort(
+    (a, b) => a.slot.weekday - b.slot.weekday || a.slot.startMin - b.slot.startMin,
+  );
 }
 
 /**

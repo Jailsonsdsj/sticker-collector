@@ -8,9 +8,11 @@ import {
   blocksOn,
   hourRows,
   isNow,
+  laneOut,
   minutesNowIn,
   nowMarker,
   openingHour,
+  type PlacedBlock,
   scheduledRoutines,
 } from "../lib/agenda";
 import { prefersMotion } from "../lib/placement";
@@ -75,7 +77,9 @@ export function AgendaGrid({
     );
   }
 
-  const blocks = agendaBlocks(scheduled, dates, occurrences);
+  // Laned here so both layouts inherit it: a clash the rules now refuse can
+  // still exist in data saved before they did.
+  const blocks = laneOut(agendaBlocks(scheduled, dates, occurrences));
   const hours = hourRows(range);
   const marker = nowMarker(range, minutesNow);
   const props = { blocks, hours, range, today, minutesNow, marker, accentOf, onToggle, isPending };
@@ -86,7 +90,7 @@ export function AgendaGrid({
 }
 
 interface LayoutProps {
-  blocks: AgendaBlock[];
+  blocks: PlacedBlock[];
   hours: number[];
   range: { from: number; to: number };
   today: LocalDate;
@@ -393,7 +397,7 @@ function Block({
   onToggle,
   isPending,
 }: {
-  block: AgendaBlock;
+  block: PlacedBlock;
   style: CSSProperties;
   today: LocalDate;
   minutesNow: number;
@@ -423,6 +427,16 @@ function Block({
         {
           ...style,
           "--ui-epic": `var(--color-${accent ?? "epic-none"})`,
+          // Its share of the cell when something else is in there too. Grid
+          // items in one area stack, so without this the later block simply
+          // covers the earlier and one task is gone from the day. Percentages
+          // resolve against the grid area, so no wrapper element is needed.
+          ...(block.lanes > 1
+            ? {
+                width: `${100 / block.lanes}%`,
+                marginLeft: `${(100 / block.lanes) * block.lane}%`,
+              }
+            : {}),
           // A WASH, not a fill: 18% of the colour the wallet pays in. A solid
           // lime block would be unreadable, and reading the name is the whole
           // reason the agenda shows names instead of checkboxes.

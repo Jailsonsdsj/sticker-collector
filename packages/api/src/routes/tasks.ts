@@ -1,7 +1,11 @@
 import {
   bulkTaskIdsSchema,
   createTaskSchema,
+  describeConflicts,
+  findSlotConflicts,
   quickAddTaskSchema,
+  type RoutineSlot,
+  type SlotConflict,
   updateTaskSchema,
 } from "@sticker-collector/shared";
 import { and, eq, inArray, isNull } from "drizzle-orm";
@@ -12,6 +16,7 @@ import {
   buildTaskPatch,
   liveTasks,
   newTaskRow,
+  otherRoutineSlots,
   ownsEpic,
   type PatchField,
   quickAddRow,
@@ -37,6 +42,32 @@ taskRoutes.on(["POST", "PATCH", "DELETE"], "*", idempotency);
 
 const bad = (issues?: unknown) => ({ error: "bad request", issues }) as const;
 
+/**
+ * Whether a proposed set of slots lands on top of another routine's.
+ *
+ * **409, not 400.** Nothing is malformed — the same body would be accepted an
+ * hour later once the other routine moved. The state of the collection is what
+ * refuses it.
+ *
+ * Enforced here and not only in the form: the form is one way in, and a rule
+ * that lives in a screen is a rule the API does not have. The agenda puts two
+ * slots in one cell on top of each other, so a saved clash is a task that
+ * silently vanishes from the day it was scheduled on.
+ */
+async function slotClash(
+  database: ReturnType<typeof db>,
+  userId: string,
+  slots: readonly RoutineSlot[],
+  exceptTaskId?: string,
+): Promise<{ error: string; conflicts: SlotConflict[] } | null> {
+  if (slots.length === 0) return null;
+
+  const others = await otherRoutineSlots(database, userId, exceptTaskId);
+  const conflicts = findSlotConflicts(slots, others, exceptTaskId);
+  const error = describeConflicts(conflicts);
+  return error ? { error, conflicts } : null;
+}
+
 taskRoutes.post("/", async (c) => {
   const parsed = createTaskSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json(bad(parsed.error.issues), 400);
@@ -50,6 +81,9 @@ taskRoutes.post("/", async (c) => {
 
   const row = newTaskRow(userId, parsed.data);
   const slots = parsed.data.type === "routine" ? (parsed.data.slots ?? []) : [];
+
+  const clash = await slotClash(database, userId, slots);
+  if (clash) return c.json({ error: clash.error, conflicts: clash.conflicts }, 409);
 
   const created = requireRow(await database.insert(task).values(row).returning(), "task");
   // One batch, because D1 has no interactive transactions. A slot row that
@@ -114,6 +148,13 @@ taskRoutes.patch("/:id", async (c) => {
 
   if (built.patch.epicId && !(await ownsEpic(database, userId, built.patch.epicId as string))) {
     return c.json({ error: "unknown epic" }, 400);
+  }
+
+  // Before the UPDATE, not after: a 409 must leave the task exactly as it was,
+  // and D1 has no transaction to roll one back with.
+  if (parsed.data.slots) {
+    const clash = await slotClash(database, userId, parsed.data.slots, id);
+    if (clash) return c.json({ error: clash.error, conflicts: clash.conflicts }, 409);
   }
 
   // A slots-only patch touches no column on `task`, and Drizzle throws "No

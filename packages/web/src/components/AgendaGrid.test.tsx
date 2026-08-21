@@ -414,3 +414,44 @@ describe("a long title", () => {
     expect(screen.getByText("10:00–11:00").className).toContain("truncate");
   });
 });
+
+describe("two routines in one slot", () => {
+  // The refusal only reaches new saves. Anything already in the database can
+  // still clash, and a block hidden under another is one you cannot fix.
+  const clashing = () => [
+    routine({ id: "a", title: "Gym", slots: [{ weekday: 0, startMin: 600, endMin: 660 }] }),
+    routine({ id: "b", title: "Piano", slots: [{ weekday: 0, startMin: 630, endMin: 690 }] }),
+  ];
+
+  it("shows both, side by side", () => {
+    view({ routines: clashing() });
+
+    expect(screen.getByRole("button", { name: /^Gym/ })).toHaveStyle({
+      width: "50%",
+      marginLeft: "0%",
+    });
+    expect(screen.getByRole("button", { name: /^Piano/ })).toHaveStyle({
+      width: "50%",
+      marginLeft: "50%",
+    });
+  });
+
+  it("leaves a block with nothing beside it at full width", () => {
+    // Narrowing every block to make room for a clash that is not there would
+    // be a worse grid for the normal case.
+    view({ routines: [routine({ slots: [{ weekday: 0, startMin: 600, endMin: 660 }] })] });
+
+    const block = screen.getByRole("button", { name: /^Gym/ });
+    expect(block.style.width).toBe("");
+    expect(block.style.marginLeft).toBe("");
+  });
+
+  it("splits the week grid's column, not the whole row", () => {
+    widescreen();
+    view({ routines: clashing() });
+
+    // Both still in Monday's column; the split is inside it.
+    expect(screen.getByRole("button", { name: /^Gym/ })).toHaveStyle({ gridColumn: "2" });
+    expect(screen.getByRole("button", { name: /^Piano/ })).toHaveStyle({ gridColumn: "2" });
+  });
+});

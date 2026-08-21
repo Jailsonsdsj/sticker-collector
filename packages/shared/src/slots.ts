@@ -80,9 +80,15 @@ export interface SlotConflict {
 /**
  * What a proposed set of slots would collide with.
  *
- * A **warning**, never a refusal: two things at nine on a Monday is a mess a
- * person may knowingly want, and an app that forbids it is an app that gets
- * lied to. The caller decides what to do with the list.
+ * A **refusal**, not a warning. This began as a warning on the reasoning that
+ * two things at nine on a Monday is a mess a person may knowingly want — but
+ * the agenda puts both in the same cell, so the second block covers the first
+ * and one of the two tasks disappears from the screen it was scheduled on.
+ * Allowing the save meant allowing an invisible task.
+ *
+ * Enforced on the server as well as in the form, because the form is not the
+ * only way in and a rule that lives in one screen is a rule the API does not
+ * have.
  *
  * `exceptTaskId` is how editing a routine avoids reporting it against itself.
  */
@@ -110,6 +116,30 @@ export function findSlotConflicts(
   }
 
   return conflicts;
+}
+
+/**
+ * The refusal, in words — one sentence naming what clashes and when.
+ *
+ * Lives here so the form and the Worker say the same thing. A 409 whose message
+ * differs from the message the form showed a second earlier reads as two
+ * different problems.
+ */
+export function describeConflicts(conflicts: readonly SlotConflict[]): string | null {
+  if (conflicts.length === 0) return null;
+
+  // One line per clashing task, not per slot: a routine that runs Mon–Fri at
+  // the same hour as another produces five conflicts and one problem.
+  const byTask = new Map<string, SlotConflict>();
+  for (const conflict of conflicts) {
+    if (!byTask.has(conflict.withTaskId)) byTask.set(conflict.withTaskId, conflict);
+  }
+
+  const named = [...byTask.values()]
+    .map((conflict) => `${conflict.withTaskTitle} (${describeSlot(conflict.withSlot)})`)
+    .join(", ");
+
+  return `This time is already taken by ${named}. Two routines in one slot hide each other on the agenda.`;
 }
 
 /** `540` → `"09:00"`. 24-hour, because the agenda is a grid and a column of
