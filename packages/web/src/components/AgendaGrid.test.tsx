@@ -464,3 +464,64 @@ describe("two routines in one slot", () => {
     expect(screen.getByRole("button", { name: /^Piano/ })).toHaveStyle({ gridColumn: "2" });
   });
 });
+
+describe("reading the time off the grid", () => {
+  const at = (utc: string) => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(utc));
+    view({ routines: [routine({ slots: [{ weekday: 0, startMin: 600, endMin: 780 }] })] });
+  };
+
+  it("says the time on the line, not just where it is", () => {
+    // Position alone was ambiguous: a line a third of the way down a 44px row
+    // labelled "10:00" is 10:20, and the only way to know was to measure it.
+    at("2026-08-17T10:20:00Z");
+
+    expect(screen.getByTestId("now-time")).toBeVisible();
+    expect(screen.getByTestId("now-time")).toHaveTextContent("10:20");
+  });
+
+  it("moves the label with the clock, to the minute", () => {
+    at("2026-08-17T10:07:00Z");
+
+    expect(screen.getByTestId("now-time")).toHaveTextContent("10:07");
+  });
+
+  // Both layouts, because they are two grids: fixing one and not the other is
+  // exactly the bug that shipped, and jsdom defaults to the narrow one.
+  for (const [name, wide] of [
+    ["one day", false],
+    ["the week", true],
+  ] as const) {
+    describe(name, () => {
+      const grid = () => {
+        if (wide) widescreen();
+        at("2026-08-17T10:20:00Z");
+        return screen.getByTestId("now-line").parentElement as HTMLElement;
+      };
+
+      it("keeps no row gap, because a gap belongs to no hour", () => {
+        // `gap-1` put 4px between 44px tracks, so an hour measured 48px on
+        // screen while a percentage offset inside it resolved against 44 —
+        // every position landed at 44/48 of where it belonged. jsdom has no
+        // layout, so the class is the only place this shows here; the
+        // arithmetic is verified in a real browser.
+        const grids = grid();
+
+        expect(grids.className).toContain("gap-x-1");
+        expect(grids.className).not.toMatch(/(^|\s)gap-1(\s|$)/);
+      });
+
+      it("rules the hour into quarters", () => {
+        const quarters = [...grid().querySelectorAll("span")].filter((span) =>
+          span.className.includes("repeating-linear-gradient"),
+        );
+
+        // One per hour row: 10:00–13:00 rounds outwards to three rows.
+        expect(quarters).toHaveLength(3);
+        // Every 25% of a track that is now exactly one hour.
+        expect(quarters[0]?.className).toContain("transparent_1px_25%");
+      });
+    });
+  }
+});
