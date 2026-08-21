@@ -23,7 +23,7 @@ export default defineConfig({
     // `test/` too: not everything under test is a component. The manifest and
     // the static assets it promises are checkable facts about the built app.
     include: ["src/**/*.test.ts", "src/**/*.test.tsx", "test/**/*.test.ts"],
-    // Comfortably above the 3 s async-query timeout in test/setup.ts. A query
+    // Comfortably above the 5 s async-query timeout in test/setup.ts. A query
     // that has to retry must fail as a missing element, naming what it looked
     // for — never as a bare "timed out", which says nothing.
     testTimeout: 20_000,

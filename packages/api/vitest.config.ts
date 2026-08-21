@@ -32,6 +32,16 @@ export default defineConfig(async () => {
       name: "api",
       include: ["test/**/*.test.ts"],
       setupFiles: ["./test/apply-migrations.ts"],
+      /**
+       * Runs on its own, after the other projects.
+       *
+       * Every file here boots a workerd isolate with its own D1. Sharing eight
+       * cores with jsdom made `pnpm test` fail somewhere new roughly one run in
+       * three — always a timing-sensitive test, always green on its own. A
+       * suite that fails somewhere different each time is a suite people learn
+       * to re-run instead of read.
+       */
+      sequence: { groupOrder: 1 },
     },
   };
 });

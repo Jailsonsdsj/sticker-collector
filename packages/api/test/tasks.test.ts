@@ -425,3 +425,134 @@ describe("lastCompletedOn", () => {
     expect(list[0]?.lastCompletedOn).toBeNull();
   });
 });
+
+describe("when a routine runs — its slots", () => {
+  const slot = (weekday: number, startMin: number, endMin: number) => ({
+    weekday,
+    startMin,
+    endMin,
+  });
+
+  const rowsFor = (taskId: string) =>
+    env.DB.prepare(
+      "SELECT weekday, start_min, end_min FROM routine_slot WHERE task_id = ? ORDER BY weekday",
+    )
+      .bind(taskId)
+      .all();
+
+  it("stores what it was given and reads it back in weekday order", async () => {
+    const created = await createRoutine({
+      weekdays: WEEKDAYS_MASK_WEEKDAYS,
+      // Deliberately out of order: the read model sorts, so neither the agenda
+      // nor the form has to.
+      slots: [slot(3, 600, 720), slot(0, 720, 840)],
+    });
+
+    expect(created.slots).toEqual([slot(0, 720, 840), slot(3, 600, 720)]);
+
+    const read = (await (await call("GET", `/api/tasks/${created.id}`)).json()) as {
+      slots: unknown[];
+    };
+    expect(read.slots).toEqual([slot(0, 720, 840), slot(3, 600, 720)]);
+  });
+
+  it("creates a routine with no slots at all — which is every routine that already exists", async () => {
+    const created = await createRoutine();
+
+    expect(created.slots).toEqual([]);
+    expect((await rowsFor(created.id)).results).toHaveLength(0);
+  });
+
+  it("refuses a slot on a day the mask does not include", async () => {
+    // The mask is authoritative. Two sources of truth for "does this run on
+    // Saturday" would let the agenda and the home screen disagree.
+    const res = await call("POST", "/api/tasks", {
+      type: "routine",
+      title: "Gym",
+      effortMinutes: 60,
+      weekdays: WEEKDAYS_MASK_WEEKDAYS,
+      slots: [slot(5, 600, 720)],
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  it("refuses two slots on the same weekday", async () => {
+    const res = await call("POST", "/api/tasks", {
+      type: "routine",
+      title: "Gym",
+      effortMinutes: 60,
+      weekdays: WEEKDAYS_MASK_WEEKDAYS,
+      slots: [slot(0, 420, 480), slot(0, 1140, 1200)],
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  it("refuses slots on a one-off, which has no weekdays to hang them on", async () => {
+    const res = await call("POST", "/api/tasks", {
+      type: "oneoff",
+      title: "Passport",
+      effortMinutes: 30,
+      slots: [slot(0, 600, 720)],
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  it("replaces the whole set on a patch", async () => {
+    // `slots` is the set, not a delta: partial editing of one weekday would
+    // need a second endpoint to say which one.
+    const created = await createRoutine({
+      weekdays: WEEKDAYS_MASK_WEEKDAYS,
+      slots: [slot(0, 600, 660), slot(1, 600, 660)],
+    });
+
+    const res = await call("PATCH", `/api/tasks/${created.id}`, {
+      slots: [slot(2, 900, 960)],
+    });
+
+    expect(res.status).toBe(200);
+    expect((await res.json()) as { slots: unknown[] }).toMatchObject({
+      slots: [slot(2, 900, 960)],
+    });
+    expect((await rowsFor(created.id)).results).toHaveLength(1);
+  });
+
+  it("clears them with an empty array", async () => {
+    const created = await createRoutine({
+      weekdays: WEEKDAYS_MASK_WEEKDAYS,
+      slots: [slot(0, 600, 660)],
+    });
+
+    await call("PATCH", `/api/tasks/${created.id}`, { slots: [] });
+
+    expect((await rowsFor(created.id)).results).toHaveLength(0);
+    const read = (await (await call("GET", `/api/tasks/${created.id}`)).json()) as {
+      slots: unknown[];
+    };
+    expect(read.slots).toEqual([]);
+  });
+
+  it("leaves them alone when a patch does not mention them", async () => {
+    // Renaming a routine must not wipe its agenda.
+    const created = await createRoutine({
+      weekdays: WEEKDAYS_MASK_WEEKDAYS,
+      slots: [slot(0, 600, 660)],
+    });
+
+    await call("PATCH", `/api/tasks/${created.id}`, { title: "Renamed" });
+
+    expect((await rowsFor(created.id)).results).toHaveLength(1);
+  });
+
+  it("carries them on the list endpoint too", async () => {
+    await createRoutine({ weekdays: WEEKDAYS_MASK_WEEKDAYS, slots: [slot(4, 480, 540)] });
+
+    const listed = (await (await call("GET", "/api/tasks")).json()) as Array<{
+      slots: unknown[];
+    }>;
+
+    expect(listed[0]?.slots).toEqual([slot(4, 480, 540)]);
+  });
+});

@@ -259,6 +259,7 @@ const TASK: Task = {
   dueAt: null,
   pinnedOn: null,
   startedAt: null,
+  slots: [],
   createdAt: "2026-07-01T00:00:00Z",
   deletedAt: null,
   lastCompletedOn: null,
@@ -485,5 +486,118 @@ describe("which section a new one-off lands in", () => {
     await u.click(screen.getByRole("tab", { name: "↻ Routine" }));
 
     expect(screen.queryByRole("tablist", { name: "Section" })).not.toBeInTheDocument();
+  });
+});
+
+describe("saying when a routine runs", () => {
+  const routineWith = (slots: { weekday: number; startMin: number; endMin: number }[] = []) =>
+    ({
+      ...({} as Task),
+      id: "other",
+      title: "Gym",
+      type: "routine" as const,
+      weekdays: 0b0000001,
+      effortMinutes: 60,
+      rewardCoins: 60,
+      priority: "medium" as const,
+      epicId: null,
+      description: null,
+      url: null,
+      startsOn: null,
+      endsOn: null,
+      dueAt: null,
+      pinnedOn: null,
+      startedAt: null,
+      slots,
+      createdAt: "2026-07-01T00:00:00Z",
+      deletedAt: null,
+      lastCompletedOn: null,
+    }) as Task;
+
+  const asRoutine = async (u: ReturnType<typeof userEvent.setup>) => {
+    await u.click(screen.getByRole("tab", { name: "↻ Routine" }));
+    await u.click(screen.getByRole("button", { name: "Mon" }));
+  };
+
+  it("asks for a time only for the days that are checked", async () => {
+    const u = userEvent.setup();
+    setup();
+    await asRoutine(u);
+
+    // A grid of seven disabled pairs is a wall of fields that says nothing.
+    expect(screen.getByLabelText("Mon start")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Tue start")).not.toBeInTheDocument();
+
+    await u.click(screen.getByRole("button", { name: "Tue" }));
+    expect(screen.getByLabelText("Tue start")).toBeInTheDocument();
+  });
+
+  it("asks for nothing at all on a one-off", async () => {
+    setup();
+    expect(screen.queryByLabelText(/start$/)).not.toBeInTheDocument();
+  });
+
+  it("keeps Save off until a checked day has both ends of its time", async () => {
+    const u = userEvent.setup();
+    const { save } = setup();
+    await u.type(screen.getByLabelText(/title/i), "Gym");
+    await asRoutine(u);
+
+    await u.type(screen.getByLabelText("Mon start"), "12:00");
+    expect(save()).toBeDisabled();
+    expect(screen.getByRole("alert")).toHaveTextContent(/start and an end/);
+
+    await u.type(screen.getByLabelText("Mon end"), "14:00");
+    expect(save()).toBeEnabled();
+  });
+
+  it("sends the times as minutes from midnight", async () => {
+    const u = userEvent.setup();
+    const { onSubmit, save } = setup();
+    await u.type(screen.getByLabelText(/title/i), "Gym");
+    await asRoutine(u);
+    await u.type(screen.getByLabelText("Mon start"), "12:00");
+    await u.type(screen.getByLabelText("Mon end"), "14:00");
+
+    await u.click(save());
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({ slots: [{ weekday: 0, startMin: 720, endMin: 840 }] }),
+    );
+  });
+
+  it("warns about an overlap without refusing it", async () => {
+    // Two things at nine on a Monday is a mess a person may knowingly want, and
+    // an app that forbids it is an app that gets lied to.
+    const u = userEvent.setup();
+    const { save } = setup({
+      routines: [routineWith([{ weekday: 0, startMin: 720, endMin: 840 }])],
+    });
+    await u.type(screen.getByLabelText(/title/i), "Lunch run");
+    await asRoutine(u);
+    await u.type(screen.getByLabelText("Mon start"), "13:00");
+    await u.type(screen.getByLabelText("Mon end"), "13:30");
+
+    expect(screen.getByRole("status")).toHaveTextContent(/Overlaps Gym/);
+    expect(save()).toBeEnabled();
+  });
+
+  it("says nothing when the times sit back to back", async () => {
+    const u = userEvent.setup();
+    setup({ routines: [routineWith([{ weekday: 0, startMin: 720, endMin: 840 }])] });
+    await u.type(screen.getByLabelText(/title/i), "Lunch run");
+    await asRoutine(u);
+    await u.type(screen.getByLabelText("Mon start"), "14:00");
+    await u.type(screen.getByLabelText("Mon end"), "15:00");
+
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("does not warn a routine about itself while it is being edited", async () => {
+    const existing = { ...routineWith([{ weekday: 0, startMin: 720, endMin: 840 }]), id: "self" };
+    setup({ task: existing, routines: [existing] });
+
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Mon start")).toHaveValue("12:00");
   });
 });

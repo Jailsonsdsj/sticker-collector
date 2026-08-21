@@ -221,6 +221,39 @@ The remaining TD items are correctly ordered where they are — pull one forward
 
 ---
 
+## Phase 8 — The weekly agenda
+
+Requested 2026-08-18. The Week tab becomes an **agenda**: hours down the left,
+weekdays across the top, routines shown as named blocks in the slots they run
+in, ticked by tapping the block. Split because it is five sessions' work and the
+first two are prerequisites for the rest.
+
+**Decisions taken before any code** (they change the data model, so they are
+recorded here rather than rediscovered):
+
+| Question | Answer | Why it matters |
+|---|---|---|
+| Two slots on the same day? | **No — one per weekday** | `occurrence` is `UNIQUE(task_id, scheduled_on)` and the ledger hangs off it. Two ticks on one day would need a slot id in that key: a migration through the append-only ledger and its triggers |
+| Which days does a routine run? | **The weekday mask stays authoritative** | It already drives occurrence generation and the reports histogram. A slot says *when*, never *whether*; setting a time sets the bit, clearing the bit drops the slot |
+| Phone layout | **Day at a time on phone, week grid on desktop** | Seven columns on a 390px screen is ~50px each — "English study" truncates to three characters |
+| Completing ahead | **Within the visible week only** | `canComplete` refuses the future because coins mint at completion. Bounded, one tap cannot mint a year, and streaks stay countable |
+| Slot length vs effort | **Independent; the form pre-fills effort from the slot** | Effort is what a task *pays* (1 min = 1 coin). A 2h window for 20 minutes of work must not pay 120 coins by construction |
+
+| ID | Task | Size | Load |
+|---|---|---|---|
+| **W8-01** ✅ | **Slots, in the data.** `routine_slot(task_id, weekday, start_min, end_min)` — wall-clock minutes, never instants (a stored instant re-runs the whole TD-31 timezone class). Mask agreement, overlap detection as a pure function in `packages/shared`, API create/update, tests. **No UI** | M | `docs/prd/02-tasks.md`, `docs/architecture.md` §4 |
+| **W8-02** ✅ | **Times in the routine form.** A start/end per checked weekday, required for a NEW routine and optional on an existing one — the column cannot be `NOT NULL`, and forcing it would make every current routine uneditable. Overlap warning inline, non-blocking: two things at 9am is a mess a person may legitimately want | M | `W8-01`, `docs/design-system.md` |
+| **W8-03** ✅ | **The agenda itself.** Sub-tab renamed Complete → **Agenda**, now the default; hour column derived from the earliest and latest slot; blocks placed by day and hour; a "now" line drawn inside its own row and a ring on the running block, both on a minute tick. Only routines that HAVE slots appear, so it has a real empty state: on day one that is everyone. Two additions the build itself argued for — a **day picker** on the phone (without one a phone sees today and nothing else) and **opening scrolled** to now, or to the day's first block when it is not today | L | `W8-01`, `docs/prd/02-tasks.md` |
+| **W8-04** ✅ | **Ticking from a block.** Tap to complete through the existing undo queue; a green wash that keeps the title legible. Landed with W8-03 — the block was already a button and routing the tap anywhere but the undo queue would have made the same misclick reversible on one screen and paid on the other | S | `W8-03` |
+| **W8-05** | **Completing ahead.** Relax `canComplete` within the visible week, plus what it means for streaks, perfect days and the PRD sentence that currently forbids it. Until it lands the agenda renders a future block **inert**, like the tick-off grid's future cells — an enabled button whose only outcome is a 400 is worse than a disabled one | M | `docs/prd/02-tasks.md`, `packages/shared/src/recurrence.ts` |
+
+**Open questions deliberately left for W8-01:** whether an overnight slot (22:00
+→ 01:00) is refused or split across two days, and whether a dated one-off with a
+due *time* should appear on the agenda too (it would fit, and nothing asks for
+it yet).
+
+---
+
 ## Post-MVP
 
 Phase 7 above holds the *product* features deferred from the spec. This section
@@ -261,6 +294,9 @@ Ordered by how likely it is to cost someone real time.
 | **TD-10** | **A soft-deleted task's history is invisible in `GET /api/occurrences`** | T-04, deliberate | `occurrenceSchema` carries no task fields, so the client joins against `GET /api/tasks`, which excludes deleted tasks — it would render rows it cannot label. Reports read the ledger instead, so nothing is lost today. Revisit if a screen ever needs to show completed work from a deleted task |
 | **TD-12** | **`Input` remounts when an error appears.** It returns a bare `<input>` with no label/hint/error and a `<Field>`-wrapped one otherwise, so gaining an error changes the tree shape — React unmounts the field and the user loses focus and caret mid-typing | Found in T-09, when quick-add used the `error` slot | Any label-less input that can fail. `QuickAdd` works around it by rendering its own message; a form with a permanent label never switches, so T-10 is unaffected. Fix is to always wrap in `Field` — small, but it moves the flex target from the input to the wrapper in every current usage |
 | **TD-28** | **`ghost`/`outline` + `neutral` rendered text at 6% white.** The tone map used one token for a tone's fill and its type, and neutral's is `--color-surface-2` — so every Cancel (8 uses) and the epic-card Edit were invisible on a dark panel | reported on device | ✅ Fixed with a separate `ink` per tone, defaulting to the accent so only neutral changed. Same root cause for both symptoms |
+| **TD-40** | **The web suite runs in whatever timezone the machine is set to, so half the UTC-assumption guards only bite locally.** `AgendaGrid`'s date label pins `timeZone: "UTC"` when formatting a `YYYY-MM-DD` — without it a zone behind UTC prints the day before. A mutation removing the pin fails here (São Paulo) and would pass on a UTC CI runner, which is where it matters | found by mutation testing during W8-03, 2026-08-20 | Not fixed. Setting `env: { TZ }` to a fixed non-UTC zone on the web vitest project would make every one of these visible in CI — and would likely surface latent UTC assumptions across the other ~1100 web tests, which is why it is its own task and not a line in W8-03. Fifth item in the TD-30/33/36/39 family |
+| **TD-39** | **A web fixture dated "today" in UTC, while the app resolves the day from the profile.** `Tasks.bulk.test.tsx` built its occurrences from `todayIn("UTC")`; west of UTC every evening that is tomorrow, so every "today" row landed in the routine backlog, *For today* rendered empty, and four tests failed from 21:00 local until midnight | found at 21:33 local while building W8-02, 2026-08-20 | ✅ Fixed: the fixture uses the app's own `today()`, so the test and the screen agree by construction. **Fourth** of this class after TD-30, TD-33 and TD-36 — the rule is now: a fixture that names a date must derive it from the same clock the code under test reads |
+| **TD-38** | **`pnpm test` failed somewhere new roughly one run in three.** Three vitest projects ran concurrently on eight cores, and the api project is a Workers pool — every file boots a workerd isolate with its own D1. The losers were always timing-sensitive tests (`waitFor`, `userEvent`), always green on their own, never the same one twice | 2026-08-18, during W8-01 | ✅ Fixed by giving the api project its own `sequence.groupOrder`, so the heavy pool runs after the others rather than beside them. Four consecutive clean full runs. A suite that fails somewhere different each time is one people re-run instead of read |
 | **TD-37** | **`asyncUtilTimeout` was set to exactly `UNDO_WINDOW_MS`.** Testing Library's async deadline was 3000 ms and the deferred completion commits at 3000 ms, so a test waiting for the commit raced its own safety net and failed roughly one run in three — the intermittent failure that had shown up twice and could not be reproduced | 2026-08-18 | ✅ Fixed: 5 s, still well under vitest's 20 s `testTimeout`. A deadline equal to the thing it waits for is not a deadline |
 | **TD-36** | **The seed's one-offs were dated in the past, so the General section vanished.** `seed.sql` gave "File Q3 taxes" and "Book dentist" fixed due dates in July. The home window reaches seven days back, so weeks later they generated no occurrence, landed in no section, and the General heading stopped rendering — failing two e2e tests that nobody had touched | CI, 2026-08-18 | ✅ Fixed: both due dates are now relative (`+1 day`, `+3 day`), like the 50 days of history beside them already were. Third instance of the same class after TD-30 and TD-33 — **a fixture with a hard-coded date is a fixture with an expiry date** |
 | **TD-35** | **`IN (?, …)` blew past D1's 100-parameter ceiling on the home screen.** `GET /api/occurrences` scoped the window by the user's live task ids, so the whole screen answered **500 `too many SQL variables`** once the account held ~99 tasks. The same unguarded `inArray` was in `/api/reports/momentum` and both bulk task endpoints (whose schema allows 200 ids) | reported from the device, 2026-08-18 | ✅ Fixed: one shared `lib/selectIn.ts` chunks every id list at 90 (leaving room for the other binds), and `backup.ts`'s private copy of the same helper now uses it. CLAUDE.md already stated the rule — the code simply did not follow it in four places, and nothing failed until the data grew |
@@ -324,6 +360,6 @@ Keep this table updated — it is the first thing a new session reads, and it co
 | 6.5 Go-Live | 0 | 5 | ⏳ **next** — `G-00` ships, `G-01` unblocks login, `G-02`–`G-04` prove it live |
 
 Post-MVP is tracked separately and deliberately excluded from the total: 5 auth
-follow-ups (`A-W1`–`A-W5`) and 37 technical-debt items (`TD-01`–`TD-37`). See
+follow-ups (`A-W1`–`A-W5`) and 40 technical-debt items (`TD-01`–`TD-40`). See
 **Post-MVP** above. `TD-01` is done and both tests it still owed (T-11's undo,
 T-12's mask bit) have landed — `packages/web/test/README.md` records the rules.

@@ -8,3 +8,4 @@ export * from "./kdf";
 export * from "./recurrence";
 export * from "./reports";
 export * from "./schema";
+export * from "./slots";

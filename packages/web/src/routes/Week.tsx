@@ -1,7 +1,7 @@
 import type { Task } from "@sticker-collector/shared";
-import { todayIn } from "@sticker-collector/shared";
 import { useMemo, useState } from "react";
 import { Navigate } from "react-router";
+import { AgendaGrid } from "../components/AgendaGrid";
 import { AppHeader } from "../components/layout";
 import { ErrorState, Skeleton, Tabs } from "../components/ui";
 import { WeeklyCompletionGrid } from "../components/WeeklyCompletionGrid";
@@ -16,31 +16,36 @@ import { weekDates } from "../lib/week";
 /**
  * The week, two ways.
  *
- * **Schedule** is the spec's "routine maintenance" — five taps make a Mon–Fri
- * habit. **Complete** is the design bundle's version, where a cell ticks that
- * day. They are separate views because one gesture cannot mean both.
+ * **Agenda** is the day laid out by hour: what is at three o'clock, and is it
+ * done. **Tick off** is the checkbox week — every routine, including the ones
+ * with no times, which the agenda cannot show. **Schedule** is the spec's
+ * "routine maintenance", where five taps make a Mon–Fri habit.
  *
- * Schedule is the default so the five-tap flow stays five taps. Day to day you
- * would tick far more often than you re-plan, so that default may be worth
- * revisiting — but it is the one T-12 is measured against.
+ * Three views because one gesture cannot mean three things: tapping a cell
+ * cannot both schedule a weekday and tick it off. Tick off stays because the
+ * agenda only shows routines that have hours, and every routine created before
+ * the agenda has none — removing it would strand them.
+ *
+ * Agenda is the default: "what am I meant to be doing now" is the question this
+ * tab is opened with, day to day, and re-planning is rarer than either ticking
+ * or looking. Schedule held the default while it was the only view here, and
+ * T-12's five-tap flow is measured from it — that flow is now six taps, one to
+ * reach Schedule, which is the cost of the tab it was worth.
  *
  * Ticking here goes through the SAME undo queue as the home screen. If this
  * screen wrote immediately, the identical misclick would be reversible in one
  * place and would silently pay coins in the other.
  */
-// Complete first, and selected by default: ticking a day is what you come back
-// to daily, where re-planning a routine is occasional. T-12's five-tap flow is
-// now five taps plus one to reach Schedule — a deliberate trade, and the reason
-// the order changed too.
 const VIEWS = [
-  { value: "complete" as const, label: "Complete", tone: "lime" as const },
+  { value: "agenda" as const, label: "Agenda", tone: "lime" as const },
+  { value: "complete" as const, label: "Tick off", tone: "cyan" as const },
   { value: "schedule" as const, label: "Schedule", tone: "violet" as const },
 ];
 
 export function Week() {
   const localToday = today();
   const dates = useMemo(() => weekDates(localToday), [localToday]);
-  const [view, setView] = useState<"schedule" | "complete">("complete");
+  const [view, setView] = useState<"agenda" | "schedule" | "complete">("agenda");
 
   const tasks = useTasks();
   const epics = useEpics();
@@ -92,6 +97,36 @@ export function Week() {
           />
           <p className="mt-5 text-center font-body text-sm text-ink-dim">
             Tap a cell to add or remove that weekday. A routine always keeps at least one day.
+          </p>
+        </>
+      ) : view === "agenda" ? (
+        <>
+          <AgendaGrid
+            routines={routines}
+            accentOf={accentOf}
+            occurrences={occurrences.data ?? []}
+            dates={dates}
+            today={localToday}
+            isPending={(block) =>
+              queue.isPending({ taskId: block.task.id, scheduledOn: block.date })
+            }
+            onToggle={(block) => {
+              const ref = { taskId: block.task.id, scheduledOn: block.date };
+              if (!block.done && !queue.isPending(ref)) {
+                queue.complete(ref, {
+                  title: block.task.title,
+                  coins: block.task.rewardCoins,
+                });
+              } else if (queue.isPending(ref)) {
+                queue.cancel(ref); // still inside the window: nothing was sent
+              } else {
+                void uncomplete.mutateAsync(ref); // past the window: re-open it
+              }
+            }}
+          />
+          <p className="mt-5 text-center font-body text-sm text-ink-dim">
+            Tap a block to tick that day off. Only routines with times appear here, and a day that
+            has not arrived yet cannot be ticked.
           </p>
         </>
       ) : (

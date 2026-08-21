@@ -64,6 +64,13 @@
       "when": 1786039114905,
       "tag": "0009_lovely_black_bird",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1787256252138,
+      "tag": "0010_melted_quicksilver",
+      "breakpoints": true
     }
   ]
 }

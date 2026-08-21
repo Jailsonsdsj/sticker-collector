@@ -33,6 +33,7 @@ const ROUTINES: Task[] = [
     dueAt: null,
     pinnedOn: null,
     startedAt: null,
+    slots: [],
     createdAt: "2026-07-01T00:00:00Z",
     deletedAt: null,
     lastCompletedOn: null,
@@ -53,6 +54,7 @@ const ROUTINES: Task[] = [
     dueAt: null,
     pinnedOn: null,
     startedAt: null,
+    slots: [],
     createdAt: "2026-07-01T00:00:00Z",
     deletedAt: null,
     lastCompletedOn: null,
@@ -100,33 +102,33 @@ const renderScreen = () => render(<Week />, { wrapper });
 const scheduleCell = (day: string) => screen.getByRole("checkbox", { name: `Stretch — ${day}` });
 
 describe("the two views", () => {
-  it("opens on Complete — ticking a day is the daily act, re-planning is not", async () => {
+  it('opens on Agenda — "what am I meant to be doing now" is the question this tab is opened with', async () => {
     renderScreen();
 
     await waitFor(() =>
-      expect(screen.getByRole("tab", { name: "Complete" })).toHaveAttribute(
-        "aria-selected",
-        "true",
-      ),
+      expect(screen.getByRole("tab", { name: "Agenda" })).toHaveAttribute("aria-selected", "true"),
     );
     // Only one grid is mounted at a time, so Schedule's help text is not merely
     // hidden — it is not there until you switch.
     expect(screen.queryByText(/add or remove that weekday/i)).not.toBeInTheDocument();
   });
 
-  it("switches to Complete, and only one grid is on screen at a time", async () => {
+  it("switches to Tick off, and only one grid is on screen at a time", async () => {
     const user = userEvent.setup();
     renderScreen();
-    await waitFor(() => expect(scheduleCell("Mon")).toBeInTheDocument());
+    await screen.findByRole("tab", { name: "Agenda" });
 
-    await user.click(screen.getByRole("tab", { name: "Complete" }));
+    await user.click(screen.getByRole("tab", { name: "Tick off" }));
 
     expect(screen.getByText(/tap a cell to complete/i)).toBeInTheDocument();
     expect(screen.queryByText(/add or remove that weekday/i)).not.toBeInTheDocument();
   });
 
   it("lists only routines — a one-off has no weekly schedule", async () => {
+    const user = userEvent.setup();
     renderScreen();
+    await user.click(await screen.findByRole("tab", { name: "Tick off" }));
+
     await waitFor(() => expect(screen.getByText("Stretch")).toBeInTheDocument());
     expect(screen.queryByText("Buy milk")).not.toBeInTheDocument();
   });
@@ -137,7 +139,7 @@ describe("Schedule still edits the mask", () => {
     const user = userEvent.setup();
     renderScreen();
 
-    // Complete is the default view now; scheduling lives one tab across.
+    // Agenda is the default view now; scheduling lives two tabs across.
     await user.click(await screen.findByRole("tab", { name: "Schedule" }));
     await waitFor(() => expect(scheduleCell("Sat")).toBeInTheDocument());
 
@@ -153,12 +155,13 @@ describe("Schedule still edits the mask", () => {
   });
 });
 
-describe("Complete goes through the undo queue", () => {
+describe("Tick off goes through the undo queue", () => {
   it("issues no request when a cell is ticked — it waits out the window", async () => {
     const user = userEvent.setup();
     renderScreen();
-    await waitFor(() => expect(scheduleCell("Mon")).toBeInTheDocument());
-    await user.click(screen.getByRole("tab", { name: "Complete" }));
+    await screen.findByRole("tab", { name: "Agenda" });
+    await user.click(screen.getByRole("tab", { name: "Tick off" }));
+    await screen.findByRole("checkbox", { name: "Stretch — Mon" });
 
     const before = fetchMock.mock.calls.length;
     await user.click(screen.getByRole("checkbox", { name: "Stretch — Mon" }));
@@ -172,10 +175,11 @@ describe("Complete goes through the undo queue", () => {
   it("untick inside the window cancels rather than re-opening", async () => {
     const user = userEvent.setup();
     renderScreen();
-    await waitFor(() => expect(scheduleCell("Mon")).toBeInTheDocument());
-    await user.click(screen.getByRole("tab", { name: "Complete" }));
+    await screen.findByRole("tab", { name: "Agenda" });
+    await user.click(screen.getByRole("tab", { name: "Tick off" }));
 
     const cell = () => screen.getByRole("checkbox", { name: "Stretch — Mon" });
+    await screen.findByRole("checkbox", { name: "Stretch — Mon" });
     await user.click(cell());
     await user.click(cell());
 

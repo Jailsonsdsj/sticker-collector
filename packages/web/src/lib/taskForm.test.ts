@@ -18,6 +18,7 @@ import {
   toDueAt,
   toPatch,
   toPayload,
+  toSlots,
   validate,
 } from "./taskForm";
 
@@ -310,6 +311,7 @@ const existing = (over: Partial<Task> = {}): Task => ({
   dueAt: null,
   pinnedOn: null,
   startedAt: null,
+  slots: [],
   createdAt: "2026-07-01T00:00:00Z",
   deletedAt: null,
   lastCompletedOn: null,
@@ -482,5 +484,149 @@ describe("toPatch — the TASK's type decides what may be sent, not the form's",
     const patch = toPatch(drifted, task);
     expect(patch).toEqual({ title: "Changed" });
     expect(patch).not.toHaveProperty("weekdays");
+  });
+});
+
+describe("when a routine runs — the form's slots", () => {
+  const routine = () =>
+    reduce(reduce(initialState(), { kind: "type", value: "routine" }), {
+      kind: "weekday",
+      value: 0,
+    });
+
+  const at = (state: TaskFormState, weekday: Weekday, start: string, end: string) =>
+    reduce(reduce(state, { kind: "slot", weekday, field: "start", value: start }), {
+      kind: "slot",
+      weekday,
+      field: "end",
+      value: end,
+    });
+
+  it("carries the times into the payload as minutes", () => {
+    const state = { ...at(routine(), 0, "12:00", "14:00"), title: "Gym" };
+
+    expect(toPayload(state)).toMatchObject({
+      slots: [{ weekday: 0, startMin: 720, endMin: 840 }],
+    });
+  });
+
+  it("refuses to submit a checked day with only half a time", () => {
+    const state = {
+      ...reduce(routine(), { kind: "slot", weekday: 0, field: "start", value: "09:00" }),
+      title: "Gym",
+    };
+
+    expect(validate(state)).toMatch(/start and an end/);
+    expect(toPayload(state)).toBeNull();
+  });
+
+  it("refuses an end that is not after the start", () => {
+    const state = { ...at(routine(), 0, "14:00", "12:00"), title: "Gym" };
+
+    expect(validate(state)).toMatch(/start and an end/);
+  });
+
+  it("still allows a routine with no times at all", () => {
+    // Every routine that predates the agenda has none, and the form must not
+    // turn them into something that cannot be saved.
+    const state = { ...routine(), title: "Stretch" };
+
+    expect(validate(state)).toBeNull();
+    expect(toPayload(state)).toMatchObject({ slots: [] });
+  });
+
+  it("copies the first time onto a newly checked day", () => {
+    // "Same time every day" is the common case, and typing it seven times is
+    // the chore that makes people leave the field blank.
+    const monday = at(routine(), 0, "07:00", "08:00");
+    const withTuesday = reduce(monday, { kind: "weekday", value: 1 });
+
+    expect(withTuesday.slots[1]).toEqual({ start: "07:00", end: "08:00" });
+  });
+
+  it("drops a day's time when the day is unchecked", () => {
+    // The API refuses a slot on a day the mask does not include, so keeping it
+    // would only be a 400 waiting to happen.
+    const monday = at(routine(), 0, "07:00", "08:00");
+    const off = reduce(monday, { kind: "weekday", value: 0 });
+
+    expect(off.slots[0]).toBeUndefined();
+    expect(toSlots(off)).toEqual([]);
+  });
+
+  it("suggests the effort from the slot's length, until the effort is typed over", () => {
+    // The slot says WHEN; effort is what the task pays. A two-hour window
+    // booked for twenty minutes of work must not mint 120 coins by
+    // construction.
+    const suggested = at(routine(), 0, "12:00", "14:00");
+    expect(suggested.effortMinutes).toBe("120");
+    expect(suggested.rewardCoins).toBe("120");
+
+    const typed = reduce(suggested, { kind: "effort", value: "20" });
+    const relit = at(typed, 0, "12:00", "15:00");
+    expect(relit.effortMinutes).toBe("20");
+  });
+
+  it("never rewrites the effort of a task being edited", () => {
+    const task = {
+      ...({} as Task),
+      id: "t1",
+      type: "routine" as const,
+      title: "Gym",
+      weekdays: 0b0000001,
+      effortMinutes: 45,
+      rewardCoins: 45,
+      priority: "medium" as const,
+      epicId: null,
+      description: null,
+      url: null,
+      startsOn: null,
+      endsOn: null,
+      dueAt: null,
+      pinnedOn: null,
+      startedAt: null,
+      slots: [{ weekday: 0, startMin: 720, endMin: 840 }],
+      createdAt: "2026-07-01T00:00:00Z",
+      deletedAt: null,
+      lastCompletedOn: null,
+    };
+
+    const state = stateFromTask(task);
+    expect(state.slots[0]).toEqual({ start: "12:00", end: "14:00" });
+
+    // Widening the block must not quietly change what the task pays.
+    expect(at(state, 0, "12:00", "16:00").effortMinutes).toBe("45");
+  });
+
+  it("sends the slots in a patch only when they changed", () => {
+    const task = {
+      ...({} as Task),
+      id: "t1",
+      type: "routine" as const,
+      title: "Gym",
+      weekdays: 0b0000001,
+      effortMinutes: 45,
+      rewardCoins: 45,
+      priority: "medium" as const,
+      epicId: null,
+      description: null,
+      url: null,
+      startsOn: null,
+      endsOn: null,
+      dueAt: null,
+      pinnedOn: null,
+      startedAt: null,
+      slots: [{ weekday: 0, startMin: 720, endMin: 840 }],
+      createdAt: "2026-07-01T00:00:00Z",
+      deletedAt: null,
+      lastCompletedOn: null,
+    };
+    const state = stateFromTask(task);
+
+    // A rename must not rewrite the agenda's rows for nothing.
+    expect(toPatch({ ...state, title: "Gym 2" }, task)).toEqual({ title: "Gym 2" });
+    expect(toPatch(at(state, 0, "12:00", "13:00"), task)).toMatchObject({
+      slots: [{ weekday: 0, startMin: 720, endMin: 780 }],
+    });
   });
 });
