@@ -256,6 +256,63 @@ describe("tapping a task", () => {
     expect(dialog().getByDisplayValue("Buy milk")).toBeInTheDocument();
   });
 
+  it("starts the task from the view and gets out of the way", async () => {
+    // The point of the button is the row moving to another section, and that
+    // section is behind the sheet.
+    const user = await openScreen();
+    await user.click(screen.getAllByRole("button", { name: "Buy milk" })[0] as HTMLElement);
+
+    await user.click(dialog().getByRole("button", { name: "Start" }));
+
+    expect(document.querySelector("dialog[open]")).toBeNull();
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.find(
+          ([url, init]) => url === "/api/tasks/t2" && init?.method === "PATCH",
+        ),
+      ).toBeTruthy(),
+    );
+    const [, init] = fetchMock.mock.calls.find(
+      ([url, i]) => url === "/api/tasks/t2" && i?.method === "PATCH",
+    ) as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({ startedAt: expect.any(String) });
+  });
+
+  it("stops it again without pinning it, unlike the swipe", async () => {
+    // The left swipe means "bring it back to today" and pins an undated
+    // capture. This button only means stop.
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      const read = (init?.method ?? "GET") === "GET";
+      if (read && url.startsWith("/api/occurrences")) return json(OCCURRENCES);
+      if (read && url.startsWith("/api/tasks"))
+        return json([
+          task({
+            id: "t2",
+            title: "Buy milk",
+            type: "oneoff",
+            weekdays: null,
+            startedAt: "2026-08-01T09:00:00Z",
+          }),
+        ]);
+      if (read && url.startsWith("/api/epics")) return json([]);
+      if (read && url.startsWith("/api/wallet")) return json({ balance: 0 });
+      return json({ ok: true });
+    });
+    const user = userEvent.setup();
+    render(<Tasks />, { wrapper });
+    await waitFor(() => expect(screen.getAllByText("Buy milk").length).toBeGreaterThan(0));
+    await user.click(screen.getAllByRole("button", { name: "Buy milk" })[0] as HTMLElement);
+
+    await user.click(dialog().getByRole("button", { name: "Stop" }));
+
+    await waitFor(() => {
+      const call = fetchMock.mock.calls.find(
+        ([url, i]) => url === "/api/tasks/t2" && i?.method === "PATCH",
+      );
+      expect(call && JSON.parse(call[1].body as string)).toEqual({ startedAt: null });
+    });
+  });
+
   it("closes the task from the view", async () => {
     const user = await openScreen();
     await user.click(screen.getAllByRole("button", { name: "Buy milk" })[0] as HTMLElement);

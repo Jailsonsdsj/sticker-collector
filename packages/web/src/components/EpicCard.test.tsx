@@ -218,3 +218,71 @@ describe("finished subtasks", () => {
     expect(screen.getByRole("button", { name: long }).className).not.toContain("truncate");
   });
 });
+
+describe("the order tasks read in", () => {
+  const withTasks = (tasks: Task[]) =>
+    render(
+      <EpicCard
+        epic={epic()}
+        tasks={tasks}
+        expanded
+        onToggleExpand={vi.fn()}
+        onAddTask={vi.fn()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        doneOpen
+        onToggleDone={vi.fn()}
+      />,
+    );
+
+  /** Row text is "↻Title+30" — the marker and the reward are not the order. */
+  const titles = () =>
+    screen
+      .getAllByRole("listitem")
+      .map((row) => (row.textContent ?? "").replace(/^↻/, "").replace(/\+\d+$/, ""));
+
+  it("puts one-offs first and routines after", () => {
+    // A one-off is what the epic finishes and the only thing its progress bar
+    // counts; a routine never finishes, so leading with one buries the work the
+    // epic is measured by.
+    withTasks([
+      task({ id: "r1", title: "Daily standup", type: "routine", weekdays: 0b1111111 }),
+      task({ id: "o1", title: "Ship it" }),
+      task({ id: "r2", title: "Weekly review", type: "routine", weekdays: 0b0000001 }),
+      task({ id: "o2", title: "Write the README" }),
+    ]);
+
+    expect(titles()).toEqual(["Ship it", "Write the README", "Daily standup", "Weekly review"]);
+  });
+
+  it("keeps the order it was given within each kind", () => {
+    // A stable sort on the type alone: the list should not acquire a new
+    // ordering nobody asked for.
+    withTasks([
+      task({ id: "b", title: "Second" }),
+      task({ id: "a", title: "First" }),
+      task({ id: "r", title: "Routine", type: "routine", weekdays: 0b1111111 }),
+    ]);
+
+    expect(titles()[0]).toContain("Second");
+    expect(titles()[1]).toContain("First");
+  });
+
+  it("orders the Done list the same way", () => {
+    // Two lists, one rule — a finished routine above a finished one-off would
+    // read as a different screen.
+    withTasks([
+      task({
+        id: "r",
+        title: "Daily standup",
+        type: "routine",
+        weekdays: 0b1111111,
+        lastCompletedOn: "2026-08-20",
+      }),
+      task({ id: "o", title: "Ship it", lastCompletedOn: "2026-08-20" }),
+    ]);
+
+    expect(titles()[0]).toContain("Ship it");
+    expect(titles()[1]).toContain("Daily standup");
+  });
+});

@@ -41,8 +41,15 @@ export interface AgendaGridProps {
   dates: LocalDate[];
   today: LocalDate;
   accentOf?: (task: Task) => EpicAccent | null;
-  /** Tapping a block completes that day. Absent leaves the agenda read-only. */
-  onToggle?: (block: AgendaBlock) => void;
+  /**
+   * Tapping a block opens that task, for the day the block sits on.
+   *
+   * It used to complete it outright. One gesture meant one thing, and the
+   * agenda is where you look at a day rather than where you race through it —
+   * from the detail sheet the same tap reaches Done, Start, Edit and Delete.
+   * Absent leaves the agenda read-only.
+   */
+  onOpen?: (block: AgendaBlock) => void;
   /** Ticked and still inside the undo window. */
   isPending?: (block: AgendaBlock) => boolean;
 }
@@ -56,7 +63,7 @@ export function AgendaGrid({
   dates,
   today,
   accentOf,
-  onToggle,
+  onOpen,
   isPending,
 }: AgendaGridProps) {
   const wide = useMediaQuery(WIDE);
@@ -82,7 +89,7 @@ export function AgendaGrid({
   const blocks = laneOut(agendaBlocks(scheduled, dates, occurrences));
   const hours = hourRows(range);
   const marker = nowMarker(range, minutesNow);
-  const props = { blocks, hours, range, today, minutesNow, marker, accentOf, onToggle, isPending };
+  const props = { blocks, hours, range, today, minutesNow, marker, accentOf, onOpen, isPending };
 
   // Keyed by the date so the phone's day picker snaps back to today when the
   // day turns over under an app left open overnight.
@@ -97,7 +104,7 @@ interface LayoutProps {
   minutesNow: number;
   marker: { hour: number; fraction: number } | null;
   accentOf?: (task: Task) => EpicAccent | null;
-  onToggle?: (block: AgendaBlock) => void;
+  onOpen?: (block: AgendaBlock) => void;
   isPending?: (block: AgendaBlock) => boolean;
 }
 
@@ -394,7 +401,7 @@ function Block({
   today,
   minutesNow,
   accentOf,
-  onToggle,
+  onOpen,
   isPending,
 }: {
   block: PlacedBlock;
@@ -402,14 +409,15 @@ function Block({
   today: LocalDate;
   minutesNow: number;
   accentOf?: (task: Task) => EpicAccent | null;
-  onToggle?: (block: AgendaBlock) => void;
+  onOpen?: (block: AgendaBlock) => void;
   isPending?: (block: AgendaBlock) => boolean;
 }) {
   const done = block.done || Boolean(isPending?.(block));
   const running = isNow(block, today, minutesNow);
-  // Inert, like the tick-off grid's future cells: T-05 refuses a completion
-  // before the day it is scheduled for, so an enabled block here would be a
-  // button whose only outcome is an error toast.
+  // Dimmed, but no longer inert. It was disabled while a tap meant "complete",
+  // because T-05 refuses a completion before its day. A tap now opens the task,
+  // which is worth doing on a day that has not arrived — the detail sheet is
+  // what withholds Done.
   const future = block.date > today;
   const accent = accentOf?.(block.task) ?? null;
   const when = `${minutesToClock(block.slot.startMin)}–${minutesToClock(block.slot.endMin)}`;
@@ -417,12 +425,12 @@ function Block({
   return (
     <button
       type="button"
-      disabled={!onToggle || future}
-      onClick={() => onToggle?.(block)}
+      disabled={!onOpen}
+      onClick={() => onOpen?.(block)}
       // The state is in the name as well as the colour: "done" as a green wash
-      // alone is unreadable to anyone who cannot see the wash.
+      // alone is unreadable to anyone who cannot see the wash. No `aria-pressed`
+      // — this opens a sheet, it does not toggle anything.
       aria-label={`${block.task.title}, ${when}${done ? ", done" : ""}`}
-      aria-pressed={onToggle && !future ? done : undefined}
       style={
         {
           ...style,
@@ -450,7 +458,7 @@ function Block({
         "min-w-0 rounded-lg border-l-[3px] px-2 py-1 text-left",
         "[border-left-color:var(--ui-epic)] outline-none",
         "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan",
-        onToggle && !future && "cursor-pointer",
+        onOpen && "cursor-pointer",
         future && "opacity-60",
         // A wash, not a fill: the title has to stay readable, which is the
         // whole point of showing the name instead of a checkbox.

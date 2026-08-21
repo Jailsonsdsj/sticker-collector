@@ -11,6 +11,14 @@ export interface TaskViewProps {
   /** Absent when this task cannot be closed from here — a routine on a day its
    *  schedule does not cover, which the API would refuse anyway. */
   onToggleDone?: () => void;
+  /** Already in progress. Decides whether the action reads Start or Stop. */
+  started?: boolean;
+  /**
+   * Absent when starting would move nothing — a routine on a day it does not
+   * run, which *In progress* takes only through today's occurrence. Setting
+   * `startedAt` there is a button that appears to do nothing.
+   */
+  onToggleStart?: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onClose: () => void;
@@ -25,15 +33,18 @@ export interface TaskViewProps {
  * viewer uses, for the same reason: title and words in evidence, everything
  * else beneath them, and the actions in the header where a thumb already is.
  *
- * Three actions, in the order they are wanted: **Done** (the thing you opened
- * it to do), **Edit** (the old behaviour, now deliberate), **Delete** (last,
- * behind the same two-step confirmation the edit form uses).
+ * Four actions, in the order they are wanted: **Done** (the thing you opened it
+ * to do), **Start** (pick it up now — the same thing a right swipe does on the
+ * list), **Edit** (the old behaviour, now deliberate), **Delete** (last, behind
+ * the same two-step confirmation the edit form uses).
  */
 export function TaskView({
   task,
   epic,
   done = false,
   onToggleDone,
+  started = false,
+  onToggleStart,
   onEdit,
   onDelete,
   onClose,
@@ -96,14 +107,27 @@ export function TaskView({
       )}
 
       <div className="mt-auto flex flex-col gap-2 pt-4">
-        {/* Done and Edit share a row: they are the two things you came here to
-            do, and stacking them pushed Delete up towards the thumb. `flex-1`
-            on each half rather than a grid, so Edit takes the whole row on its
-            own when the task cannot be closed from here. */}
+        {/* One row: these are the things you came here to do, and stacking
+            them pushed Delete up towards the thumb. `flex-1` on each rather
+            than a grid, so the row closes up around whichever of them apply —
+            Edit alone takes the whole width. */}
         <div className="flex gap-2">
           {onToggleDone && (
             <Button className="flex-1" tone={done ? "neutral" : "lime"} onClick={onToggleDone}>
               {done ? "Reopen" : "Done"}
+            </Button>
+          )}
+          {/* Not offered on something already finished: starting what you have
+              just closed is not a state the list has anywhere to put. Reopen
+              it first and the button comes back. */}
+          {onToggleStart && !done && (
+            <Button
+              className="flex-1"
+              variant={started ? "solid" : "outline"}
+              tone="violet"
+              onClick={onToggleStart}
+            >
+              {started ? "Stop" : "Start"}
             </Button>
           )}
           <Button className="flex-1" variant="outline" tone="cyan" onClick={onEdit}>

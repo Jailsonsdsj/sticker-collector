@@ -358,6 +358,30 @@ export function Tasks() {
                   setViewing(null);
                 }
           }
+          started={Boolean(viewing.item.task.startedAt)}
+          // Offered only where it would actually move the row. *In progress*
+          // takes a routine through TODAY's occurrence alone, so starting one
+          // on a day it does not run sets a flag and changes nothing on screen.
+          // A one-off is a single row and always moves.
+          onToggleStart={
+            viewing.item.task.type === "oneoff" || viewing.item.scheduledOn === today
+              ? () => {
+                  updateTask.mutate({
+                    id: viewing.item.task.id,
+                    // The plain inverse of starting. Deliberately NOT the left
+                    // swipe's behaviour, which also pins an undated capture to
+                    // today: that gesture means "bring it back to today", and
+                    // this button only means "stop".
+                    patch: {
+                      startedAt: viewing.item.task.startedAt ? null : new Date().toISOString(),
+                    },
+                  });
+                  // Close, because the point of the button is the row moving
+                  // to another section — which is behind this sheet.
+                  setViewing(null);
+                }
+              : undefined
+          }
           onEdit={() => {
             setEditing({ task: viewing.item.task, nonce: Date.now() });
             setViewing(null);
