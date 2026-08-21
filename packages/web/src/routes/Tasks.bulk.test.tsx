@@ -1,5 +1,5 @@
 import type { Occurrence, Task } from "@sticker-collector/shared";
-import { addDays, todayIn, WEEKDAYS_MASK_WEEKDAYS } from "@sticker-collector/shared";
+import { addDays, WEEKDAYS_MASK_WEEKDAYS } from "@sticker-collector/shared";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -18,7 +18,16 @@ import { Tasks } from "./Tasks";
  * any of them must mark all of them and send its id exactly once.
  */
 
-const TODAY = todayIn("UTC");
+/**
+ * The app's own today, not UTC's.
+ *
+ * The screen resolves the local day through `lib/timezone`, so a fixture dated
+ * in UTC disagrees with it for the hours the two differ — west of UTC, every
+ * evening. Every occurrence dated "today" then landed in the routine backlog
+ * and *For today* rendered empty, which failed four tests after 21:00 local and
+ * passed again by morning.
+ */
+const TODAY = today();
 
 const task = (over: Partial<Task>): Task => ({
   id: "t1",
@@ -36,6 +45,7 @@ const task = (over: Partial<Task>): Task => ({
   dueAt: null,
   pinnedOn: null,
   startedAt: null,
+  slots: [],
   createdAt: "2026-07-01T00:00:00Z",
   deletedAt: null,
   lastCompletedOn: null,

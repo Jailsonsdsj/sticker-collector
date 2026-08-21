@@ -7,7 +7,7 @@ import {
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { Hono } from "hono";
 import { db } from "../db/client";
-import { task } from "../db/schema";
+import { routineSlot, task } from "../db/schema";
 import {
   buildTaskPatch,
   liveTasks,
@@ -17,6 +17,8 @@ import {
   quickAddRow,
   requireRow,
   selectTasksWithCompletion,
+  slotRows,
+  slotsFor,
   type TaskInsert,
   toTask,
 } from "../lib/tasks";
@@ -47,8 +49,17 @@ taskRoutes.post("/", async (c) => {
   }
 
   const row = newTaskRow(userId, parsed.data);
+  const slots = parsed.data.type === "routine" ? (parsed.data.slots ?? []) : [];
+
   const created = requireRow(await database.insert(task).values(row).returning(), "task");
-  return c.json(toTask(created), 201);
+  // One batch, because D1 has no interactive transactions. A slot row that
+  // failed on its own would leave a routine whose agenda silently disagrees
+  // with the form that created it.
+  if (slots.length > 0) {
+    await database.batch([database.insert(routineSlot).values(slotRows(created.id, slots))]);
+  }
+
+  return c.json(toTask(created, null, slots), 201);
 });
 
 /** Capture must never cost a form: one field, an undated one-off, no epic. */
@@ -105,15 +116,34 @@ taskRoutes.patch("/:id", async (c) => {
     return c.json({ error: "unknown epic" }, 400);
   }
 
-  const updated = requireRow(
-    await database
-      .update(task)
-      .set(built.patch)
-      .where(and(eq(task.id, id), eq(task.userId, userId)))
-      .returning(),
-    "task",
-  );
-  return c.json(toTask(updated));
+  // A slots-only patch touches no column on `task`, and Drizzle throws "No
+  // values to set" on an empty UPDATE. Nothing to change is not an error — the
+  // slots below are the change.
+  const updated =
+    Object.keys(built.patch).length === 0
+      ? current
+      : requireRow(
+          await database
+            .update(task)
+            .set(built.patch)
+            .where(and(eq(task.id, id), eq(task.userId, userId)))
+            .returning(),
+          "task",
+        );
+
+  // `slots` replaces the whole set — partial editing of one weekday would need
+  // a second endpoint to say which one. Delete-then-insert in ONE batch: two
+  // requests could leave a routine with no slots at all if the second failed.
+  if (parsed.data.slots) {
+    const rows = slotRows(id, parsed.data.slots);
+    await database.batch([
+      database.delete(routineSlot).where(eq(routineSlot.taskId, id)),
+      ...(rows.length > 0 ? [database.insert(routineSlot).values(rows)] : []),
+    ]);
+  }
+
+  const slots = (await slotsFor(database, [id])).get(id) ?? [];
+  return c.json(toTask(updated, null, slots));
 });
 
 /**

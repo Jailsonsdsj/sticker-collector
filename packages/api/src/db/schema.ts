@@ -159,6 +159,33 @@ export const occurrence = sqliteTable(
   (table) => [unique("occurrence_task_scheduled_unique").on(table.taskId, table.scheduledOn)],
 );
 
+/**
+ * When a routine runs, one row per weekday.
+ *
+ * A child table rather than columns on `task`: seven nullable start/end pairs
+ * would be fourteen columns that only ever mean something together, and D1
+ * binds 100 parameters per statement.
+ *
+ * `UNIQUE(task_id, weekday)` is the model's own statement that a routine runs
+ * at most once a day — which is what keeps `occurrence`'s (task, date) key, and
+ * the ledger hanging off it, able to record a completion at all.
+ */
+export const routineSlot = sqliteTable(
+  "routine_slot",
+  {
+    id: text("id").primaryKey(),
+    taskId: text("task_id")
+      .notNull()
+      .references(() => task.id),
+    /** Bit 0 = Monday, like the mask everything else reads. */
+    weekday: integer("weekday").notNull(),
+    /** Wall-clock minutes from midnight. Never an instant — see shared/slots.ts. */
+    startMin: integer("start_min").notNull(),
+    endMin: integer("end_min").notNull(),
+  },
+  (table) => [unique("routine_slot_task_weekday_unique").on(table.taskId, table.weekday)],
+);
+
 // the single source of truth for the wallet. append-only (enforced by the ledger_no_update/ledger_no_delete triggers).
 export const ledger = sqliteTable(
   "ledger",

@@ -376,6 +376,7 @@ export function Tasks() {
         onClose={() => setFormOpen(false)}
         onSubmit={(payload) => createTask.mutateAsync(payload)}
         epics={epics.data ?? []}
+        routines={tasks.data ?? []}
       />
 
       <TaskForm
@@ -389,6 +390,7 @@ export function Tasks() {
         }
         onDelete={() => (editing ? deleteTask.mutateAsync(editing.task.id) : Promise.resolve())}
         epics={epics.data ?? []}
+        routines={tasks.data ?? []}
       />
 
       {loading && (

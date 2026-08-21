@@ -2,6 +2,7 @@ import { z } from "zod";
 import { TIERS, validateOdds } from "./economy.js";
 import { isImageKey } from "./image.js";
 import { WEEKDAYS_MASK_ALL } from "./recurrence.js";
+import { routineSlotSchema, routineSlotsSchema, slotsAgreeWithMask } from "./slots";
 
 /**
  * Every task, epic and occurrence payload. One schema, two consumers — the
@@ -114,10 +115,17 @@ const createRoutineSchema = z
     weekdays: weekdayMaskSchema,
     startsOn: localDateSchema.nullish(),
     endsOn: localDateSchema.nullish(),
+    /** When it runs, on the days the mask already includes. Absent is legal:
+     *  every routine that existed before the agenda has none. */
+    slots: routineSlotsSchema.optional(),
   })
   .refine((t) => !(t.startsOn && t.endsOn) || t.startsOn <= t.endsOn, {
     message: "endsOn must not be before startsOn",
     path: ["endsOn"],
+  })
+  .refine((t) => slotsAgreeWithMask(t.slots ?? [], t.weekdays), {
+    message: "a slot must fall on a day the routine runs",
+    path: ["slots"],
   });
 
 const createOneOffSchema = z.strictObject({
@@ -167,6 +175,9 @@ export const updateTaskSchema = z
     pinnedOn: localDateSchema.nullish(),
     /** Set to start the task, null to stop. See `taskSchema.startedAt`. */
     startedAt: instantSchema.nullish(),
+    /** Replaces the whole set, so an empty array clears it. Partial editing of
+     *  one weekday would need a second endpoint to say which one. */
+    slots: routineSlotsSchema,
   })
   .partial()
   .refine((t) => Object.keys(t).length > 0, { message: "no fields to update" })
@@ -222,6 +233,9 @@ export const taskSchema = z.object({
    * without a second column.
    */
   startedAt: instantSchema.nullable(),
+  /** When this routine runs. Empty for a one-off, and for every routine that
+   *  predates the agenda. */
+  slots: z.array(routineSlotSchema),
   createdAt: instantSchema,
   deletedAt: instantSchema.nullable(),
   /**

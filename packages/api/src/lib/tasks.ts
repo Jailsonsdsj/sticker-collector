@@ -1,7 +1,13 @@
-import { type CreateTask, DEFAULT_EFFORT_MINUTES, type Task } from "@sticker-collector/shared";
-import { and, eq, isNull, type SQL, sql } from "drizzle-orm";
+import {
+  type CreateTask,
+  DEFAULT_EFFORT_MINUTES,
+  type RoutineSlot,
+  type Task,
+} from "@sticker-collector/shared";
+import { and, eq, inArray, isNull, type SQL, sql } from "drizzle-orm";
 import type { Db } from "../db/client";
-import { epic, occurrence, task } from "../db/schema";
+import { epic, occurrence, routineSlot, task } from "../db/schema";
+import { selectIn } from "./selectIn";
 
 export type TaskRow = typeof task.$inferSelect;
 export type TaskInsert = typeof task.$inferInsert;
@@ -137,7 +143,11 @@ export function requireRow<T>(rows: T[], what = "row"): T {
 }
 
 /** The row as the API returns it. `userId` never leaves the server. */
-export function toTask(row: TaskRow, lastCompletedOn: string | null = null): Task {
+export function toTask(
+  row: TaskRow,
+  lastCompletedOn: string | null = null,
+  slots: RoutineSlot[] = [],
+): Task {
   return {
     id: row.id,
     epicId: row.epicId,
@@ -154,6 +164,9 @@ export function toTask(row: TaskRow, lastCompletedOn: string | null = null): Tas
     dueAt: row.dueAt,
     pinnedOn: row.pinnedOn,
     startedAt: row.startedAt,
+    // Ordered by weekday, so the agenda and the form both read Monday-first
+    // without either of them sorting.
+    slots: [...slots].sort((a, b) => a.weekday - b.weekday),
     createdAt: row.createdAt,
     deletedAt: row.deletedAt,
     lastCompletedOn,
@@ -182,7 +195,54 @@ export async function selectTasksWithCompletion(
     .leftJoin(occurrence, eq(occurrence.taskId, task.id))
     .where(filters)
     .groupBy(task.id);
-  return rows.map((r) => toTask(r.row, r.lastCompletedOn));
+
+  // A second query rather than a join: joining slots onto the completion
+  // aggregate above would multiply the rows the MAX() runs over, and a routine
+  // with five slots would need the GROUP BY rewritten to survive it.
+  const bySlotTask = await slotsFor(
+    database,
+    rows.map((r) => r.row.id),
+  );
+
+  return rows.map((r) => toTask(r.row, r.lastCompletedOn, bySlotTask.get(r.row.id) ?? []));
+}
+
+/** Every routine's slots, keyed by task. Chunked: `IN (?, …)` counts against
+ *  D1's 100-parameter ceiling as much as any write does (TD-35). */
+export async function slotsFor(
+  database: Db,
+  taskIds: readonly string[],
+): Promise<Map<string, RoutineSlot[]>> {
+  const rows = await selectIn(taskIds, (batch) =>
+    database
+      .select({
+        taskId: routineSlot.taskId,
+        weekday: routineSlot.weekday,
+        startMin: routineSlot.startMin,
+        endMin: routineSlot.endMin,
+      })
+      .from(routineSlot)
+      .where(inArray(routineSlot.taskId, batch)),
+  );
+
+  const map = new Map<string, RoutineSlot[]>();
+  for (const row of rows) {
+    const list = map.get(row.taskId) ?? [];
+    list.push({ weekday: row.weekday, startMin: row.startMin, endMin: row.endMin });
+    map.set(row.taskId, list);
+  }
+  return map;
+}
+
+/** The rows for one task's slots, ready to insert. */
+export function slotRows(taskId: string, slots: readonly RoutineSlot[]) {
+  return slots.map((slot) => ({
+    id: crypto.randomUUID(),
+    taskId,
+    weekday: slot.weekday,
+    startMin: slot.startMin,
+    endMin: slot.endMin,
+  }));
 }
 
 /**

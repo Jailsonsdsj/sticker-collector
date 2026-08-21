@@ -1,6 +1,15 @@
 import type { CreateTaskInput, Epic, Task, UpdateTask } from "@sticker-collector/shared";
-import { useReducer, useState } from "react";
-import { initialState, reduce, stateFromTask, toPatch, toPayload, validate } from "../lib/taskForm";
+import { findSlotConflicts } from "@sticker-collector/shared";
+import { useMemo, useReducer, useState } from "react";
+import {
+  initialState,
+  reduce,
+  stateFromTask,
+  toPatch,
+  toPayload,
+  toSlots,
+  validate,
+} from "../lib/taskForm";
 import { DeleteTaskAction } from "./taskForm/DeleteTaskAction";
 import { EffortFields } from "./taskForm/EffortFields";
 import { MetaFields } from "./taskForm/MetaFields";
@@ -26,6 +35,14 @@ export interface TaskFormProps {
   onUpdate?: (patch: UpdateTask) => Promise<unknown>;
   onDelete?: () => Promise<unknown>;
   epics?: Epic[];
+  /**
+   * Every other routine's times, so a clash can be pointed out while it is
+   * being made rather than discovered on the agenda.
+   *
+   * Optional: a caller with no list simply gets no warning, which is what the
+   * epic screen does.
+   */
+  routines?: Task[];
   /** Set when opened from an epic — the one thing that is not blank. */
   defaultEpicId?: string | null;
 }
@@ -38,6 +55,7 @@ export function TaskForm({
   onUpdate,
   onDelete,
   epics = [],
+  routines = [],
   defaultEpicId,
 }: TaskFormProps) {
   const [state, dispatch] = useReducer(reduce, undefined, () =>
@@ -47,6 +65,23 @@ export function TaskForm({
   const [failed, setFailed] = useState<string | null>(null);
 
   const problem = validate(state);
+
+  /**
+   * What the times entered here run into.
+   *
+   * Recomputed as they are typed — a warning that arrives on submit is a
+   * warning about a decision already made. Editing a routine never reports it
+   * against itself.
+   */
+  const conflicts = useMemo(
+    () =>
+      findSlotConflicts(
+        toSlots(state) ?? [],
+        routines.filter((candidate) => candidate.type === "routine"),
+        task?.id,
+      ),
+    [state, routines, task?.id],
+  );
   const patch = task ? toPatch(state, task) : null;
   // Editing with nothing changed is not an error, but there is nothing to send.
   const nothingToSave = task ? patch === null : problem !== null;
@@ -129,7 +164,12 @@ export function TaskForm({
         onChange={(e) => dispatch({ kind: "url", value: e.target.value })}
       />
 
-      <ScheduleFields state={state} dispatch={dispatch} typeLocked={Boolean(task)} />
+      <ScheduleFields
+        state={state}
+        dispatch={dispatch}
+        typeLocked={Boolean(task)}
+        conflicts={conflicts}
+      />
       <EffortFields state={state} dispatch={dispatch} />
       <MetaFields state={state} dispatch={dispatch} epics={epics} />
 

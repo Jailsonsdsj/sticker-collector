@@ -56,6 +56,7 @@ const TASKS: Task[] = [
     dueAt: null,
     pinnedOn: null,
     startedAt: null,
+    slots: [],
     createdAt: "2026-07-01T00:00:00Z",
     deletedAt: null,
     lastCompletedOn: null,

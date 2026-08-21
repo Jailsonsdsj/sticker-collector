@@ -55,6 +55,9 @@ test("weekly grid cells still stretch to fill their column", async ({ page }) =>
   // not turn their wide cells back into small squares floating in a column.
   await login(page);
   await page.goto("/week");
+  // The Week tab opens on the agenda now, which has no checkboxes — the wide
+  // cells this guards live one tab across.
+  await page.getByRole("tab", { name: "Tick off" }).click();
 
   const cell = page.getByRole("checkbox").first();
   const label = await size(cell.locator("xpath=.."));

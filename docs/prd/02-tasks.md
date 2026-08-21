@@ -63,6 +63,15 @@ Every task is either a **routine** or a **one-off**. The choice is made at creat
 4. A dated one-off does not archive. It persists until completed or deleted.
 5. When a missed occurrence is completed late, the occurrence keeps its original scheduled date and coin snapshot, while the ledger entry carries the real completion timestamp. Reports must never claim work happened on a day it did not.
 
+**When a routine runs — slots** *(W8-01; the agenda that reads them is W8-03)*
+
+- A routine may carry **one time slot per weekday**: a start and an end, as **wall-clock minutes from midnight**. Not an instant — 18:00 means 18:00 wherever the user is, and a stored timestamp would move every block when the profile's timezone changed.
+- **The weekday mask stays authoritative.** A slot says *when* a routine happens on a day the mask already includes; it never adds a day. A slot on a day outside the mask is refused, because two sources of truth for "does this run on Tuesday" would let the agenda and the home screen disagree about one task.
+- **One slot per weekday**, enforced by the schema and by a unique index. `occurrence` is unique on (task, date) and the coin ledger hangs off that pair, so a second block on the same day would be a completion the database cannot record.
+- **Overnight is refused, not split.** 22:00 → 01:00 is two blocks on two days; inventing the second would put the task on a day the user never chose.
+- Slots are **optional**: every routine that predates this has none, and the agenda simply does not show it.
+- **Overlaps are a warning, never a refusal.** Two things at nine on a Monday is a mess a person may knowingly want, and an app that forbids it is an app that gets lied to.
+
 **The home screen**
 
 Six sections, in this order:
@@ -145,7 +154,20 @@ left, not what was scheduled.
 
 Routine maintenance does not happen through the task form. It happens on a single screen: tasks as rows, the seven weekdays as columns, a checkbox in every cell. The user sees the whole week at once and toggles cells. Creating a Mon–Fri habit is five taps, not five forms.
 
-The screen has two views. **Complete is the default** — ticking off a day is what you come back to daily, where re-planning a routine is occasional — so the five-tap flow is now five taps plus one to reach *Schedule*. Each row wears its epic's accent on its leading edge, the same colour the home screen gives it, and titles wrap rather than truncate: the label column is narrow, and a cut-off title routinely hid the word that told two routines apart.
+The screen has three views: **Agenda**, **Tick off** and **Schedule**. Each row wears its epic's accent on its leading edge, the same colour the home screen gives it, and titles wrap rather than truncate: the label column is narrow, and a cut-off title routinely hid the word that told two routines apart.
+
+**Agenda is the default** — "what am I meant to be doing now" is the question this tab is opened with, day to day. *Tick off* is the checkbox week, and it stays: the agenda can only show a routine that has hours, and every routine created before slots existed has none, so removing it would strand them. *Schedule* is where five taps make a Mon–Fri habit; that flow is now six taps, one to reach it.
+
+**The agenda** *(W8-03)*
+
+- Hours down the side, days across the top, each routine a named **block** in the slot it runs in — a name, not a checkbox, because "is it done" is a smaller question than "what is it".
+- The hour column is **derived** from the earliest start and the latest end, rounded outwards to whole hours. A person whose day starts at six does not scroll past six empty rows to reach it.
+- **Only routines with times appear.** A block with no hour has nowhere to go, so a week with no slots shows an empty state saying exactly that, not an empty grid.
+- **Two layouts, not one scaled down.** Seven columns on a 390px phone is ~50px each, so below `40rem` the agenda shows **one day at a time** with a day picker for the rest of the week. Without the picker a phone would see today and nothing else — including no way to tick off a day already gone, which is half the reason the Week tab exists.
+- The grid **opens scrolled** to now, or to the day's first block when the shown day is not today. Fifteen rows holding three blocks is otherwise a page of empty morning.
+- **Now** is a line drawn inside its own hour row (rows are content-sized, so a fraction of the whole grid drifts), and the block containing it carries a ring. Both move on a minute tick — the one thing on this screen that is wrong the moment it stops moving.
+- Tapping a block completes that day through the **same undo queue** as everywhere else, and a completed block gets a wash of the coin colour plus a struck-through title. A wash, not a fill: the name has to stay readable, which is the whole point of showing names.
+- A block on a **day that has not arrived** is inert, for as long as `canComplete` refuses the future (W8-05).
 
 The daily list is never assembled by hand. The home screen shows today's occurrences, today's dated tasks, and anything overdue.
 

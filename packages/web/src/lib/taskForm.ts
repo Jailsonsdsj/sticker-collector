@@ -1,11 +1,14 @@
 import {
   type CreateTaskInput,
+  clockToMinutes,
   DEFAULT_EFFORT_MINUTES,
+  maskHasDay,
   maskToggleDay,
+  minutesToClock,
   type Priority,
+  type RoutineSlot,
   type Task,
   type TaskType,
-  todayIn,
   type UpdateTask,
   WEEKDAYS_MASK_NONE,
   type Weekday,
@@ -42,6 +45,17 @@ export interface TaskFormState {
   rewardCoins: string;
   /** Set the moment the user edits reward; from then on it stops tracking effort. */
   rewardLocked: boolean;
+  /**
+   * When the routine runs, keyed by weekday, as the `HH:MM` strings a time
+   * input produces.
+   *
+   * Held as strings rather than minutes because a half-typed "1" is a state the
+   * user passes through, and a number field cannot represent it.
+   */
+  slots: Record<number, { start: string; end: string }>;
+  /** Set the moment the user edits effort; from then on a slot's length stops
+   *  filling it in. */
+  effortLocked: boolean;
   /** "Do this today" — lifts an undated capture into the For today section. */
   pinnedToday: boolean;
   priority: Priority;
@@ -56,6 +70,7 @@ export type TaskFormAction =
   | { kind: "effort"; value: string }
   | { kind: "reward"; value: string }
   | { kind: "pinToday"; value: boolean }
+  | { kind: "slot"; weekday: Weekday; field: "start" | "end"; value: string }
   | { kind: "priority"; value: Priority }
   | { kind: "epic"; value: string | null };
 
@@ -93,6 +108,10 @@ export function initialState(options: { epicId?: string | null } = {}): TaskForm
     // the effort until the user types over it — `rewardLocked` is what stops
     // that, and typing here is what sets it.
     rewardCoins: String(DEFAULT_EFFORT_MINUTES),
+    slots: {},
+    // The default effort is the form's suggestion, not the user's answer, so a
+    // slot may still overwrite it.
+    effortLocked: false,
     rewardLocked: false,
     pinnedToday: false,
     priority: "medium",
@@ -117,8 +136,25 @@ export function reduce(state: TaskFormState, action: TaskFormAction): TaskFormSt
     case "pinToday":
       return { ...state, pinnedToday: action.value };
 
-    case "weekday":
-      return { ...state, weekdays: maskToggleDay(state.weekdays, action.value) };
+    case "weekday": {
+      const weekdays = maskToggleDay(state.weekdays, action.value);
+      const slots = { ...state.slots };
+
+      if (maskHasDay(weekdays, action.value)) {
+        // A newly checked day copies the first time already entered. "Same time
+        // every day" is the common case, and typing it seven times is the kind
+        // of chore that makes people leave the field blank.
+        slots[action.value] = slots[action.value] ??
+          firstSlot(state.slots) ?? { start: "", end: "" };
+      } else {
+        // Unchecking a day drops its time with it: the API refuses a slot on a
+        // day the mask does not include, so keeping it would only be a 400
+        // waiting to happen.
+        delete slots[action.value];
+      }
+
+      return { ...state, weekdays, slots };
+    }
 
     case "dueDate":
     case "dueTime":
@@ -130,7 +166,31 @@ export function reduce(state: TaskFormState, action: TaskFormAction): TaskFormSt
         ...state,
         effortMinutes: action.value,
         rewardCoins: state.rewardLocked ? state.rewardCoins : action.value,
+        effortLocked: true,
       };
+
+    case "slot": {
+      const current = state.slots[action.weekday] ?? { start: "", end: "" };
+      const slots = {
+        ...state.slots,
+        [action.weekday]: { ...current, [action.field]: action.value },
+      };
+
+      // A slot's length suggests the effort — 12:00–14:00 is 120 minutes — but
+      // only until the user types an effort of their own. The slot says WHEN;
+      // effort is what the task pays, and a two-hour window booked for twenty
+      // minutes of work must not mint 120 coins by construction.
+      const minutes = slotLength(slots[action.weekday]);
+      const effortMinutes =
+        !state.effortLocked && minutes !== null ? String(minutes) : state.effortMinutes;
+
+      return {
+        ...state,
+        slots,
+        effortMinutes,
+        rewardCoins: state.rewardLocked ? state.rewardCoins : effortMinutes,
+      };
+    }
 
     case "reward":
       return { ...state, rewardCoins: action.value, rewardLocked: true };
@@ -141,6 +201,50 @@ export function reduce(state: TaskFormState, action: TaskFormAction): TaskFormSt
     case "epic":
       return { ...state, epicId: action.value };
   }
+}
+
+/** The first time already entered, in weekday order — what a newly checked day
+ *  copies. */
+function firstSlot(slots: TaskFormState["slots"]): { start: string; end: string } | null {
+  for (const weekday of [0, 1, 2, 3, 4, 5, 6]) {
+    const slot = slots[weekday];
+    if (slot?.start && slot.end) return { ...slot };
+  }
+  return null;
+}
+
+/** How long a slot is, or null if it is not yet a slot. */
+function slotLength(slot: { start: string; end: string } | undefined): number | null {
+  if (!slot) return null;
+  const start = clockToMinutes(slot.start);
+  const end = clockToMinutes(slot.end);
+  if (start === null || end === null || end <= start) return null;
+  return end - start;
+}
+
+/**
+ * The slots as the API wants them, or null if any checked day is unfinished.
+ *
+ * Days outside the mask are dropped rather than reported: unchecking a day is
+ * how you remove its time, and the state may still hold one from before.
+ */
+export function toSlots(state: TaskFormState): RoutineSlot[] | null {
+  const slots: RoutineSlot[] = [];
+
+  for (const weekday of [0, 1, 2, 3, 4, 5, 6] as Weekday[]) {
+    if (!maskHasDay(state.weekdays, weekday)) continue;
+
+    const entry = state.slots[weekday];
+    if (!entry?.start && !entry?.end) continue; // never filled in
+
+    const start = clockToMinutes(entry?.start ?? "");
+    const end = clockToMinutes(entry?.end ?? "");
+    if (start === null || end === null || end <= start) return null;
+
+    slots.push({ weekday, startMin: start, endMin: end });
+  }
+
+  return slots;
 }
 
 const positiveInt = (raw: string): number | null => {
@@ -154,6 +258,9 @@ export function validate(state: TaskFormState): string | null {
   if (positiveInt(state.effortMinutes) === null) return "Effort must be a whole number of minutes.";
   if (state.type === "routine" && state.weekdays === WEEKDAYS_MASK_NONE) {
     return "Pick at least one weekday.";
+  }
+  if (state.type === "routine" && toSlots(state) === null) {
+    return "Each day needs a start and an end, and the end must be later.";
   }
   if (state.rewardLocked) {
     const reward = Number(state.rewardCoins);
@@ -195,7 +302,7 @@ export function toPayload(state: TaskFormState): CreateTaskInput | null {
   };
 
   return state.type === "routine"
-    ? { ...common, type: "routine", weekdays: state.weekdays }
+    ? { ...common, type: "routine", weekdays: state.weekdays, slots: toSlots(state) ?? [] }
     : {
         ...common,
         type: "oneoff",
@@ -246,6 +353,15 @@ export function stateFromTask(task: Task): TaskFormState {
     // Pinned yesterday is not pinned today — the date is the whole reason the
     // flag is a date, so a stale pin reads as unpinned rather than as a choice.
     pinnedToday: task.pinnedOn === today(),
+    slots: Object.fromEntries(
+      task.slots.map((slot) => [
+        slot.weekday,
+        { start: minutesToClock(slot.startMin), end: minutesToClock(slot.endMin) },
+      ]),
+    ),
+    // Editing: effort is whatever the task already says, and a slot must not
+    // silently rewrite it.
+    effortLocked: true,
     priority: task.priority,
     epicId: task.epicId,
   };
@@ -289,6 +405,10 @@ export function toPatch(state: TaskFormState, original: Task): UpdateTask | null
   // The task's own type decides which schedule may be sent, not the form's.
   if (original.type === "routine") {
     set("weekdays", state.weekdays, original.weekdays);
+    // Compared as JSON: `slots` is the whole set, and sending an unchanged one
+    // would make every rename rewrite the agenda's rows for nothing.
+    const next = toSlots(state) ?? [];
+    if (JSON.stringify(next) !== JSON.stringify(original.slots)) patch.slots = next;
   } else {
     set("dueAt", toDueAt(state.dueDate, state.dueTime), original.dueAt);
   }

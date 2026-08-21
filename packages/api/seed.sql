@@ -96,3 +96,29 @@ SELECT
   o.completed_at
 FROM occurrence o
 WHERE o.id LIKE 'occ_seed_%';
+
+-- Times for the routines, so the Week tab's agenda has something to draw.
+--
+-- Without these the agenda is nothing but its empty state — which is correct
+-- for a fresh account and useless as sample data, and it left the e2e suite
+-- with no block to click. One slot per weekday, and only on days the mask
+-- already covers: the mask decides WHETHER a routine runs, a slot only says
+-- WHEN. (task_run and task_tidy are mask 62 = Tue–Sat; task_read is 127.)
+INSERT INTO routine_slot (id, task_id, weekday, start_min, end_min) VALUES
+  ('slot_run_1',  'task_run',  1, 420, 450),
+  ('slot_run_2',  'task_run',  2, 420, 450),
+  ('slot_run_3',  'task_run',  3, 420, 450),
+  ('slot_run_4',  'task_run',  4, 420, 450),
+  ('slot_run_5',  'task_run',  5, 420, 450),
+  ('slot_tidy_1', 'task_tidy', 1, 1080, 1095),
+  ('slot_tidy_2', 'task_tidy', 2, 1080, 1095),
+  ('slot_tidy_3', 'task_tidy', 3, 1080, 1095),
+  ('slot_tidy_4', 'task_tidy', 4, 1080, 1095),
+  ('slot_tidy_5', 'task_tidy', 5, 1080, 1095),
+  ('slot_read_0', 'task_read', 0, 1260, 1290),
+  ('slot_read_1', 'task_read', 1, 1260, 1290),
+  ('slot_read_2', 'task_read', 2, 1260, 1290),
+  ('slot_read_3', 'task_read', 3, 1260, 1290),
+  ('slot_read_4', 'task_read', 4, 1260, 1290),
+  ('slot_read_5', 'task_read', 5, 1260, 1290),
+  ('slot_read_6', 'task_read', 6, 1260, 1290);
