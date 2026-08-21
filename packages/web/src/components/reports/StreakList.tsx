@@ -43,7 +43,7 @@ export function StreakList({ streaks, perfect }: StreakListProps) {
               key={streak.taskId}
               className="flex items-center gap-3 rounded-xl border border-border bg-panel p-3"
             >
-              <span className="flex-1 truncate font-body text-sm font-bold text-ink">
+              <span className="min-w-0 flex-1 font-body text-sm font-bold break-words text-ink">
                 {streak.title}
               </span>
               <Badge tone={streak.current > 0 ? "lime" : "neutral"} font="numeric" size="sm">

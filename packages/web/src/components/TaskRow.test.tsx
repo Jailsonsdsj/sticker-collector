@@ -199,3 +199,25 @@ describe("multi-select mode", () => {
     expect(onToggle).toHaveBeenCalledWith(true);
   });
 });
+
+describe("a long title", () => {
+  // The one place this component asserts a class name: `truncate` IS the
+  // behaviour here, and jsdom has no layout to observe it any other way.
+  const LONG = "Stretch shoulders, hips and lower back before the morning run";
+
+  it("is shown in full, not cut off with an ellipsis", () => {
+    renderRow({ title: LONG, onEdit: vi.fn() });
+
+    const title = screen.getByRole("button", { name: LONG });
+    expect(title.className).not.toContain("truncate");
+    expect(title.className).toContain("break-words");
+  });
+
+  it("is shown in full when the row has no title action either", () => {
+    // Two branches render the title; only one of them used to truncate, so the
+    // same task read differently depending on whether it could be opened.
+    renderRow({ title: LONG });
+
+    expect(screen.getByText(LONG).className).not.toContain("truncate");
+  });
+});

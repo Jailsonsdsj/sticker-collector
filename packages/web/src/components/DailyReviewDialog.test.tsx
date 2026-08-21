@@ -86,3 +86,19 @@ describe("reading a day back", () => {
     expect(onClose).toHaveBeenCalled();
   });
 });
+
+describe("a long title", () => {
+  it("is shown in full rather than cut off", () => {
+    const long = "Water the plants, both balconies and the kitchen windowsill";
+    render(
+      <DailyReviewDialog
+        review={review({
+          rows: [{ taskId: "t1", title: long, epic: null, epicAccent: null, coins: 30 }],
+        })}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(long).className).not.toContain("truncate");
+  });
+});

@@ -113,12 +113,12 @@ export function EpicCard({
           <button
             type="button"
             onClick={() => onOpenTask(task)}
-            className="min-w-0 flex-1 cursor-pointer truncate text-left font-body text-md outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan"
+            className="min-w-0 flex-1 cursor-pointer text-left font-body text-md break-words outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan"
           >
             {task.title}
           </button>
         ) : (
-          <span className="min-w-0 flex-1 truncate font-body text-md">{task.title}</span>
+          <span className="min-w-0 flex-1 font-body text-md break-words">{task.title}</span>
         )}
 
         <span className="font-numeric text-2xs font-bold text-coin">+{task.rewardCoins}</span>

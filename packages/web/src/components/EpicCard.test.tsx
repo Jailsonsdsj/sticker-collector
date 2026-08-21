@@ -209,4 +209,12 @@ describe("finished subtasks", () => {
     expect(screen.getByRole("checkbox", { name: /complete ship it/i })).toBeChecked();
     expect(screen.queryByRole("button", { name: /done/i })).toBeNull();
   });
+
+  it("shows a long task title in full rather than truncating it", () => {
+    // A task row inside an epic card is the narrowest place a title appears.
+    const long = "Draft the quarterly report and circulate it for review";
+    withTasks([task({ id: "z", title: long })], { onOpenTask: vi.fn() });
+
+    expect(screen.getByRole("button", { name: long }).className).not.toContain("truncate");
+  });
 });

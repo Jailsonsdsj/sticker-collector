@@ -69,7 +69,7 @@ export function DailyReviewDialog({ review, heading, onClose }: DailyReviewDialo
             }
           >
             <span className="min-w-0 flex-1">
-              <span className="block truncate font-body text-md text-ink">{row.title}</span>
+              <span className="block font-body text-md break-words text-ink">{row.title}</span>
               {row.epic && (
                 <Badge tone="neutral" size="sm">
                   {row.epic}
