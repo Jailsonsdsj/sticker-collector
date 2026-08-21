@@ -1,5 +1,5 @@
 import type { Epic, EpicStatus, Task } from "@sticker-collector/shared";
-import { todayIn } from "@sticker-collector/shared";
+import { maskHasDay, weekdayOf } from "@sticker-collector/shared";
 import { useMemo, useState } from "react";
 import { Navigate } from "react-router";
 import { DeleteEpicDialog } from "../components/DeleteEpicDialog";
@@ -35,7 +35,7 @@ import { today } from "../lib/timezone";
  * The three lists, and the order work moves through them.
  *
  * "Achievements" is deliberately last and starts folded: it is a record, not a
- * queue, and an epic finished in March should not push what is running localToday
+ * queue, and an epic finished in March should not push what is running today
  * off the first screenful — the same reasoning the home screen folds Missed and
  * the routine backlog.
  */
@@ -252,6 +252,23 @@ export function Epics() {
                     { taskId: viewing.id, scheduledOn: localToday },
                     { title: viewing.title, coins: viewing.rewardCoins },
                   );
+                  setViewing(null);
+                }
+              : undefined
+          }
+          started={Boolean(viewing.startedAt)}
+          // Same rule as the tasks tab, derived from the mask because this
+          // screen has no occurrences to read: *In progress* takes a routine
+          // through today's occurrence only. `startsOn`/`endsOn` are not
+          // consulted — at worst the button shows on a routine outside its run
+          // and moves nothing, which is the same cost as not showing it.
+          onToggleStart={
+            viewing.type === "oneoff" || maskHasDay(viewing.weekdays ?? 0, weekdayOf(localToday))
+              ? () => {
+                  updateTask.mutate({
+                    id: viewing.id,
+                    patch: { startedAt: viewing.startedAt ? null : new Date().toISOString() },
+                  });
                   setViewing(null);
                 }
               : undefined

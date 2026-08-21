@@ -244,17 +244,19 @@ describe("a block that is done", () => {
     view({
       routines: [routine({ slots: [{ weekday: 0, startMin: 600, endMin: 660 }] })],
       occurrences: [done("t1", MONDAY)],
-      onToggle: () => {},
+      onOpen: () => {},
     });
 
     const block = screen.getByRole("button", { name: "Gym, 10:00–11:00, done" });
-    expect(block).toHaveAttribute("aria-pressed", "true");
+    // No `aria-pressed`: the block opens a sheet, it does not toggle. Claiming
+    // otherwise tells a screen reader this press is the completion.
+    expect(block).not.toHaveAttribute("aria-pressed");
   });
 
   it("counts a tick still inside the undo window", () => {
     view({
       routines: [routine({ slots: [{ weekday: 0, startMin: 600, endMin: 660 }] })],
-      onToggle: () => {},
+      onOpen: () => {},
       isPending: () => true,
     });
 
@@ -330,46 +332,53 @@ describe("the now line", () => {
 });
 
 describe("a day that has not happened yet", () => {
-  it("is inert — T-05 refuses a completion before its day", () => {
+  it("opens like any other block", async () => {
+    // It was inert while a tap meant "complete", because T-05 refuses a
+    // completion before its day. Reading, editing and deleting a task are all
+    // worth doing on a day that has not arrived; the sheet withholds Done.
     widescreen();
-    const onToggle = vi.fn();
+    const onOpen = vi.fn();
+    const user = userEvent.setup();
     view({
       routines: [routine({ title: "Later", slots: [{ weekday: 3, startMin: 600, endMin: 660 }] })],
-      onToggle,
+      onOpen,
     });
 
-    expect(screen.getByRole("button", { name: /^Later/ })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: /^Later/ }));
+
+    expect(onOpen).toHaveBeenCalledOnce();
   });
 
-  it("leaves a day already past tappable, which is the point of the picker", () => {
+  it("still reads as not-yet", () => {
+    // Openable is not the same as due: the dimming is the only thing left
+    // saying which side of today this block is on.
     widescreen();
     view({
-      routines: [routine({ title: "Gone", slots: [{ weekday: 0, startMin: 600, endMin: 660 }] })],
-      today: "2026-08-20",
-      onToggle: () => {},
+      routines: [routine({ title: "Later", slots: [{ weekday: 3, startMin: 600, endMin: 660 }] })],
+      onOpen: () => {},
     });
 
-    expect(screen.getByRole("button", { name: /^Gone/ })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /^Later/ })).toHaveClass("opacity-60");
   });
 });
 
-describe("ticking a block", () => {
+describe("opening a block", () => {
   it("hands back the day it was tapped on, not just the task", async () => {
-    // A completion is keyed by (task, date). A week grid that reports only the
-    // task ticks whichever day the server guesses.
-    const onToggle = vi.fn();
+    // A completion is keyed by (task, date), and the agenda shows seven of a
+    // routine's days at once. A sheet that only knew the task would tick
+    // whichever day the server guessed.
+    const onOpen = vi.fn();
     const user = userEvent.setup();
     widescreen();
     view({
       routines: [routine({ slots: [{ weekday: 3, startMin: 600, endMin: 660 }] })],
-      // Sunday, so Thursday's block is behind us and still tappable.
       today: "2026-08-23",
-      onToggle,
+      onOpen,
     });
 
     await user.click(screen.getByRole("button", { name: /^Gym/ }));
 
-    expect(onToggle).toHaveBeenCalledWith(
+    expect(onOpen).toHaveBeenCalledWith(
       expect.objectContaining({ date: "2026-08-20", done: false }),
     );
   });

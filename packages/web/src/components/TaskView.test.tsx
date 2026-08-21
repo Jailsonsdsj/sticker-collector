@@ -176,3 +176,55 @@ describe("when it happens, in words", () => {
     expect(schedule(task())).toBe("Any day");
   });
 });
+
+describe("picking a task up", () => {
+  const openWithStart = (props: Partial<Parameters<typeof TaskView>[0]> = {}) => {
+    const onToggleStart = vi.fn();
+    const rest = open({ onToggleStart, ...props });
+    return { ...rest, onToggleStart };
+  };
+
+  it("offers Start between Done and Edit", () => {
+    // The order is the order the actions are wanted in, and the user asked for
+    // this one in the middle.
+    openWithStart();
+
+    const labels = screen
+      .getAllByRole("button")
+      .map((button) => button.textContent)
+      .filter((text) => ["Done", "Start", "Edit"].includes(text ?? ""));
+    expect(labels).toEqual(["Done", "Start", "Edit"]);
+  });
+
+  it("hands the press back", async () => {
+    const user = userEvent.setup();
+    const { onToggleStart } = openWithStart();
+
+    await user.click(screen.getByRole("button", { name: "Start" }));
+
+    expect(onToggleStart).toHaveBeenCalledOnce();
+  });
+
+  it("reads Stop once the task is already going", () => {
+    openWithStart({ started: true });
+
+    expect(screen.getByRole("button", { name: "Stop" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Start" })).not.toBeInTheDocument();
+  });
+
+  it("stays away when starting would move nothing", () => {
+    // A routine on a day it does not run: *In progress* takes it through
+    // today's occurrence only, so the flag would be set and nothing would move.
+    open({ onToggleStart: undefined });
+
+    expect(screen.queryByRole("button", { name: "Start" })).not.toBeInTheDocument();
+  });
+
+  it("stays away on a task already finished", () => {
+    // Starting what you just closed is not a state the list can place.
+    openWithStart({ done: true });
+
+    expect(screen.queryByRole("button", { name: "Start" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reopen" })).toBeInTheDocument();
+  });
+});

@@ -16,6 +16,9 @@ import { cx } from "./ui/cx";
  * tasks only, because routines never finish and including them would peg every
  * epic below 100% forever (prd/03-epics.md §Enhancements).
  */
+/** One-offs before routines, everywhere an epic lists its tasks. */
+const TYPE_RANK: Record<Task["type"], number> = { oneoff: 0, routine: 1 };
+
 /**
  * The progress bar has five tones; the epic palette has fifteen. Each accent
  * maps to the tone it sits nearest, so a bar never has to invent a colour the
@@ -76,14 +79,28 @@ export function EpicCard({
   const percent = epic.oneOffTotal === 0 ? 0 : (epic.oneOffDone / epic.oneOffTotal) * 100;
 
   /**
+   * One-offs first, routines after.
+   *
+   * A one-off is a thing this epic finishes, and it is the only thing the
+   * progress bar above counts. A routine never finishes — it is the background
+   * hum of the epic — so leading with it buries the work the epic is actually
+   * measured by. The `↻` beside each routine says which is which; the order
+   * says which to read first.
+   *
+   * A stable sort on nothing but the type, so the order within each group is
+   * the one the list already had rather than a new one invented here.
+   */
+  const ordered = [...tasks].sort((a, b) => TYPE_RANK[a.type] - TYPE_RANK[b.type]);
+
+  /**
    * Finished means finished — `lastCompletedOn`, not a pending tick.
    *
    * A row inside its undo window stays where it is and merely shows a checked
    * box: moving it into Done the instant it is ticked would make the undo
    * button chase a row that had already left.
    */
-  const done = tasks.filter((task) => Boolean(task.lastCompletedOn));
-  const open = tasks.filter((task) => !task.lastCompletedOn);
+  const done = ordered.filter((task) => Boolean(task.lastCompletedOn));
+  const open = ordered.filter((task) => !task.lastCompletedOn);
 
   const row = (task: Task) => {
     // Only a ONE-OFF is tickable from here. A routine belongs to a day: the API
