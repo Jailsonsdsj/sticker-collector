@@ -2,6 +2,7 @@ import {
   applyPan,
   aspectFillRect,
   CENTERED,
+  IMAGE_SIZES,
   type ImageKind,
   type Offset,
 } from "@sticker-collector/shared";
@@ -110,7 +111,11 @@ export function ImageCropper({
       <div
         ref={frameRef}
         className="relative mx-auto w-full max-w-sm touch-none overflow-hidden rounded-2xl border border-border bg-panel"
-        style={{ aspectRatio: "5 / 7" }}
+        // The kind's own ratio, never a literal. The frame IS the crop preview
+        // — `object-fit: cover` inside it is the same aspect-fill the export
+        // performs — so a frame shaped 5:7 over a square puzzle would let the
+        // user position one window and ship a different one.
+        style={{ aspectRatio: `${IMAGE_SIZES[kind].width} / ${IMAGE_SIZES[kind].height}` }}
         onPointerDown={(event) => {
           dragRef.current = { x: event.clientX, y: event.clientY };
           event.currentTarget.setPointerCapture(event.pointerId);

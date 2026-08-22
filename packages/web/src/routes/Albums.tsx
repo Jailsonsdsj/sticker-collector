@@ -1,16 +1,19 @@
 import type { AlbumStatus, AlbumSummary } from "@sticker-collector/shared";
 import { ALBUM_SORTS } from "@sticker-collector/shared";
 import { useState } from "react";
-import { Link, Navigate } from "react-router";
+import { Navigate } from "react-router";
 import { AlbumCard } from "../components/AlbumCard";
 import { BackupNudge } from "../components/BackupNudge";
+import { CreateChoiceDialog } from "../components/CreateChoiceDialog";
 import { AlbumGrid, AppHeader } from "../components/layout";
+import { PuzzleCard } from "../components/PuzzleCard";
 import { UnlockDialog } from "../components/UnlockDialog";
 import { Button, Chip, EmptyState, ErrorState, Skeleton, Tabs } from "../components/ui";
 import { ApiError } from "../lib/api";
 import { useUnlockAlbum } from "../lib/mutations";
 import { playUnlock } from "../lib/placement";
-import { useAlbums, useWallet } from "../lib/queries";
+import { useAlbums, usePuzzles, useWallet } from "../lib/queries";
+import { shelf } from "../lib/shelf";
 
 /**
  * The shelf.
@@ -58,11 +61,13 @@ export function paginate<T>(rows: T[], page: number, perPage = ALBUMS_PER_PAGE) 
 
 export function Albums() {
   const [filter, setFilter] = useState<AlbumStatus | "all">("all");
+  const [creating, setCreating] = useState(false);
   const [sort, setSort] = useState<(typeof ALBUM_SORTS)[number]>("status");
   const [unlocking, setUnlocking] = useState<AlbumSummary | null>(null);
   const [page, setPage] = useState(0);
 
   const albums = useAlbums({ status: filter === "all" ? undefined : filter, sort });
+  const puzzles = usePuzzles();
   const wallet = useWallet();
   const unlock = useUnlockAlbum();
 
@@ -71,26 +76,37 @@ export function Albums() {
   }
 
   const rows = albums.data ?? [];
+  // One grid, both kinds. The server has already filtered and sorted the
+  // albums; `shelf` mixes the puzzles in and re-sorts the whole thing with a
+  // comparator that matches the server's, so an album does not move just
+  // because a puzzle exists.
+  const items = shelf(rows, puzzles.data ?? [], filter, sort);
 
-  const { pages, current, visible } = paginate(rows, page);
+  const { pages, current, visible } = paginate(items, page);
 
   return (
     <>
       <AppHeader
         title="Albums"
         trailing={
-          // §Creating 1: the listing is where a new album starts.
-          <Link
-            to="/albums/new"
-            className="rounded-lg border border-cyan px-3 py-1 font-body text-sm font-bold text-cyan"
+          // §Creating 1: the listing is where a new album starts — and now a
+          // puzzle too, so the link became a fork.
+          <button
+            type="button"
+            onClick={() => setCreating(true)}
+            className="cursor-pointer rounded-lg border border-cyan px-3 py-1 font-body text-sm font-bold text-cyan"
           >
             Create
-          </Link>
+          </button>
         }
       />
 
       {/* Right where an album is created or finished. */}
-      <BackupNudge albums={rows} />
+      <CreateChoiceDialog open={creating} onClose={() => setCreating(false)} />
+
+      {/* Puzzles too: a puzzle's master image exists nowhere else, so it is the
+          most irreplaceable thing the app holds. */}
+      <BackupNudge items={[...rows, ...(puzzles.data ?? [])]} />
 
       <Tabs
         items={FILTERS}
@@ -133,28 +149,36 @@ export function Albums() {
         // either, and "No albums yet" would tell someone their collection is
         // gone when the truth is that the request never landed.
         <ErrorState error={albums.error} onRetry={() => void albums.refetch()} />
-      ) : rows.length === 0 ? (
+      ) : items.length === 0 ? (
         <EmptyState
           icon="◈"
-          title={filter === "all" ? "No albums yet" : "Nothing here"}
+          title={filter === "all" ? "Nothing here yet" : "Nothing here"}
           description={
             filter === "all"
-              ? "Albums are yours to author. Build one, seal it, then earn your way through it."
-              : "No album has that status right now."
+              ? "Albums and puzzles are yours to author. Make one, then earn your way through it."
+              : "Nothing has that status right now."
           }
         />
       ) : (
         <>
           <AlbumGrid>
-            {visible.map((album) => (
-              <AlbumCard key={album.id} album={album} onUnlock={() => setUnlocking(album)} />
-            ))}
+            {visible.map((item) =>
+              item.kind === "album" ? (
+                <AlbumCard
+                  key={item.id}
+                  album={item.album}
+                  onUnlock={() => setUnlocking(item.album)}
+                />
+              ) : (
+                <PuzzleCard key={item.id} puzzle={item.puzzle} />
+              ),
+            )}
           </AlbumGrid>
 
           {/* Absent entirely on a single page: controls that can never do
               anything are noise on the screen they sit on. */}
           {pages > 1 && (
-            <nav aria-label="Album pages" className="mt-5 flex items-center justify-center gap-3">
+            <nav aria-label="Shelf pages" className="mt-5 flex items-center justify-center gap-3">
               <Button
                 size="sm"
                 variant="outline"

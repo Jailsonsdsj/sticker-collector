@@ -1,11 +1,5 @@
 import type { EpicAccent, LocalDate, Task, Weekday } from "@sticker-collector/shared";
-import {
-  daysFromMask,
-  maskHasDay,
-  maskToggleDay,
-  WEEKDAYS,
-  weekdayOf,
-} from "@sticker-collector/shared";
+import { daysFromMask, maskHasDay, maskToggleDay, WEEKDAYS } from "@sticker-collector/shared";
 import { Checkbox, EmptyState } from "./ui";
 import { WEEKDAY_INDICES, WeekGridShell, WeekRowLabel } from "./weekGrid/WeekGridShell";
 
@@ -29,8 +23,6 @@ export interface WeeklyGridProps {
 }
 
 export function WeeklyGrid({ routines, accentOf, today, onChangeMask, disabled }: WeeklyGridProps) {
-  const todayIndex = weekdayOf(today);
-
   if (routines.length === 0) {
     return (
       <EmptyState
@@ -55,7 +47,6 @@ export function WeeklyGrid({ routines, accentOf, today, onChangeMask, disabled }
             key={task.id}
             task={task}
             mask={mask}
-            todayIndex={todayIndex}
             lastRemaining={lastRemaining}
             disabled={disabled}
             epicAccent={accentOf?.(task) ?? null}
@@ -70,7 +61,6 @@ export function WeeklyGrid({ routines, accentOf, today, onChangeMask, disabled }
 function Row({
   task,
   mask,
-  todayIndex,
   lastRemaining,
   disabled,
   epicAccent,
@@ -78,7 +68,6 @@ function Row({
 }: {
   task: Task;
   mask: number;
-  todayIndex: Weekday;
   lastRemaining: boolean;
   disabled?: boolean;
   epicAccent: EpicAccent | null;

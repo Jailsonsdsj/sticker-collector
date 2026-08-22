@@ -127,6 +127,16 @@ describe("PUT — content addressing", () => {
     expect(await response.json()).toMatchObject({ kind: "cover" });
   });
 
+  it("accepts a puzzle, which is square and not a print size", async () => {
+    // The route names no kind of its own — it asks `imageKindForSize`. This is
+    // the test that the third kind actually arrives here, because before it
+    // existed this exact upload came back 422 with no cause either side could
+    // see.
+    const { response } = await upload(jpeg(IMAGE_SIZES.puzzle.width, IMAGE_SIZES.puzzle.height));
+    expect(response.status).toBe(201);
+    expect(await response.json()).toMatchObject({ kind: "puzzle" });
+  });
+
   it("creates no second object when identical bytes are uploaded again", async () => {
     const bytes = stickerBytes();
     const first = await upload(bytes);
@@ -181,6 +191,8 @@ describe("PUT — what it refuses to store", () => {
       [1772, 2481],
       [1000, 1400],
       [827, 591],
+      // A square one pixel off the puzzle: the near-miss for the new kind.
+      [1536, 1535],
     ] as const) {
       const bytes = jpeg(w, h);
       const key = imageKey(await sha256Hex(bytes));

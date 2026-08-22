@@ -13,6 +13,8 @@ import { imageRoutes } from "./routes/images";
 import { occurrenceRoutes } from "./routes/occurrences";
 import { pullRoutes, stickerRoutes } from "./routes/pulls";
 import { purchaseRoutes } from "./routes/purchases";
+import { puzzlePurchaseRoutes } from "./routes/puzzlePurchases";
+import { puzzleRoutes } from "./routes/puzzles";
 import { reportRoutes } from "./routes/reports";
 import { taskRoutes } from "./routes/tasks";
 import { walletRoutes } from "./routes/wallet";
@@ -35,6 +37,10 @@ app.route("/api/albums", albumRoutes);
 app.route("/api/albums", purchaseRoutes);
 app.route("/api/albums", pullRoutes);
 app.route("/api/albums", albumListRoutes);
+app.route("/api/puzzles", puzzleRoutes);
+// Mounted on the same prefix, like purchases on albums: idempotency is claimed
+// per route, never on a wildcard, or the second middleware sees its own claim.
+app.route("/api/puzzles", puzzlePurchaseRoutes);
 app.route("/api/stickers", stickerRoutes);
 
 /**

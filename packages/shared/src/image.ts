@@ -1,10 +1,13 @@
 /**
  * Image geometry, as pure arithmetic.
  *
- * Every stored image is one of exactly two sizes, sharing one 5:7 ratio, and
- * the cover is exactly three times the sticker so it lands on A5 when printed
- * (`prd/04-albums.md` §Geometry). These are the dimensions of the *stored*
- * image, not of the screen — they are identical on every device.
+ * Every stored image is one of a small set of canonical sizes. The sticker and
+ * the cover share one 5:7 ratio, and the cover is exactly three times the
+ * sticker so it lands on A5 when printed (`prd/04-albums.md` §Geometry). The
+ * puzzle is square and print-free — it is cut into a grid rather than laid out
+ * on a page, so it answers to a different constraint. These are the dimensions
+ * of the *stored* image, not of the screen — they are identical on every
+ * device.
  *
  * The crop lives here rather than in the component because jsdom has no canvas:
  * `drawImage` and `toBlob` cannot run in any test in this repo. So the canvas
@@ -13,21 +16,46 @@
  * decided by functions that are tested exhaustively here.
  */
 
-export type ImageKind = "sticker" | "cover";
+/**
+ * Every kind there is, in one list.
+ *
+ * `ImageKind` is derived from it rather than declared beside it, and
+ * `imageKindForSize` walks it rather than naming kinds again — a kind added to
+ * the sizes below but forgotten by the validator would be an image the client
+ * happily crops and the Worker answers 422 to, which is a bug with no visible
+ * cause on either side.
+ */
+export const IMAGE_KINDS = ["sticker", "cover", "puzzle"] as const;
+
+export type ImageKind = (typeof IMAGE_KINDS)[number];
 
 export interface Size {
   width: number;
   height: number;
 }
 
-/** Canonical stored sizes at 300 dpi: 50×70 mm and 150×210 mm (A5). */
+/**
+ * Canonical stored sizes.
+ *
+ * Sticker and cover are 300 dpi print sizes: 50×70 mm and 150×210 mm (A5).
+ *
+ * **Puzzle is square, and deliberately not a print size.** It is cut into a
+ * grid, so a square divides evenly on both axes at every piece count, and it
+ * crops a landscape photo and a portrait one equally rather than mauling one of
+ * them the way A5 portrait would. 1536 is a round power-of-two multiple that
+ * leaves each piece of the largest supported grid (12×12) at 128 px — still
+ * sharp on a zoomed-in phone.
+ */
 export const IMAGE_SIZES: Record<ImageKind, Size> = {
   sticker: { width: 591, height: 827 },
   cover: { width: 1772, height: 2480 },
+  puzzle: { width: 1536, height: 1536 },
 };
 
 /**
- * The nominal aspect ratio, kept as two integers so no comparison needs a float.
+ * The nominal aspect ratio **of the sticker and the cover**, kept as two
+ * integers so no comparison needs a float. The puzzle is 1:1 and does not
+ * answer to this.
  *
  * The stored sizes are only 5:7 to within rounding — 591 × 7 = 4137 against
  * 827 × 5 = 4135 — because each dimension is independently rounded from 300 dpi
@@ -150,9 +178,9 @@ export function hashFromImageKey(key: string): string | null {
   return isImageKey(key) ? (key.slice(4, 68) as string) : null;
 }
 
-/** Whether a decoded image is exactly one of the two canonical sizes. */
+/** Whether a decoded image is exactly one of the canonical sizes. */
 export function imageKindForSize(size: Size): ImageKind | null {
-  for (const kind of ["sticker", "cover"] as const) {
+  for (const kind of IMAGE_KINDS) {
     const canonical = IMAGE_SIZES[kind];
     if (size.width === canonical.width && size.height === canonical.height) return kind;
   }

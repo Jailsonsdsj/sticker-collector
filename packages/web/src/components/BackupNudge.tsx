@@ -1,25 +1,33 @@
-import type { AlbumSummary } from "@sticker-collector/shared";
 import { useState } from "react";
 import { Link } from "react-router";
 import { dismissNudge, lastAlbumChange, shouldNudge } from "../lib/backupState";
 import { Button } from "./ui";
 
 export interface BackupNudgeProps {
-  albums: readonly AlbumSummary[];
+  /**
+   * Everything worth losing — albums AND puzzles.
+   *
+   * Structural, not `AlbumSummary[]`: the nudge only ever asks when the last
+   * change was, and a puzzle carries the same two timestamps. Typing it to
+   * albums is what made creating a puzzle — the most irreplaceable thing in the
+   * app, because its master image exists nowhere else — fail to prompt for the
+   * backup that would save it.
+   */
+  items: readonly { createdAt: string; completedAt: string | null }[];
 }
 
 /**
- * Asks for a backup after an album is created or finished.
+ * Asks for a backup after an album or a puzzle is created or finished.
  *
  * Backup is a feature, not a menu item (`prd/07-services.md` §Data 3): the
  * moment there is something worth losing is the moment to mention it. It is a
  * suggestion and never a modal — nothing here blocks the shelf.
  */
-export function BackupNudge({ albums }: BackupNudgeProps) {
+export function BackupNudge({ items }: BackupNudgeProps) {
   const [hidden, setHidden] = useState(false);
-  const changed = lastAlbumChange(albums);
+  const changed = lastAlbumChange(items);
 
-  if (hidden || !shouldNudge(albums)) return null;
+  if (hidden || !shouldNudge(items)) return null;
 
   return (
     <aside

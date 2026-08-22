@@ -3,7 +3,12 @@
 // two concurrent requests can't both overspend (§4.3). Money is integer coins.
 
 // Only debits go through spend().
-export type SpendReason = "album_unlock" | "sticker_buy" | "random_pull";
+export type SpendReason =
+  | "album_unlock"
+  | "sticker_buy"
+  | "random_pull"
+  | "puzzle_unlock"
+  | "piece_unlock";
 
 /**
  * Credits: coins arriving rather than leaving. A refund must NOT go through
@@ -21,6 +26,7 @@ export interface SpendInput {
   occurrenceId?: string;
   albumId?: string;
   stickerId?: string;
+  puzzleId?: string;
   createdAt?: string;
 }
 
@@ -36,7 +42,7 @@ export async function balance(db: D1Database, userId: string): Promise<number> {
 /**
  * Extra conditions folded into the spend's WHERE clause, so a guard that must
  * hold *at the moment of payment* is checked by the database rather than by a
- * read that happened earlier. Binds start at ?9 — the spend itself uses ?1–?8.
+ * read that happened earlier. Binds start at ?10 — the spend itself uses ?1–?9.
  */
 export interface SpendGuard {
   sql: string;
@@ -60,8 +66,8 @@ export function spendStatement(
 
   return db
     .prepare(
-      `INSERT INTO ledger (id, user_id, amount_coins, reason, occurrence_id, album_id, sticker_id, created_at)
-       SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8
+      `INSERT INTO ledger (id, user_id, amount_coins, reason, occurrence_id, album_id, sticker_id, puzzle_id, created_at)
+       SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9
        WHERE (SELECT COALESCE(SUM(amount_coins), 0) FROM ledger WHERE user_id = ?2) >= ABS(?3)${extra}`,
     )
     .bind(
@@ -72,6 +78,7 @@ export function spendStatement(
       input.occurrenceId ?? null,
       input.albumId ?? null,
       input.stickerId ?? null,
+      input.puzzleId ?? null,
       createdAt,
       ...(guard?.binds ?? []),
     );

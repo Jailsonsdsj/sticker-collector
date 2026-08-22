@@ -41,7 +41,7 @@ function album(createdAt: string, completedAt: string | null = null): AlbumSumma
 const show = (albums: AlbumSummary[]) =>
   render(
     <MemoryRouter>
-      <BackupNudge albums={albums} />
+      <BackupNudge items={albums} />
     </MemoryRouter>,
   );
 
@@ -116,5 +116,21 @@ describe("acting on it", () => {
     // A suggestion, not a modal.
     show([album(JAN)]);
     expect(document.querySelector("dialog[open]")).toBeNull();
+  });
+});
+
+describe("what counts as worth losing", () => {
+  it("asks after a puzzle, not only after an album", () => {
+    // A puzzle's master image exists nowhere else. Typing this prop to albums
+    // meant the most irreplaceable thing in the app never prompted the backup
+    // that would save it.
+    // The nudge links to Settings, so it needs a router like every case above.
+    render(
+      <MemoryRouter>
+        <BackupNudge items={[{ createdAt: MAR, completedAt: null }]} />
+      </MemoryRouter>,
+    );
+
+    expect(nudge()).toBeInTheDocument();
   });
 });

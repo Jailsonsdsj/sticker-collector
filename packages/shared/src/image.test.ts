@@ -6,6 +6,7 @@ import {
   CENTERED,
   clampOffset,
   hashFromImageKey,
+  IMAGE_KINDS,
   IMAGE_SIZES,
   type ImageKind,
   imageKey,
@@ -30,7 +31,9 @@ const matchesRatio = (rect: { sWidth: number; sHeight: number }, kind: ImageKind
 };
 
 describe("the canonical sizes", () => {
-  it("are both 5:7, to within the rounding 300 dpi forces", () => {
+  it("are 5:7 for the two PRINT kinds, to within the rounding 300 dpi forces", () => {
+    // The puzzle is deliberately not in this list: it is square, because it is
+    // cut into a grid rather than laid out on a page.
     for (const kind of ["sticker", "cover"] as const) {
       const { width, height } = IMAGE_SIZES[kind];
       // 591 x 7 = 4137 against 827 x 5 = 4135: two units of drift, not zero.
@@ -52,11 +55,21 @@ describe("the canonical sizes", () => {
   it("are the sizes the spec names, not approximations of them", () => {
     expect(IMAGE_SIZES.sticker).toEqual({ width: 591, height: 827 });
     expect(IMAGE_SIZES.cover).toEqual({ width: 1772, height: 2480 });
+    expect(IMAGE_SIZES.puzzle).toEqual({ width: 1536, height: 1536 });
+  });
+
+  it("give the puzzle a square, so every grid divides evenly on both axes", () => {
+    // A 12x12 grid of a 5:7 image has pieces that are not the shape of the
+    // pieces beside them on the other axis; a square has one piece shape.
+    expect(IMAGE_SIZES.puzzle.width).toBe(IMAGE_SIZES.puzzle.height);
+    // And the largest supported grid still leaves a piece worth zooming into.
+    expect(IMAGE_SIZES.puzzle.width % 12).toBe(0);
+    expect(IMAGE_SIZES.puzzle.width / 12).toBe(128);
   });
 });
 
 describe("aspectFillRect", () => {
-  const kinds: ImageKind[] = ["sticker", "cover"];
+  const kinds: readonly ImageKind[] = IMAGE_KINDS;
 
   it("crops the width of a source that is too wide", () => {
     // 1000×700 against 5:7 → keep the full height, take 500 of the width.
@@ -238,9 +251,20 @@ describe("image keys", () => {
 });
 
 describe("imageKindForSize", () => {
-  it("names the two canonical sizes", () => {
+  it("names each canonical size", () => {
     expect(imageKindForSize({ width: 591, height: 827 })).toBe("sticker");
     expect(imageKindForSize({ width: 1772, height: 2480 })).toBe("cover");
+    expect(imageKindForSize({ width: 1536, height: 1536 })).toBe("puzzle");
+  });
+
+  it("recognises every kind that has a size", () => {
+    // The bug this forecloses: a kind added to IMAGE_SIZES but not to whatever
+    // the validator walks. The client crops it happily, the Worker answers 422,
+    // and neither side names a cause. Deriving both from IMAGE_KINDS is the
+    // fix; this is the test that says so.
+    for (const kind of IMAGE_KINDS) {
+      expect(imageKindForSize(IMAGE_SIZES[kind])).toBe(kind);
+    }
   });
 
   it("refuses a size that is one pixel off", () => {
@@ -249,5 +273,6 @@ describe("imageKindForSize", () => {
     expect(imageKindForSize({ width: 591, height: 828 })).toBeNull();
     expect(imageKindForSize({ width: 590, height: 827 })).toBeNull();
     expect(imageKindForSize({ width: 827, height: 591 })).toBeNull();
+    expect(imageKindForSize({ width: 1536, height: 1535 })).toBeNull();
   });
 });

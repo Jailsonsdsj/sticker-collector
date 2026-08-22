@@ -7,7 +7,18 @@ import {
 import { eq, inArray } from "drizzle-orm";
 import { Hono } from "hono";
 import { db } from "../db/client";
-import { album, epic, holding, ledger, occurrence, sticker, task, user } from "../db/schema";
+import {
+  album,
+  epic,
+  holding,
+  ledger,
+  occurrence,
+  puzzle,
+  puzzlePiece,
+  sticker,
+  task,
+  user,
+} from "../db/schema";
 import { selectIn } from "../lib/selectIn";
 import { idempotency } from "../middleware/idempotency";
 import { requireAuth } from "../middleware/require-auth";
@@ -51,10 +62,11 @@ backupRoutes.get("/manifest", async (c) => {
     .get();
   if (!owner) return c.json({ error: "not found" }, 404);
 
-  const [epics, tasks, albums] = await Promise.all([
+  const [epics, tasks, albums, puzzles] = await Promise.all([
     database.select().from(epic).where(eq(epic.userId, userId)),
     database.select().from(task).where(eq(task.userId, userId)),
     database.select().from(album).where(eq(album.userId, userId)),
+    database.select().from(puzzle).where(eq(puzzle.userId, userId)),
   ]);
 
   // Occurrences, stickers and holdings hang off the rows above rather than off
@@ -73,12 +85,23 @@ backupRoutes.get("/manifest", async (c) => {
     (batch) => database.select().from(holding).where(inArray(holding.stickerId, batch)),
   );
 
+  const puzzlePieces = await selectIn(
+    puzzles.map((row) => row.id),
+    (batch) => database.select().from(puzzlePiece).where(inArray(puzzlePiece.puzzleId, batch)),
+  );
+
   const entries = await database.select().from(ledger).where(eq(ledger.userId, userId));
 
   // Covers and stickers alike. Deduplicated: a derived edition shares keys with
   // its source, and the client fetches one copy of each.
+  // A puzzle's master belongs here as much as a cover does: it is the whole
+  // picture, and a restore without it is a grid of nothing.
   const imageKeys = [
-    ...new Set([...albums.map((row) => row.coverKey), ...stickers.map((row) => row.imageKey)]),
+    ...new Set([
+      ...albums.map((row) => row.coverKey),
+      ...stickers.map((row) => row.imageKey),
+      ...puzzles.map((row) => row.imageKey),
+    ]),
   ];
 
   const body: BackupManifest = {
@@ -95,6 +118,8 @@ backupRoutes.get("/manifest", async (c) => {
     albums,
     stickers,
     holdings,
+    puzzles,
+    puzzlePieces,
     imageKeys,
   };
   return c.json(body);
@@ -186,6 +211,15 @@ backupRoutes.post("/restore", idempotency, async (c) => {
     userId,
     derivedFromAlbumId: refTo(row.derivedFromAlbumId),
   }));
+  // Puzzles before their pieces, so a piece's `puzzleId` resolves to the id its
+  // puzzle was just given.
+  const puzzles = manifest.puzzles.map((row) => ({ ...row, id: idFor(row.id), userId }));
+  const puzzlePieces = manifest.puzzlePieces.map((row) => ({
+    ...row,
+    id: idFor(row.id),
+    puzzleId: refTo(row.puzzleId),
+  }));
+
   const stickers = manifest.stickers.map((row) => ({
     ...row,
     id: idFor(row.id),
@@ -208,10 +242,14 @@ backupRoutes.post("/restore", idempotency, async (c) => {
     occurrenceId: refTo(row.occurrenceId),
     albumId: refTo(row.albumId),
     stickerId: refTo(row.stickerId),
+    // Absent from a version-1 backup, and `refTo` answers null for undefined —
+    // an old file restores with its ledger intact and no puzzle references.
+    puzzleId: refTo(row.puzzleId),
   }));
 
   // Parents before children: epic → task → occurrence, album → sticker →
-  // holding. The ledger references occurrences, so it lands last.
+  // holding, puzzle → piece. The ledger references occurrences, albums,
+  // stickers AND puzzles, so it lands last.
   const statements = [
     ...chunkFor(epics).map((rows) => database.insert(epic).values(rows as never)),
     ...chunkFor(tasks).map((rows) => database.insert(task).values(rows as never)),
@@ -219,6 +257,8 @@ backupRoutes.post("/restore", idempotency, async (c) => {
     ...chunkFor(albums).map((rows) => database.insert(album).values(rows as never)),
     ...chunkFor(stickers).map((rows) => database.insert(sticker).values(rows as never)),
     ...chunkFor(holdings).map((rows) => database.insert(holding).values(rows as never)),
+    ...chunkFor(puzzles).map((rows) => database.insert(puzzle).values(rows as never)),
+    ...chunkFor(puzzlePieces).map((rows) => database.insert(puzzlePiece).values(rows as never)),
     ...chunkFor(entries).map((rows) => database.insert(ledger).values(rows as never)),
   ];
 
@@ -238,6 +278,8 @@ backupRoutes.post("/restore", idempotency, async (c) => {
       albums: manifest.albums.length,
       stickers: manifest.stickers.length,
       holdings: manifest.holdings.length,
+      puzzles: manifest.puzzles.length,
+      puzzlePieces: manifest.puzzlePieces.length,
     },
   };
   return c.json(body, 201);

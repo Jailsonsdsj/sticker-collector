@@ -1,5 +1,4 @@
 import type { AlbumDetail } from "@sticker-collector/shared";
-import { todayIn } from "@sticker-collector/shared";
 import { useState } from "react";
 import { exportAlbum } from "../lib/exportAlbum";
 import type { Paper } from "../lib/pdfLayout";

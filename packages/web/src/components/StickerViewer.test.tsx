@@ -51,8 +51,6 @@ const swipe = (dx: number, dy = 0, element: HTMLElement = card()) => {
   fireEvent.pointerUp(element, { pointerType: "touch", clientX: dx, clientY: dy, pointerId: 1 });
 };
 
-const surface = () => screen.getByText("1 of 3").parentElement as HTMLElement;
-
 describe("looking at one sticker", () => {
   it("shows its picture", () => {
     setup();

@@ -28,6 +28,8 @@ function manifest(over: Partial<BackupManifest> = {}): BackupManifest {
     albums: [{ id: "a1", userId: "u1", title: "Kitchen heroes", coverKey: key(999) }],
     stickers: [{ id: "s1", albumId: "a1", imageKey: key(1), tier: "common", slotIndex: 0 }],
     holdings: [{ id: "h1", stickerId: "s1", quantity: 2 }],
+    puzzles: [],
+    puzzlePieces: [],
     imageKeys: [key(1), key(999)],
     ...over,
   };
