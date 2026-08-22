@@ -29,6 +29,10 @@ export const IMAGE_KINDS = ["sticker", "cover", "puzzle"] as const;
 
 export type ImageKind = (typeof IMAGE_KINDS)[number];
 
+/** The kinds with one exact size, which is what a decoded image can be matched
+ *  against. A puzzle has a range and has to be declared. */
+export const FIXED_IMAGE_KINDS = ["sticker", "cover"] as const;
+
 export interface Size {
   width: number;
   height: number;
@@ -37,20 +41,64 @@ export interface Size {
 /**
  * Canonical stored sizes.
  *
- * Sticker and cover are 300 dpi print sizes: 50×70 mm and 150×210 mm (A5).
+ * Sticker and cover are 300 dpi print sizes: 50×70 mm and 150×210 mm (A5), and
+ * an import is cropped to them exactly.
  *
- * **Puzzle is square, and deliberately not a print size.** It is cut into a
- * grid, so a square divides evenly on both axes at every piece count, and it
- * crops a landscape photo and a portrait one equally rather than mauling one of
- * them the way A5 portrait would. 1536 is a round power-of-two multiple that
- * leaves each piece of the largest supported grid (12×12) at 128 px — still
- * sharp on a zoomed-in phone.
+ * **Puzzle is different: this is a bounding box, not a size.** A puzzle keeps
+ * the shape it was imported at — it started square and cropped to fit, and that
+ * cut the ends off every photo that was not already square, which is the one
+ * thing a picture you are going to reassemble cannot afford. What is stored is
+ * the whole source, scaled down until its long edge fits inside this box.
  */
 export const IMAGE_SIZES: Record<ImageKind, Size> = {
   sticker: { width: 591, height: 827 },
   cover: { width: 1772, height: 2480 },
   puzzle: { width: 1536, height: 1536 },
 };
+
+/** The longest a stored puzzle edge may be. Keeps one master a sane download. */
+export const PUZZLE_MAX_EDGE = 1536;
+
+/**
+ * The shortest. A 200 px photo cut into 144 pieces is 16 px a piece — nothing
+ * to look at however far you zoom, and no amount of scaling puts detail back.
+ */
+export const PUZZLE_MIN_EDGE = 256;
+
+/**
+ * What to store for a puzzle: the whole source, scaled to fit the box.
+ *
+ * Never upscaled — enlarging a small photo invents detail and makes the pieces
+ * blurry rather than small. Aspect is preserved exactly by scaling both axes by
+ * the same factor and rounding once.
+ */
+export function puzzleTarget(source: Size): Size {
+  const longest = Math.max(source.width, source.height);
+  if (longest <= PUZZLE_MAX_EDGE) {
+    return { width: Math.round(source.width), height: Math.round(source.height) };
+  }
+
+  const factor = PUZZLE_MAX_EDGE / longest;
+  return {
+    width: Math.max(1, Math.round(source.width * factor)),
+    height: Math.max(1, Math.round(source.height * factor)),
+  };
+}
+
+/**
+ * Whether a decoded image is a legal puzzle master.
+ *
+ * A range rather than an equality, which is why a puzzle cannot be recognised
+ * by its dimensions the way a sticker can — the uploader has to say what it is
+ * (`PUT /api/images/:key?kind=puzzle`).
+ */
+export function isPuzzleSize(size: Size): boolean {
+  const edges = [size.width, size.height];
+  return (
+    edges.every((edge) => Number.isInteger(edge) && edge >= PUZZLE_MIN_EDGE) &&
+    Math.max(...edges) <= PUZZLE_MAX_EDGE
+  );
+}
 
 /**
  * The nominal aspect ratio **of the sticker and the cover**, kept as two
@@ -178,9 +226,16 @@ export function hashFromImageKey(key: string): string | null {
   return isImageKey(key) ? (key.slice(4, 68) as string) : null;
 }
 
-/** Whether a decoded image is exactly one of the canonical sizes. */
+/**
+ * Whether a decoded image is exactly one of the canonical FIXED sizes.
+ *
+ * Puzzles are deliberately absent: they have a range rather than a size, so
+ * nothing can be inferred from their dimensions and the uploader declares the
+ * kind instead. Returning "puzzle" for a 1536 square here would also mean a
+ * mis-cropped sticker could pass as one.
+ */
 export function imageKindForSize(size: Size): ImageKind | null {
-  for (const kind of IMAGE_KINDS) {
+  for (const kind of FIXED_IMAGE_KINDS) {
     const canonical = IMAGE_SIZES[kind];
     if (size.width === canonical.width && size.height === canonical.height) return kind;
   }

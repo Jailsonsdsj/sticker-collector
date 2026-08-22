@@ -33,9 +33,12 @@ export function PuzzleCard({ puzzle }: PuzzleCardProps) {
         className="relative block overflow-hidden rounded-2xl border border-border focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan"
         style={{ aspectRatio: "var(--aspect-card)" }}
       >
+        {/* `contain`, not `cover`: a puzzle keeps the shape it was imported at,
+            and cropping the card's thumbnail would hide the same ends the
+            import used to cut off. */}
         <ImageTile
           src={imageSrc(puzzle.imageKey)}
-          className="object-cover transition-[filter] duration-500"
+          className="object-contain transition-[filter] duration-500"
           // Grey until finished. Unlocking buys the right to start, not the
           // picture.
           style={{ filter: done ? "var(--filter-unlocked)" : "var(--filter-locked)" }}

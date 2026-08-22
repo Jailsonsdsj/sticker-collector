@@ -19,11 +19,14 @@ export interface UploadResult {
  * This does not go through `api()`: the body is raw JPEG rather than JSON, and
  * `api()` stringifies everything it is given.
  */
-export async function uploadImage(bytes: Uint8Array): Promise<UploadResult> {
+export async function uploadImage(bytes: Uint8Array, kind?: ImageKind): Promise<UploadResult> {
   const key = imageKey(await sha256Hex(bytes));
-  const path = `/api/images/${key}`;
+  // A puzzle has a range of legal sizes rather than one, so the Worker cannot
+  // tell what it is from the bytes — it is declared. Everything else is
+  // identified by its dimensions and says nothing.
+  const path = `/api/images/${key}${kind === "puzzle" ? "?kind=puzzle" : ""}`;
 
-  const existing = await send(path, { method: "HEAD" });
+  const existing = await send(`/api/images/${key}`, { method: "HEAD" });
   if (existing.ok) return { key, uploaded: false };
   if (existing.status !== 404) throw await toError(existing);
 

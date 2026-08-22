@@ -1,4 +1,4 @@
-import type { ImageKind } from "@sticker-collector/shared";
+import type { ImageKind, Size } from "@sticker-collector/shared";
 import { useRef, useState } from "react";
 import { uploadImage } from "../../lib/imageUpload";
 import { ImageCropper } from "../ImageCropper";
@@ -7,8 +7,9 @@ import { Button, Sheet } from "../ui";
 export interface ImagePickerProps {
   kind: ImageKind;
   label: string;
-  /** Called with the stored image's key once the bytes are safely uploaded. */
-  onPicked: (imageKey: string) => void;
+  /** The stored image's key once the bytes are safely uploaded, and the size
+   *  they were stored at. A caller that only wants the key can ignore it. */
+  onPicked: (imageKey: string, size: Size) => void;
   disabled?: boolean;
   /**
    * Import a batch: pick several files, then position them one after another.
@@ -58,12 +59,12 @@ export function ImagePicker({
     setIndex(0);
   };
 
-  const commit = async (bytes: Uint8Array) => {
+  const commit = async (bytes: Uint8Array, size: Size) => {
     setBusy(true);
     setError(null);
     try {
-      const { key } = await uploadImage(bytes);
-      onPicked(key);
+      const { key } = await uploadImage(bytes, kind);
+      onPicked(key, size);
       // Advance, or finish. Stepping Back and re-positioning an earlier image
       // adds it again rather than replacing it — content addressing makes the
       // re-upload free, and the caller can drop the one it does not want.
@@ -130,7 +131,7 @@ export function ImagePicker({
             kind={kind}
             commitLabel={queue.length > 1 ? (last ? "Done" : "Next") : undefined}
             onBack={index > 0 ? () => setIndex(index - 1) : undefined}
-            onCommit={(bytes) => void commit(bytes)}
+            onCommit={(bytes, size) => void commit(bytes, size)}
             onCancel={close}
           />
         )}

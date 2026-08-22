@@ -85,9 +85,9 @@ const stickerBytes = (salt = 0) =>
   jpeg(IMAGE_SIZES.sticker.width, IMAGE_SIZES.sticker.height, salt);
 const coverBytes = () => jpeg(IMAGE_SIZES.cover.width, IMAGE_SIZES.cover.height);
 
-function put(key: string, body: Uint8Array, init: RequestInit = {}) {
+function put(key: string, body: Uint8Array, init: RequestInit = {}, query = "") {
   return app.fetch(
-    new Request(`http://localhost/api/images/${key}`, {
+    new Request(`http://localhost/api/images/${key}${query}`, {
       method: "PUT",
       headers: { Authorization: `Bearer ${token}`, ...(init.headers as Record<string, string>) },
       body: body as BodyInit,
@@ -97,9 +97,9 @@ function put(key: string, body: Uint8Array, init: RequestInit = {}) {
   );
 }
 
-async function upload(body: Uint8Array): Promise<{ key: string; response: Response }> {
+async function upload(body: Uint8Array, query = ""): Promise<{ key: string; response: Response }> {
   const key = imageKey(await sha256Hex(body));
-  return { key, response: await put(key, body) };
+  return { key, response: await put(key, body, {}, query) };
 }
 
 /** Every object in the bucket. The only honest way to assert "no second object". */
@@ -127,14 +127,38 @@ describe("PUT — content addressing", () => {
     expect(await response.json()).toMatchObject({ kind: "cover" });
   });
 
-  it("accepts a puzzle, which is square and not a print size", async () => {
-    // The route names no kind of its own — it asks `imageKindForSize`. This is
-    // the test that the third kind actually arrives here, because before it
-    // existed this exact upload came back 422 with no cause either side could
-    // see.
-    const { response } = await upload(jpeg(IMAGE_SIZES.puzzle.width, IMAGE_SIZES.puzzle.height));
+  it("accepts a puzzle at whatever shape it was imported at", async () => {
+    // Declared, not inferred: a puzzle keeps its own shape, so nothing about
+    // its dimensions says what it is.
+    const { response } = await upload(jpeg(1536, 864), "?kind=puzzle");
     expect(response.status).toBe(201);
     expect(await response.json()).toMatchObject({ kind: "puzzle" });
+  });
+
+  it("refuses a picture too small to cut, even when declared", async () => {
+    // A range is still a rule. 144 pieces of a 200px picture is nothing to
+    // look at however far you zoom.
+    const { response } = await upload(jpeg(1000, 200), "?kind=puzzle");
+    expect(response.status).toBe(422);
+  });
+
+  it("refuses one past the ceiling", async () => {
+    const { response } = await upload(jpeg(4000, 3000), "?kind=puzzle");
+    expect(response.status).toBe(422);
+  });
+
+  it("refuses a kind it does not know, rather than ignoring it", async () => {
+    // Ignoring the parameter would quietly fall back to size matching and let
+    // a typo through as a sticker.
+    const { response } = await upload(stickerBytes(), "?kind=poster");
+    expect(response.status).toBe(400);
+  });
+
+  it("will not let a puzzle-shaped file in without being declared", async () => {
+    // The other half: an undeclared upload is still matched on size alone, so
+    // a free-shape picture has no way to sneak past as one of the fixed kinds.
+    const { response } = await upload(jpeg(1536, 864));
+    expect(response.status).toBe(422);
   });
 
   it("creates no second object when identical bytes are uploaded again", async () => {

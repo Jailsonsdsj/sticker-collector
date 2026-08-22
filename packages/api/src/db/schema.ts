@@ -208,6 +208,27 @@ export const puzzle = sqliteTable(
     description: text("description"),
     /** The one master. Pieces are windows onto it, never images of their own. */
     imageKey: text("image_key").notNull(),
+    /**
+     * The master's own shape, stored because nothing else knows it.
+     *
+     * A puzzle keeps the picture it was imported at rather than cropping it
+     * square, so the grid follows the image and the board has to lay out a
+     * rectangle. Reading it back from the bytes would mean decoding a JPEG on
+     * a 10 ms budget, every time.
+     */
+    /**
+     * Defaulted to the old square, and that default is a **backfill**, not a
+     * fallback: every puzzle made before this column existed was cropped to
+     * 1536×1536, so that is precisely its shape. It also keeps the migration an
+     * `ADD COLUMN` — SQLite would otherwise rebuild the table, and a rebuilt
+     * table loses `puzzle_frozen` without a word.
+     *
+     * No CHECK on these for the same reason: SQLite cannot add one in place, so
+     * asking for it would force exactly the rebuild this default avoids. The
+     * range is enforced where the bytes are, by `isPuzzleSize` at upload.
+     */
+    imageWidth: integer("image_width").notNull().default(1536),
+    imageHeight: integer("image_height").notNull().default(1536),
     unlockPrice: integer("unlock_price").notNull(),
     /** Every piece costs the same; the board shows the price once, on screen. */
     piecePrice: integer("piece_price").notNull(),

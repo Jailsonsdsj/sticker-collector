@@ -6,12 +6,23 @@
  * screen, a pinch that inverts when the fingers cross. The component reads
  * pointer positions and calls these; it decides nothing.
  *
- * **The model.** An inner element the same size as the board is transformed
- * with `transform-origin: 0 0` as `translate(x, y) scale(s)`, so the content
- * occupies `[x, x + size·s]` on each axis. Origin at the corner rather than the
- * centre because it makes the bounds arithmetic below a subtraction instead of
- * a case analysis.
+ * **The model.** A square of side `side` sits inside a frame that is usually
+ * NOT square — the board fills the screen, the picture does not — and is
+ * transformed with `transform-origin: 0 0` as `translate(x, y) scale(s)`. The
+ * content therefore occupies `[x, x + side·s]` on each axis. Origin at the
+ * corner rather than the centre because it makes the bounds arithmetic a
+ * subtraction instead of a case analysis.
+ *
+ * The frame being taller than the content is the normal case on a phone, and it
+ * is what `clampPan` below is really about: a picture smaller than the space it
+ * sits in must be **centred**, not draggable into a corner.
  */
+
+/** The visible box. Not square, except by accident. */
+export interface Frame {
+  width: number;
+  height: number;
+}
 
 export interface Point {
   x: number;
@@ -34,7 +45,32 @@ export const MIN_SCALE = 1;
  */
 export const MAX_SCALE = 4;
 
+/** Before the frame has been measured. `fitView` replaces it on first layout. */
 export const INITIAL_VIEW: View = { pan: { x: 0, y: 0 }, scale: MIN_SCALE };
+
+/**
+ * The picture at rest: whole, and centred in whatever space it has.
+ *
+ * This is what the reset button returns to, and what the board opens at. The
+ * centring falls out of `clampPan` rather than being computed twice.
+ */
+export function fitView(content: Frame, frame: Frame): View {
+  return { pan: clampPan({ x: 0, y: 0 }, MIN_SCALE, content, frame), scale: MIN_SCALE };
+}
+
+/**
+ * The picture at scale 1: the whole of it, as large as the frame allows.
+ *
+ * `contain`, not `cover` — the point of the opening view is that you can see
+ * all of it. Zooming is what fills the screen.
+ */
+export function fitContent(image: Frame, frame: Frame): Frame {
+  if (image.width <= 0 || image.height <= 0 || frame.width <= 0 || frame.height <= 0) {
+    return { width: 0, height: 0 };
+  }
+  const factor = Math.min(frame.width / image.width, frame.height / image.height);
+  return { width: image.width * factor, height: image.height * factor };
+}
 
 export function clampScale(scale: number): number {
   if (!Number.isFinite(scale)) return MIN_SCALE;
@@ -49,10 +85,23 @@ export function clampScale(scale: number): number {
  * a drag walks the picture into empty space and leaves the user looking at the
  * background wondering where their puzzle went.
  */
-export function clampPan(pan: Point, scale: number, size: number): Point {
-  const travel = size - size * scale; // ≤ 0
-  const axis = (value: number) => Math.min(Math.max(value, travel), 0);
-  return { x: axis(pan.x), y: axis(pan.y) };
+export function clampPan(pan: Point, scale: number, content: Frame, frame: Frame): Point {
+  // Two regimes per axis, and the axes can be in different ones at the same
+  // time — which is exactly what a square picture in a tall frame looks like
+  // when you zoom in far enough to fill the width but not the height.
+  const axis = (value: number, extent: number, span: number) => {
+    // Smaller than the space it is in: centred, and there is nowhere to drag
+    // it. Anything else leaves the picture pinned to a corner with a void
+    // beside it.
+    if (span <= extent) return (extent - span) / 2;
+    // Bigger: it may travel, but never far enough to show a gap at an edge.
+    return Math.min(Math.max(value, extent - span), 0);
+  };
+
+  return {
+    x: axis(pan.x, frame.width, content.width * scale),
+    y: axis(pan.y, frame.height, content.height * scale),
+  };
 }
 
 /**
@@ -63,7 +112,13 @@ export function clampPan(pan: Point, scale: number, size: number): Point {
  * thing that feels broken: the picture slides out from under the fingers doing
  * the pinching.
  */
-export function zoomAbout(view: View, nextScale: number, focus: Point, size: number): View {
+export function zoomAbout(
+  view: View,
+  nextScale: number,
+  focus: Point,
+  content: Frame,
+  frame: Frame,
+): View {
   const scale = clampScale(nextScale);
   // The content point under the focus must not move: solve x' from
   // (focus - x) / scale === (focus - x') / scale'.
@@ -71,14 +126,14 @@ export function zoomAbout(view: View, nextScale: number, focus: Point, size: num
     x: focus.x - ((focus.x - view.pan.x) * scale) / view.scale,
     y: focus.y - ((focus.y - view.pan.y) * scale) / view.scale,
   };
-  return { pan: clampPan(pan, scale, size), scale };
+  return { pan: clampPan(pan, scale, content, frame), scale };
 }
 
 /** Drag by a delta in container pixels, bounded. */
-export function panBy(view: View, delta: Point, size: number): View {
+export function panBy(view: View, delta: Point, content: Frame, frame: Frame): View {
   return {
     ...view,
-    pan: clampPan({ x: view.pan.x + delta.x, y: view.pan.y + delta.y }, view.scale, size),
+    pan: clampPan({ x: view.pan.x + delta.x, y: view.pan.y + delta.y }, view.scale, content, frame),
   };
 }
 
@@ -102,11 +157,11 @@ export function midpoint(a: Point, b: Point): Point {
 export function pieceAt(
   point: Point,
   view: View,
-  size: number,
+  content: Frame,
   grid: { rows: number; cols: number },
 ): number | null {
-  const u = (point.x - view.pan.x) / (size * view.scale);
-  const v = (point.y - view.pan.y) / (size * view.scale);
+  const u = (point.x - view.pan.x) / (content.width * view.scale);
+  const v = (point.y - view.pan.y) / (content.height * view.scale);
   if (u < 0 || u >= 1 || v < 0 || v >= 1) return null;
 
   const col = Math.min(grid.cols - 1, Math.floor(u * grid.cols));

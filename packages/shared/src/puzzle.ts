@@ -44,33 +44,47 @@ export function isPiecePreset(pieces: number): pieces is PiecePreset {
 }
 
 /**
- * The factor pair for a count, shaped to the image.
+ * The factor pair for a count, shaped to the image it is cutting.
  *
- * The stored puzzle image is square, so "shaped to the image" means "as close
- * to square as the count allows": the pair whose rows and cols are nearest each
- * other. 48 becomes 6×8 rather than 4×12, and 144 becomes a clean 12×12.
+ * A puzzle keeps the shape it was imported at, so the grid has to follow: 48
+ * pieces of a 16:9 photo is 6×8 at best and 4×12 at right, and cutting it 8×6
+ * would make every piece a tall sliver of a wide picture. The pair chosen is
+ * the one whose own proportions land nearest the image's.
  *
- * Derived rather than stored as a table of five answers, so the reasoning is
- * visible and a sixth preset needs no second edit. Fewer rows than cols when
- * the pair is uneven, always — the choice has to be *a* choice, or the same
- * count would transpose between callers and a piece index would name a
- * different piece depending on who asked.
+ * Compared by **cross-multiplication**, so no comparison depends on a float:
+ * `cols/rows` against `width/height` is `cols·height` against `rows·width`.
  *
- * **This assumes the master is square**, which `IMAGE_SIZES.puzzle` guarantees
- * and a test asserts. If that ever changes, this has to weigh the pair against
- * the real aspect instead of against each other.
+ * With no aspect given the answer is the most balanced pair — 48 becomes 6×8,
+ * 144 a clean 12×12 — which is what a square wants and what every puzzle got
+ * while the master was square.
+ *
+ * Derived rather than stored as a table of answers, so the reasoning is visible
+ * and a sixth preset needs no second edit.
  */
-export function gridFor(pieces: number): Grid {
-  let best: Grid = { rows: 1, cols: pieces };
+export function gridFor(pieces: number, aspect: { width: number; height: number } = SQUARE): Grid {
+  const { width, height } = aspect.width > 0 && aspect.height > 0 ? aspect : SQUARE;
+  let best: Grid | null = null;
+  let bestDrift = Number.POSITIVE_INFINITY;
 
-  for (let rows = 1; rows * rows <= pieces; rows++) {
+  // Every factor pair, both ways round: a wide image wants more columns, a tall
+  // one more rows, and only trying both can give it either.
+  for (let rows = 1; rows <= pieces; rows++) {
     if (pieces % rows !== 0) continue;
     const cols = pieces / rows;
-    if (Math.abs(cols - rows) <= Math.abs(best.cols - best.rows)) best = { rows, cols };
+    const drift = Math.abs(cols * height - rows * width);
+    // `<` not `<=`: the first pair at a given drift wins, and rows ascend, so a
+    // tie always resolves the same way rather than depending on iteration
+    // order. A piece index has to name the same piece for every caller.
+    if (drift < bestDrift) {
+      bestDrift = drift;
+      best = { rows, cols };
+    }
   }
 
-  return best;
+  return best ?? { rows: 1, cols: pieces };
 }
+
+const SQUARE = { width: 1, height: 1 } as const;
 
 /** Every piece index of a grid, in reading order: left to right, top to bottom. */
 export function pieceCount(grid: Grid): number {

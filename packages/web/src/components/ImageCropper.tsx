@@ -4,7 +4,10 @@ import {
   CENTERED,
   IMAGE_SIZES,
   type ImageKind,
+  isPuzzleSize,
   type Offset,
+  puzzleTarget,
+  type Size,
 } from "@sticker-collector/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cropToJpeg, loadBitmap } from "../lib/canvas";
@@ -13,7 +16,9 @@ import { Button } from "./ui";
 export interface ImageCropperProps {
   file: File;
   kind: ImageKind;
-  onCommit: (bytes: Uint8Array) => void;
+  /** The encoded bytes, and the size they were encoded at — a puzzle keeps
+   *  its own shape, so the caller cannot infer it. */
+  onCommit: (bytes: Uint8Array, size: Size) => void;
   onCancel: () => void;
   /** "Use this image" alone; "Next"/"Done" when positioning a batch. */
   commitLabel?: string;
@@ -38,6 +43,11 @@ export function ImageCropper({
   commitLabel,
   onBack,
 }: ImageCropperProps) {
+  /**
+   * A puzzle keeps its whole picture, so there is nothing to position: no
+   * crop, no drag, and a preview shaped like the file itself.
+   */
+  const whole = kind === "puzzle";
   const [bitmap, setBitmap] = useState<ImageBitmap | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [offset, setOffset] = useState<Offset>(CENTERED);
@@ -70,7 +80,7 @@ export function ImageCropper({
   const pan = useCallback(
     (dx: number, dy: number) => {
       const frame = frameRef.current;
-      if (!bitmap || !frame) return;
+      if (!bitmap || !frame || whole) return;
 
       const source = { width: bitmap.width, height: bitmap.height };
       const rect = aspectFillRect(source, kind, CENTERED);
@@ -90,15 +100,24 @@ export function ImageCropper({
         ),
       );
     },
-    [bitmap, kind],
+    [bitmap, kind, whole],
   );
 
+  /** Too small or too thin to cut into pieces worth looking at. */
+  const tooSmall =
+    whole &&
+    bitmap !== null &&
+    !isPuzzleSize(puzzleTarget({ width: bitmap.width, height: bitmap.height }));
+
   const commit = async () => {
-    if (!bitmap) return;
+    if (!bitmap || tooSmall) return;
     setBusy(true);
     setError(null);
     try {
-      onCommit(await cropToJpeg(bitmap, kind, offset));
+      const size = whole
+        ? puzzleTarget({ width: bitmap.width, height: bitmap.height })
+        : IMAGE_SIZES[kind];
+      onCommit(await cropToJpeg(bitmap, kind, offset), size);
     } catch {
       setError("That image could not be prepared. Try a different file.");
     } finally {
@@ -111,11 +130,15 @@ export function ImageCropper({
       <div
         ref={frameRef}
         className="relative mx-auto w-full max-w-sm touch-none overflow-hidden rounded-2xl border border-border bg-panel"
-        // The kind's own ratio, never a literal. The frame IS the crop preview
-        // — `object-fit: cover` inside it is the same aspect-fill the export
-        // performs — so a frame shaped 5:7 over a square puzzle would let the
-        // user position one window and ship a different one.
-        style={{ aspectRatio: `${IMAGE_SIZES[kind].width} / ${IMAGE_SIZES[kind].height}` }}
+        // The frame IS the preview, so it has to be the shape of what gets
+        // saved: `object-fit: cover` inside it is the same aspect-fill the
+        // export performs. For a puzzle nothing is cropped, so the frame takes
+        // the picture's own shape and shows all of it.
+        style={{
+          aspectRatio: whole
+            ? `${bitmap?.width ?? 1} / ${bitmap?.height ?? 1}`
+            : `${IMAGE_SIZES[kind].width} / ${IMAGE_SIZES[kind].height}`,
+        }}
         onPointerDown={(event) => {
           dragRef.current = { x: event.clientX, y: event.clientY };
           event.currentTarget.setPointerCapture(event.pointerId);
@@ -138,15 +161,27 @@ export function ImageCropper({
             src={preview}
             alt=""
             draggable={false}
-            className="h-full w-full select-none object-cover"
-            style={{ objectPosition: `${offset.x * 100}% ${offset.y * 100}%` }}
+            className={
+              whole
+                ? "h-full w-full select-none object-contain"
+                : "h-full w-full select-none object-cover"
+            }
+            style={whole ? undefined : { objectPosition: `${offset.x * 100}% ${offset.y * 100}%` }}
           />
         )}
       </div>
 
       <p className="text-center font-body text-sm text-ink-dim">
-        Drag to reposition. The visible area is what gets saved.
+        {whole
+          ? "The whole picture is kept, at the shape it came in."
+          : "Drag to reposition. The visible area is what gets saved."}
       </p>
+
+      {tooSmall && (
+        <p role="alert" className="text-center font-body text-sm text-magenta">
+          That picture is too small to cut up. Pick one at least 256 pixels on its shorter side.
+        </p>
+      )}
 
       {error && (
         <p role="alert" className="text-center font-body text-sm text-magenta">
@@ -163,7 +198,7 @@ export function ImageCropper({
             Back
           </Button>
         )}
-        <Button tone="lime" disabled={!bitmap || busy} onClick={commit}>
+        <Button tone="lime" disabled={!bitmap || busy || tooSmall} onClick={commit}>
           {busy ? "Preparing…" : (commitLabel ?? "Use this image")}
         </Button>
       </div>
