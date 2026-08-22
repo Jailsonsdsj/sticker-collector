@@ -461,6 +461,12 @@ export const createPuzzleSchema = z
     description: z.string().max(2000).nullish(),
     /** The single master. Pieces are windows onto it. */
     imageKey: imageKeySchema,
+    /**
+     * The master's own shape. Sent by the client, which is the only party that
+     * has decoded the picture — the Worker never decodes an image (10 ms).
+     */
+    imageWidth: z.int().min(1).max(4096),
+    imageHeight: z.int().min(1).max(4096),
     unlockPrice: z.int().min(0).max(1_000_000),
     /** Every piece costs this. Shown once on the board, never on a piece. */
     piecePrice: z.int().min(0).max(1_000_000),
@@ -483,6 +489,8 @@ export const puzzleSchema = z.object({
   title: z.string(),
   description: z.string().nullable(),
   imageKey: z.string(),
+  imageWidth: z.int().min(1),
+  imageHeight: z.int().min(1),
   unlockPrice: z.int().min(0),
   piecePrice: z.int().min(0),
   rows: z.int().min(1),

@@ -33,6 +33,8 @@ function toPuzzle(row: PuzzleRow, ownedCount: number): Puzzle {
     title: row.title,
     description: row.description,
     imageKey: row.imageKey,
+    imageWidth: row.imageWidth,
+    imageHeight: row.imageHeight,
     unlockPrice: row.unlockPrice,
     piecePrice: row.piecePrice,
     rows: row.rows,
@@ -66,7 +68,8 @@ puzzleRoutes.post("/", idempotency, async (c) => {
   }
 
   const input = parsed.data;
-  const grid = gridFor(input.pieces);
+  // The grid follows the picture: 48 pieces of a wide photo cut 6×8, not 8×6.
+  const grid = gridFor(input.pieces, { width: input.imageWidth, height: input.imageHeight });
   const now = new Date().toISOString();
 
   const row: typeof puzzle.$inferInsert = {
@@ -75,6 +78,8 @@ puzzleRoutes.post("/", idempotency, async (c) => {
     title: input.title,
     description: input.description ?? null,
     imageKey: input.imageKey,
+    imageWidth: input.imageWidth,
+    imageHeight: input.imageHeight,
     unlockPrice: input.unlockPrice,
     piecePrice: input.piecePrice,
     rows: grid.rows,

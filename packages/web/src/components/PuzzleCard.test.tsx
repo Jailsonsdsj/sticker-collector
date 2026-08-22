@@ -9,6 +9,8 @@ const puzzle = (over: Partial<Puzzle> = {}): Puzzle => ({
   title: "The harbour",
   description: null,
   imageKey: `img/${"b".repeat(64)}.jpg`,
+  imageWidth: 1536,
+  imageHeight: 1024,
   unlockPrice: 100,
   piecePrice: 25,
   rows: 2,

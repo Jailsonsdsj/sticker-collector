@@ -4,6 +4,7 @@ import {
   type ImageKind,
   JPEG_QUALITY,
   type Offset,
+  puzzleTarget,
 } from "@sticker-collector/shared";
 
 /**
@@ -23,8 +24,20 @@ export async function cropToJpeg(
   kind: ImageKind,
   offset: Offset,
 ): Promise<Uint8Array> {
-  const target = IMAGE_SIZES[kind];
-  const rect = aspectFillRect({ width: source.width, height: source.height }, kind, offset);
+  const size = { width: source.width, height: source.height };
+
+  /**
+   * A puzzle is **scaled, not cropped**: the whole picture, at its own shape,
+   * down to the bounding box. Cropping it to a square cut the ends off every
+   * photo that was not already square, which is the one thing a picture you are
+   * going to reassemble cannot afford. So the source rect is the whole bitmap
+   * and there is nothing to position.
+   */
+  const target = kind === "puzzle" ? puzzleTarget(size) : IMAGE_SIZES[kind];
+  const rect =
+    kind === "puzzle"
+      ? { sx: 0, sy: 0, sWidth: size.width, sHeight: size.height }
+      : aspectFillRect(size, kind, offset);
 
   const canvas = document.createElement("canvas");
   canvas.width = target.width;

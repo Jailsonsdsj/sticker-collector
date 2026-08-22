@@ -68,6 +68,35 @@ describe("choosing the grid", () => {
     }
   });
 
+  it("follows a wide image with a wide grid", () => {
+    // The point of the change: 48 pieces of a 16:9 photo cut 6x8, not 8x6.
+    // Cutting a wide picture with a tall grid makes every piece a sliver.
+    expect(gridFor(48, { width: 16, height: 9 })).toEqual({ rows: 6, cols: 8 });
+    expect(gridFor(12, { width: 16, height: 9 })).toEqual({ rows: 3, cols: 4 });
+  });
+
+  it("follows a tall image with a tall grid", () => {
+    expect(gridFor(48, { width: 9, height: 16 })).toEqual({ rows: 8, cols: 6 });
+    expect(gridFor(12, { width: 9, height: 16 })).toEqual({ rows: 4, cols: 3 });
+  });
+
+  it("goes further for a shape further from square", () => {
+    // A panorama should not be cut like a snapshot.
+    expect(gridFor(24, { width: 3, height: 1 })).toEqual({ rows: 3, cols: 8 });
+  });
+
+  it("gives the same answer for a square as for no aspect at all", () => {
+    for (const pieces of PIECE_PRESETS) {
+      expect(gridFor(pieces, { width: 100, height: 100 })).toEqual(gridFor(pieces));
+    }
+  });
+
+  it("ignores a degenerate aspect rather than dividing by it", () => {
+    // A zero edge cannot come from a stored image, but it can come from a row
+    // read before its columns existed.
+    expect(gridFor(48, { width: 0, height: 0 })).toEqual(gridFor(48));
+  });
+
   it("handles a prime count rather than looping forever", () => {
     // Not a preset, but the function is exported and a caller could ask.
     expect(gridFor(7)).toEqual({ rows: 1, cols: 7 });

@@ -1,6 +1,6 @@
 import { MAX_PIECES_PER_UNLOCK, type PuzzleDetail } from "@sticker-collector/shared";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -22,6 +22,8 @@ const puzzle = (over: Partial<PuzzleDetail> = {}): PuzzleDetail => ({
   title: "The harbour",
   description: null,
   imageKey: `img/${"a".repeat(64)}.jpg`,
+  imageWidth: 1536,
+  imageHeight: 1024,
   unlockPrice: 100,
   piecePrice: 25,
   rows: 2,
@@ -264,5 +266,77 @@ describe("deleting one", () => {
       const call = fetchMock.mock.calls.find(([, init]) => init?.method === "DELETE");
       expect(call?.[0]).toBe("/api/puzzles/p1");
     });
+  });
+});
+
+describe("the board takes the screen", () => {
+  it("offers a way back to the whole picture", async () => {
+    // Zoomed into a corner, the way out should not be off the picture.
+    open();
+    expect(await screen.findByRole("button", { name: "Fit" })).toBeInTheDocument();
+  });
+
+  it("Fit actually puts it back", async () => {
+    // jsdom measures nothing, so the board is given a size to fit inside —
+    // otherwise there is no view to reset and the button cannot be told from
+    // one that does nothing.
+    class Observer {
+      observe() {}
+      disconnect() {}
+    }
+    vi.stubGlobal("ResizeObserver", Observer);
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({
+      width: 300,
+      height: 600,
+      top: 0,
+      left: 0,
+      right: 300,
+      bottom: 600,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    } as DOMRect);
+
+    const user = userEvent.setup();
+    open();
+    const canvas = await screen.findByTestId("puzzle-canvas");
+    const board = canvas.parentElement as HTMLElement;
+    // Wait for the measurement to land before reading the opening view — the
+    // first paint is the unmeasured one.
+    // A 1536x1024 picture fitted into a 300x600 board is 300x200, centred.
+    const fitted = "translate(0px, 200px) scale(1)";
+    await waitFor(() => expect(canvas.style.transform).toBe(fitted));
+
+    fireEvent.pointerDown(board, { pointerId: 1, clientX: 10, clientY: 10 });
+    fireEvent.pointerDown(board, { pointerId: 2, clientX: 20, clientY: 20 });
+    fireEvent.pointerMove(board, { pointerId: 1, clientX: 0, clientY: 0 });
+    fireEvent.pointerMove(board, { pointerId: 2, clientX: 200, clientY: 200 });
+    fireEvent.pointerUp(board, { pointerId: 1, clientX: 0, clientY: 0 });
+    fireEvent.pointerUp(board, { pointerId: 2, clientX: 200, clientY: 200 });
+    expect(canvas.style.transform).not.toBe(fitted);
+
+    await user.click(screen.getByRole("button", { name: "Fit" }));
+
+    expect(canvas.style.transform).toBe(fitted);
+  });
+
+  it("keeps progress and the buy row in one bar, with nothing between them", async () => {
+    // They used to be a screen apart — the bar pinned to the bottom, the
+    // progress left at the end of the scrolling column — which read as two
+    // unrelated things saying different numbers about the same puzzle.
+    open(puzzle({ ownedPieces: [0], ownedCount: 1 }));
+    await tiles();
+
+    const bar = document.querySelector(".app-column.fixed") as HTMLElement;
+    expect(bar).toContainElement(screen.getByRole("progressbar"));
+    expect(bar).toContainElement(screen.getByRole("button", { name: "Unlock" }));
+  });
+
+  it("still shows progress once it is finished, with the buy row gone", async () => {
+    open(puzzle({ completedAt: "2026-08-02T00:00:00Z", ownedPieces: [0, 1, 2, 3, 4, 5] }));
+
+    expect(await screen.findByText(/picture is whole/i)).toBeInTheDocument();
+    expect(screen.getByRole("progressbar")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Unlock" })).not.toBeInTheDocument();
   });
 });

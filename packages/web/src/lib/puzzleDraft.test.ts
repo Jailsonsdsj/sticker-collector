@@ -66,7 +66,9 @@ describe("leaving without saving", () => {
   it("is not pristine once a picture is picked", () => {
     // The image is already uploaded by then — the bytes are on the server and
     // the user has done real work.
-    expect(isPristine(apply(initialDraft, { kind: "image", value: KEY }))).toBe(false);
+    expect(
+      isPristine(apply(initialDraft, { kind: "image", value: KEY, width: 1536, height: 864 })),
+    ).toBe(false);
   });
 
   it("is not pristine once a price is changed", () => {

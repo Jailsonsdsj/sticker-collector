@@ -12,11 +12,14 @@ import { PuzzleBoard } from "./PuzzleBoard";
  */
 const KEY = `img/${"a".repeat(64)}.jpg`;
 const GRID = { rows: 2, cols: 3 };
+/** A 3:2 picture, matching the 2x3 grid above. */
+const IMAGE = { width: 1500, height: 1000 };
 
 const view = (props: Partial<Parameters<typeof PuzzleBoard>[0]> = {}) =>
   render(
     <PuzzleBoard
       imageKey={KEY}
+      image={IMAGE}
       grid={GRID}
       owned={new Set<number>()}
       hideLocked={false}
@@ -96,7 +99,7 @@ describe("showing what is picked", () => {
     const [first, second] = pieces();
 
     expect(second?.style.filter).toBe("grayscale(1) brightness(1)");
-    expect(first?.style.filter).toBe("grayscale(1) brightness(0.55)");
+    expect(first?.style.filter).toBe("grayscale(1) brightness(0.3)");
     expect(second?.className).toContain("inset_0_0_0_3px");
   });
 
@@ -186,5 +189,116 @@ describe("gestures belong to the board", () => {
     expect(screen.getByTestId("puzzle-canvas").style.transform).toBe(
       "translate(0px, 0px) scale(1)",
     );
+  });
+});
+
+describe("putting the picture back", () => {
+  /**
+   * jsdom measures nothing and has no `ResizeObserver`, so the board never
+   * learns its own size and never fits. Both are stubbed here because the
+   * behaviour under test — "reset returns to the opening view" — is only
+   * reachable once the board has been measured at all.
+   */
+  const measured = (width: number, height: number) => {
+    class Observer {
+      observe() {}
+      disconnect() {}
+    }
+    vi.stubGlobal("ResizeObserver", Observer);
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({
+      width,
+      height,
+      top: 0,
+      left: 0,
+      right: width,
+      bottom: height,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    } as DOMRect);
+  };
+
+  const transform = () => screen.getByTestId("puzzle-canvas").style.transform;
+
+  it("keeps the picture's own shape inside a frame that is not", () => {
+    // A 3:2 picture in a 300x600 board fits to 300x200 — it is never stretched
+    // to the screen. An `inset-0` layer would take the frame's shape and shear
+    // the cut, which is the whole reason the canvas is sized in pixels.
+    measured(300, 600);
+    view();
+    const canvas = screen.getByTestId("puzzle-canvas");
+
+    expect(canvas.style.width).toBe("300px");
+    expect(canvas.style.height).toBe("200px");
+  });
+
+  it("opens with the picture centred in a frame taller than it is", () => {
+    // A phone. The picture fits to 300x200 in a 300x600 board, so it sits 200
+    // down rather than jammed against the top with a void beneath it.
+    measured(300, 600);
+    view();
+
+    expect(transform()).toBe("translate(0px, 200px) scale(1)");
+  });
+
+  it("comes back to exactly that after being dragged away", () => {
+    measured(300, 600);
+    const { rerender } = render(
+      <PuzzleBoard
+        imageKey={KEY}
+        image={IMAGE}
+        grid={GRID}
+        owned={new Set<number>()}
+        hideLocked={false}
+        resetToken={0}
+      />,
+    );
+    const board = screen.getByTestId("puzzle-canvas").parentElement as HTMLElement;
+
+    // Zoom in, so there is somewhere to be lost.
+    fireEvent.pointerDown(board, { pointerId: 1, clientX: 10, clientY: 10 });
+    fireEvent.pointerDown(board, { pointerId: 2, clientX: 20, clientY: 20 });
+    fireEvent.pointerMove(board, { pointerId: 1, clientX: 0, clientY: 0 });
+    fireEvent.pointerMove(board, { pointerId: 2, clientX: 200, clientY: 200 });
+    fireEvent.pointerUp(board, { pointerId: 1, clientX: 0, clientY: 0 });
+    fireEvent.pointerUp(board, { pointerId: 2, clientX: 200, clientY: 200 });
+    expect(transform()).not.toBe("translate(0px, 200px) scale(1)");
+
+    rerender(
+      <PuzzleBoard
+        imageKey={KEY}
+        image={IMAGE}
+        grid={GRID}
+        owned={new Set<number>()}
+        hideLocked={false}
+        resetToken={1}
+      />,
+    );
+
+    expect(transform()).toBe("translate(0px, 200px) scale(1)");
+  });
+
+  it("resets again on a second press, not only the first", () => {
+    // A counter rather than a boolean, for exactly this.
+    measured(300, 600);
+    const props = {
+      imageKey: KEY,
+      image: IMAGE,
+      grid: GRID,
+      owned: new Set<number>(),
+      hideLocked: false,
+    };
+    const { rerender } = render(<PuzzleBoard {...props} resetToken={1} />);
+    const board = screen.getByTestId("puzzle-canvas").parentElement as HTMLElement;
+
+    fireEvent.pointerDown(board, { pointerId: 1, clientX: 10, clientY: 10 });
+    fireEvent.pointerDown(board, { pointerId: 2, clientX: 20, clientY: 20 });
+    fireEvent.pointerMove(board, { pointerId: 1, clientX: 0, clientY: 0 });
+    fireEvent.pointerMove(board, { pointerId: 2, clientX: 200, clientY: 200 });
+    expect(transform()).not.toBe("translate(0px, 200px) scale(1)");
+
+    rerender(<PuzzleBoard {...props} resetToken={2} />);
+
+    expect(transform()).toBe("translate(0px, 200px) scale(1)");
   });
 });

@@ -21,8 +21,17 @@ import {
 export interface PuzzleDraft {
   title: string;
   description: string;
-  /** Set once the cropped bytes are stored. Null means no image yet. */
+  /** Set once the bytes are stored. Null means no image yet. */
   imageKey: string | null;
+  /**
+   * The stored master's shape.
+   *
+   * Carried because a puzzle keeps the picture it was imported at rather than
+   * cropping it square, so nothing downstream can infer it — the grid follows
+   * it and the board lays it out.
+   */
+  imageWidth: number;
+  imageHeight: number;
   unlockPrice: string;
   piecePrice: string;
   pieces: PiecePreset;
@@ -39,6 +48,8 @@ export const initialDraft: PuzzleDraft = {
   title: "",
   description: "",
   imageKey: null,
+  imageWidth: 0,
+  imageHeight: 0,
   unlockPrice: "200",
   piecePrice: "10",
   pieces: DEFAULT_PIECES,
@@ -48,7 +59,7 @@ export const initialDraft: PuzzleDraft = {
 export type DraftAction =
   | { kind: "title"; value: string }
   | { kind: "description"; value: string }
-  | { kind: "image"; value: string }
+  | { kind: "image"; value: string; width: number; height: number }
   | { kind: "unlockPrice"; value: string }
   | { kind: "piecePrice"; value: string }
   | { kind: "pieces"; value: PiecePreset }
@@ -61,7 +72,12 @@ export function reduce(state: PuzzleDraft, action: DraftAction): PuzzleDraft {
     case "description":
       return { ...state, description: action.value };
     case "image":
-      return { ...state, imageKey: action.value };
+      return {
+        ...state,
+        imageKey: action.value,
+        imageWidth: action.width,
+        imageHeight: action.height,
+      };
     case "unlockPrice":
       return { ...state, unlockPrice: action.value };
     case "piecePrice":
@@ -127,9 +143,15 @@ export function totalCost(draft: PuzzleDraft): number {
   return (coins(draft.unlockPrice) ?? 0) + (coins(draft.piecePrice) ?? 0) * draft.pieces;
 }
 
-/** The grid this many pieces will be cut into, for the form to show. */
+/**
+ * The grid this many pieces will be cut into, for the form to show.
+ *
+ * Follows the picture once there is one: 48 pieces of a wide photo cut 6×8,
+ * not 8×6. Before a picture is picked there is no shape to follow, so it falls
+ * back to the balanced pair.
+ */
 export function draftGrid(draft: PuzzleDraft) {
-  return gridFor(draft.pieces);
+  return gridFor(draft.pieces, { width: draft.imageWidth, height: draft.imageHeight });
 }
 
 /** The create payload, or null when the draft is not ready. */
@@ -140,6 +162,8 @@ export function toPayload(draft: PuzzleDraft): CreatePuzzleInput | null {
     title: draft.title.trim(),
     description: draft.description.trim() || null,
     imageKey: draft.imageKey,
+    imageWidth: draft.imageWidth,
+    imageHeight: draft.imageHeight,
     unlockPrice: coins(draft.unlockPrice) ?? 0,
     piecePrice: coins(draft.piecePrice) ?? 0,
     pieces: draft.pieces,

@@ -101,14 +101,28 @@ export function PuzzleNew() {
               <ImagePicker
                 kind="puzzle"
                 label="Replace"
-                onPicked={(imageKey) => dispatch({ kind: "image", value: imageKey })}
+                onPicked={(imageKey, size) =>
+                  dispatch({
+                    kind: "image",
+                    value: imageKey,
+                    width: size.width,
+                    height: size.height,
+                  })
+                }
               />
             </div>
           ) : (
             <ImagePicker
               kind="puzzle"
               label="Choose a picture"
-              onPicked={(imageKey) => dispatch({ kind: "image", value: imageKey })}
+              onPicked={(imageKey, size) =>
+                dispatch({
+                  kind: "image",
+                  value: imageKey,
+                  width: size.width,
+                  height: size.height,
+                })
+              }
             />
           )}
         </Field>

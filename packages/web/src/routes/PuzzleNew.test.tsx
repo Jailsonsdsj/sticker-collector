@@ -13,8 +13,18 @@ import { PuzzleNew } from "./PuzzleNew";
  * tests for the half that is missing here.
  */
 vi.mock("../components/wizard/ImagePicker", () => ({
-  ImagePicker: ({ label, onPicked }: { label: string; onPicked: (key: string) => void }) => (
-    <button type="button" onClick={() => onPicked(`img/${"a".repeat(64)}.jpg`)}>
+  ImagePicker: ({
+    label,
+    onPicked,
+  }: {
+    label: string;
+    onPicked: (key: string, size: { width: number; height: number }) => void;
+  }) => (
+    // A wide picture, because a puzzle now keeps the shape it arrived in.
+    <button
+      type="button"
+      onClick={() => onPicked(`img/${"a".repeat(64)}.jpg`, { width: 1536, height: 864 })}
+    >
       {label}
     </button>
   ),

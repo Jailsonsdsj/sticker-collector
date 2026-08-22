@@ -28,6 +28,8 @@ function body(over: Partial<CreatePuzzleInput> = {}): CreatePuzzleInput {
     title: "The harbour",
     description: null,
     imageKey: key(1),
+    imageWidth: 1536,
+    imageHeight: 1024,
     unlockPrice: 300,
     piecePrice: 25,
     pieces: 48,

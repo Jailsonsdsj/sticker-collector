@@ -5,6 +5,7 @@ import {
   aspectFillRect,
   CENTERED,
   clampOffset,
+  FIXED_IMAGE_KINDS,
   hashFromImageKey,
   IMAGE_KINDS,
   IMAGE_SIZES,
@@ -12,7 +13,11 @@ import {
   imageKey,
   imageKindForSize,
   isImageKey,
+  isPuzzleSize,
+  PUZZLE_MAX_EDGE,
+  PUZZLE_MIN_EDGE,
   panFreedom,
+  puzzleTarget,
   type Size,
 } from "./image";
 
@@ -58,18 +63,18 @@ describe("the canonical sizes", () => {
     expect(IMAGE_SIZES.puzzle).toEqual({ width: 1536, height: 1536 });
   });
 
-  it("give the puzzle a square, so every grid divides evenly on both axes", () => {
-    // A 12x12 grid of a 5:7 image has pieces that are not the shape of the
-    // pieces beside them on the other axis; a square has one piece shape.
-    expect(IMAGE_SIZES.puzzle.width).toBe(IMAGE_SIZES.puzzle.height);
-    // And the largest supported grid still leaves a piece worth zooming into.
-    expect(IMAGE_SIZES.puzzle.width % 12).toBe(0);
-    expect(IMAGE_SIZES.puzzle.width / 12).toBe(128);
+  it("gives the puzzle a bounding box rather than a size", () => {
+    // It is a ceiling on the long edge, not a shape to crop to. A 12x12 grid of
+    // a master at that ceiling still leaves 128 px a piece.
+    expect(IMAGE_SIZES.puzzle).toEqual({ width: PUZZLE_MAX_EDGE, height: PUZZLE_MAX_EDGE });
+    expect(PUZZLE_MAX_EDGE / 12).toBe(128);
   });
 });
 
 describe("aspectFillRect", () => {
-  const kinds: readonly ImageKind[] = IMAGE_KINDS;
+  // Only the fixed kinds are cropped to a target. A puzzle keeps its own
+  // shape, so there is no rect to fill.
+  const kinds: readonly ImageKind[] = FIXED_IMAGE_KINDS;
 
   it("crops the width of a source that is too wide", () => {
     // 1000×700 against 5:7 → keep the full height, take 500 of the width.
@@ -251,20 +256,26 @@ describe("image keys", () => {
 });
 
 describe("imageKindForSize", () => {
-  it("names each canonical size", () => {
+  it("names each of the FIXED sizes", () => {
     expect(imageKindForSize({ width: 591, height: 827 })).toBe("sticker");
     expect(imageKindForSize({ width: 1772, height: 2480 })).toBe("cover");
-    expect(imageKindForSize({ width: 1536, height: 1536 })).toBe("puzzle");
   });
 
-  it("recognises every kind that has a size", () => {
+  it("recognises every kind that has one exact size", () => {
     // The bug this forecloses: a kind added to IMAGE_SIZES but not to whatever
     // the validator walks. The client crops it happily, the Worker answers 422,
-    // and neither side names a cause. Deriving both from IMAGE_KINDS is the
-    // fix; this is the test that says so.
-    for (const kind of IMAGE_KINDS) {
+    // and neither side names a cause.
+    for (const kind of FIXED_IMAGE_KINDS) {
       expect(imageKindForSize(IMAGE_SIZES[kind])).toBe(kind);
     }
+  });
+
+  it("cannot name a puzzle, because a puzzle has a range and not a size", () => {
+    // It keeps the shape it was imported at, so nothing about its dimensions
+    // identifies it — the uploader declares the kind instead. Guessing here
+    // would also let a mis-cropped sticker pass as a puzzle.
+    expect(imageKindForSize(IMAGE_SIZES.puzzle)).toBeNull();
+    expect(imageKindForSize({ width: 1536, height: 864 })).toBeNull();
   });
 
   it("refuses a size that is one pixel off", () => {
@@ -274,5 +285,60 @@ describe("imageKindForSize", () => {
     expect(imageKindForSize({ width: 590, height: 827 })).toBeNull();
     expect(imageKindForSize({ width: 827, height: 591 })).toBeNull();
     expect(imageKindForSize({ width: 1536, height: 1535 })).toBeNull();
+  });
+});
+
+describe("what a puzzle stores", () => {
+  it("keeps the whole picture, at the shape it arrived in", () => {
+    // The change this exists for: cropping to a square cut the ends off every
+    // photo that was not already square — the one thing a picture you are going
+    // to reassemble cannot afford.
+    expect(puzzleTarget({ width: 3840, height: 2160 })).toEqual({ width: 1536, height: 864 });
+    expect(puzzleTarget({ width: 2160, height: 3840 })).toEqual({ width: 864, height: 1536 });
+  });
+
+  it("caps the long edge, whichever one it is", () => {
+    for (const source of [
+      { width: 5000, height: 400 },
+      { width: 400, height: 5000 },
+    ]) {
+      const stored = puzzleTarget(source);
+      expect(Math.max(stored.width, stored.height)).toBe(PUZZLE_MAX_EDGE);
+    }
+  });
+
+  it("preserves the aspect it was given, to within a rounded pixel", () => {
+    const source = { width: 4032, height: 3024 };
+    const stored = puzzleTarget(source);
+
+    const drift = Math.abs(stored.width * source.height - stored.height * source.width);
+    expect(drift).toBeLessThanOrEqual(source.height);
+  });
+
+  it("never enlarges a small picture", () => {
+    // Upscaling invents detail: it makes the pieces blurry rather than small.
+    expect(puzzleTarget({ width: 600, height: 400 })).toEqual({ width: 600, height: 400 });
+  });
+
+  it("accepts a master inside the bounds and refuses one outside", () => {
+    expect(isPuzzleSize({ width: 1536, height: 864 })).toBe(true);
+    expect(isPuzzleSize({ width: PUZZLE_MIN_EDGE, height: PUZZLE_MIN_EDGE })).toBe(true);
+    // Too small to cut: 144 pieces of this is nothing to look at.
+    expect(isPuzzleSize({ width: PUZZLE_MIN_EDGE - 1, height: 1000 })).toBe(false);
+    // Past the ceiling on one edge is still past it.
+    expect(isPuzzleSize({ width: PUZZLE_MAX_EDGE + 1, height: 500 })).toBe(false);
+  });
+
+  it("accepts whatever it produces, for any source", () => {
+    // The two have to agree, or an import passes the client and 422s at the
+    // Worker with nothing to say why.
+    for (const source of [
+      { width: 4000, height: 3000 },
+      { width: 1000, height: 4000 },
+      { width: 800, height: 800 },
+      { width: 1536, height: 256 },
+    ]) {
+      expect(isPuzzleSize(puzzleTarget(source))).toBe(true);
+    }
   });
 });

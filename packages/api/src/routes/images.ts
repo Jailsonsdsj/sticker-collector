@@ -2,6 +2,7 @@ import {
   hashFromImageKey,
   imageKindForSize,
   isImageKey,
+  isPuzzleSize,
   sha256Hex,
 } from "@sticker-collector/shared";
 import { Hono } from "hono";
@@ -75,7 +76,21 @@ imageRoutes.put("*", requireBearer, idempotency, async (c) => {
   // the cause is still obvious.
   const size = jpegSize(body);
   if (!size) return c.json({ error: "not a jpeg" }, 415);
-  const kind = imageKindForSize(size);
+  /**
+   * A puzzle is **declared**, not inferred.
+   *
+   * Every other kind has one exact size, so the bytes identify themselves. A
+   * puzzle keeps the shape it was imported at, so nothing about its dimensions
+   * says what it is — the uploader has to. The rule is still a rule: a range,
+   * checked here, rather than "anything goes for a query param".
+   */
+  const declared = c.req.query("kind");
+  if (declared !== undefined && declared !== "puzzle") {
+    return c.json({ error: "unknown kind", got: declared }, 400);
+  }
+
+  const kind =
+    declared === "puzzle" ? (isPuzzleSize(size) ? "puzzle" : null) : imageKindForSize(size);
   if (!kind) {
     return c.json({ error: "wrong dimensions", got: size }, 422);
   }

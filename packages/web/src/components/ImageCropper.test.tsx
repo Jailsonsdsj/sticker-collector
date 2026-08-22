@@ -1,4 +1,4 @@
-import { IMAGE_KINDS, IMAGE_SIZES } from "@sticker-collector/shared";
+import { FIXED_IMAGE_KINDS, IMAGE_SIZES } from "@sticker-collector/shared";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ImageCropper } from "./ImageCropper";
@@ -14,7 +14,7 @@ import { ImageCropper } from "./ImageCropper";
  */
 const file = () => new File([new Uint8Array([0xff, 0xd8])], "photo.jpg", { type: "image/jpeg" });
 
-const view = (kind: (typeof IMAGE_KINDS)[number]) => {
+const view = (kind: "sticker" | "cover" | "puzzle") => {
   const { container } = render(
     <ImageCropper file={file()} kind={kind} onCommit={vi.fn()} onCancel={vi.fn()} />,
   );
@@ -22,18 +22,35 @@ const view = (kind: (typeof IMAGE_KINDS)[number]) => {
 };
 
 describe("the crop frame", () => {
-  it("is shaped like the kind it is cropping for, every kind", () => {
-    for (const kind of IMAGE_KINDS) {
+  it("is shaped like the kind it is cropping for", () => {
+    // A frame that disagrees with the export lets the user position one window
+    // and ship another, looking entirely correct while doing it.
+    for (const kind of FIXED_IMAGE_KINDS) {
       const { width, height } = IMAGE_SIZES[kind];
       expect(view(kind).style.aspectRatio).toBe(`${width} / ${height}`);
     }
   });
 
-  it("is square for a puzzle, not the 5:7 the print kinds use", () => {
-    // The literal that was there before. A square image dragged inside a 5:7
-    // window is the failure this replaced.
-    expect(view("puzzle").style.aspectRatio).toBe("1536 / 1536");
-    expect(view("sticker").style.aspectRatio).not.toBe("1536 / 1536");
+  it("takes the picture's own shape for a puzzle, not a fixed one", () => {
+    // A puzzle is scaled rather than cropped, so there is no target shape to
+    // preview — the frame follows the file. (jsdom decodes nothing, so the
+    // fallback is what shows here; the point is that it is NOT the box.)
+    expect(view("puzzle").style.aspectRatio).not.toBe(
+      `${IMAGE_SIZES.puzzle.width} / ${IMAGE_SIZES.puzzle.height}`,
+    );
+  });
+
+  it("says the whole picture is kept, rather than offering a drag", () => {
+    render(<ImageCropper file={file()} kind="puzzle" onCommit={vi.fn()} onCancel={vi.fn()} />);
+
+    expect(screen.getByText(/whole picture is kept/i)).toBeInTheDocument();
+    expect(screen.queryByText(/drag to reposition/i)).not.toBeInTheDocument();
+  });
+
+  it("still offers the drag for a kind that is cropped", () => {
+    render(<ImageCropper file={file()} kind="cover" onCommit={vi.fn()} onCancel={vi.fn()} />);
+
+    expect(screen.getByText(/drag to reposition/i)).toBeInTheDocument();
   });
 
   it("still offers the way out, whatever the shape", () => {

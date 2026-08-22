@@ -85,6 +85,13 @@
       "when": 1787344067702,
       "tag": "0012_puzzle_triggers",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1787407016642,
+      "tag": "0013_smart_nicolaos",
+      "breakpoints": true
     }
   ]
 }

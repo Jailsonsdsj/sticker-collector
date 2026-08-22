@@ -2,12 +2,16 @@ import { type Grid, placePiece } from "@sticker-collector/shared";
 import {
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
+  useEffect,
   useRef,
   useState,
 } from "react";
 import { imageSrc } from "../lib/imageUpload";
 import {
   distance,
+  type Frame,
+  fitContent,
+  fitView,
   INITIAL_VIEW,
   isTap,
   midpoint,
@@ -20,6 +24,8 @@ import { cx } from "./ui/cx";
 
 export interface PuzzleBoardProps {
   imageKey: string;
+  /** The master's own shape. The picture keeps it; only the scale changes. */
+  image: { width: number; height: number };
   grid: Grid;
   /** Indexes that have been bought. Absence is locked. */
   owned: ReadonlySet<number>;
@@ -29,6 +35,8 @@ export interface PuzzleBoardProps {
   selected?: ReadonlySet<number>;
   /** A tap that was not a drag, on a locked piece. */
   onPick?: (index: number) => void;
+  /** Bumped by the caller to put the picture back where it started. */
+  resetToken?: number;
 }
 
 /**
@@ -50,14 +58,24 @@ export interface PuzzleBoardProps {
  */
 export function PuzzleBoard({
   imageKey,
+  image,
   grid,
   owned,
   hideLocked,
   selected,
   onPick,
+  resetToken = 0,
 }: PuzzleBoardProps) {
   const frame = useRef<HTMLDivElement>(null);
   const [view, setView] = useState<View>(INITIAL_VIEW);
+  /**
+   * The visible box, measured.
+   *
+   * The board fills the screen and the picture keeps whatever shape it was
+   * imported at, so the two are only the same shape by accident — every bound
+   * below needs both.
+   */
+  const [box, setBox] = useState<Frame>({ width: 0, height: 0 });
   /** Live pointers, so a second finger turns a drag into a pinch. */
   const pointers = useRef(new Map<number, Point>());
   /** Where the gesture began, to tell a tap from a drag when it ends. */
@@ -72,7 +90,37 @@ export function PuzzleBoard({
   const dragged = useRef(false);
   const pinch = useRef<{ gap: number; scale: number } | null>(null);
 
-  const size = () => frame.current?.getBoundingClientRect().width ?? 0;
+  /** The picture at scale 1: the whole of it, as large as the frame allows. It
+   *  keeps its own shape — only the scale changes. */
+  const content = fitContent(image, box);
+  const ready = content.width > 0;
+
+  // Re-fit whenever the box changes (rotation, resize) or the caller asks. Both
+  // land on the same view, which is what makes "reset" mean "as it opened".
+  useEffect(() => {
+    const node = frame.current;
+    if (!node || typeof ResizeObserver !== "function") return;
+
+    const measure = () => {
+      const rect = node.getBoundingClientRect();
+      setBox({ width: rect.width, height: rect.height });
+    };
+    measure();
+
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  /* `resetToken` is a re-run signal, not a value this reads: the caller bumps
+     it to say "put the picture back". Without it in the deps the effect only
+     fires on a resize, and the Fit button does nothing. */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: resetToken re-runs the fit on demand
+  useEffect(() => {
+    if (ready) setView(fitView(content, box));
+    // `content` is a fresh object each render, so the primitives are the deps
+    // that actually change.
+  }, [content.width, content.height, box, ready, resetToken]);
   const local = (event: ReactPointerEvent): Point => {
     const box = frame.current?.getBoundingClientRect();
     return { x: event.clientX - (box?.left ?? 0), y: event.clientY - (box?.top ?? 0) };
@@ -128,7 +176,9 @@ export function PuzzleBoard({
       const gap = distance(a as Point, b as Point);
       if (gap === 0) return; // fingers on one pixel: no ratio to take
       const next = (pinch.current.scale * gap) / pinch.current.gap;
-      setView((current) => zoomAbout(current, next, midpoint(a as Point, b as Point), size()));
+      setView((current) =>
+        zoomAbout(current, next, midpoint(a as Point, b as Point), content, box),
+      );
       return;
     }
 
@@ -142,7 +192,9 @@ export function PuzzleBoard({
       capture(event);
       dragged.current = true;
     }
-    setView((current) => panBy(current, { x: at.x - previous.x, y: at.y - previous.y }, size()));
+    setView((current) =>
+      panBy(current, { x: at.x - previous.x, y: at.y - previous.y }, content, box),
+    );
   }
 
   function onPointerUp(event: ReactPointerEvent<HTMLDivElement>) {
@@ -165,7 +217,9 @@ export function PuzzleBoard({
       // `touch-action: none` or the browser scrolls the page instead of letting
       // the board pan — the same trap the sticker viewer fell into, from the
       // other side. Nothing here scrolls; everything here is a gesture.
-      className="relative aspect-square w-full touch-none overflow-hidden rounded-2xl border border-border bg-surface-1"
+      // Fills whatever space the screen gives it. The picture inside stays
+      // square; the black around it is the shape of the screen, not a bug.
+      className="relative size-full touch-none overflow-hidden bg-void"
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -173,8 +227,14 @@ export function PuzzleBoard({
     >
       <div
         data-testid="puzzle-canvas"
-        className="absolute inset-0 grid"
+        className="absolute top-0 left-0 grid"
         style={{
+          // A real square in pixels, positioned entirely by the transform. An
+          // `inset-0` layer would take the frame's shape and stretch the cut.
+          // A real rectangle in pixels, positioned entirely by the transform.
+          // An `inset-0` layer would take the frame's shape and shear the cut.
+          width: content.width || "100%",
+          height: content.height || "100%",
           gridTemplateColumns: `repeat(${grid.cols}, 1fr)`,
           gridTemplateRows: `repeat(${grid.rows}, 1fr)`,
           transformOrigin: "0 0",
@@ -230,15 +290,16 @@ function Piece({
         // tile's share is the part on show.
         backgroundSize: `${grid.cols * 100}% ${grid.rows * 100}%`,
         backgroundPosition: `${place.xPercent}% ${place.yPercent}%`,
-        // Grayscale is a filter, never a second asset. Dimmed as well as
-        // drained: grey at full brightness reads as "photographed in 1950"
-        // rather than as "not yours yet".
+        // Grayscale is a filter, never a second asset. Drained AND pushed
+        // down hard: at 0.55 a locked piece still read as part of the picture,
+        // so a half-finished puzzle looked merely washed out instead of
+        // half-finished. The contrast with an owned piece is the progress bar
+        // you actually look at.
         //
-        // A picked piece is lifted back towards full brightness. A ring alone
-        // was not enough to see at 1× on a dark tile — and not being able to
-        // tell what you have picked is fatal on a screen whose whole job is
-        // picking.
-        ...(owned ? {} : { filter: `grayscale(1) brightness(${selected ? 1 : 0.55})` }),
+        // A picked piece is lifted back to full brightness. A ring alone was
+        // not enough to see at 1× on a dark tile, and not being able to tell
+        // what you have picked is fatal on a screen whose whole job is picking.
+        ...(owned ? {} : { filter: `grayscale(1) brightness(${selected ? 1 : 0.3})` }),
       }
     : {};
 

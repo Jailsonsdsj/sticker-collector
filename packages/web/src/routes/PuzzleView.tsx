@@ -29,6 +29,9 @@ export function PuzzleView() {
   const unlock = useUnlockPuzzle();
   const buy = useUnlockPieces(id ?? "");
   const [picked, setPicked] = useState<ReadonlySet<number>>(new Set());
+  // Bumped to put the picture back where it opened. A counter rather than a
+  // boolean: pressing reset twice in a row has to work the second time.
+  const [resetToken, setResetToken] = useState(0);
   const [failure, setFailure] = useState<string | null>(null);
 
   if (puzzle.isLoading) {
@@ -100,23 +103,61 @@ export function PuzzleView() {
         }
       />
 
-      <div className="flex flex-col gap-4 pb-24">
+      {/*
+        Full bleed, and as tall as the screen allows.
+        
+        The board used to be a square in the middle of a mostly-empty page: on a
+        phone the picture had a third of the screen and the rest was nothing —
+        which is the opposite of a thing you navigate around. `-mx-4` escapes
+        the app column's padding; the flex column below gives whatever is left
+        after the description to the board itself.
+      */}
+      {/* The height is a class, not an inline style. jsdom throws resolving
+          `env()` inside a `calc()` it is asked to compute, and every role-based
+          query in the subtree goes down with it — a Tailwind arbitrary value
+          lives in a stylesheet the tests never parse. */}
+      <div className="-mx-4 flex h-[calc(100dvh_-_var(--size-tabbar)_-_env(safe-area-inset-bottom)_-_9rem)] flex-col">
         {board.description && (
-          <p className="whitespace-pre-line font-body text-sm text-ink-secondary">
+          <p className="shrink-0 whitespace-pre-line px-4 pb-2 font-body text-sm text-ink-secondary">
             {board.description}
           </p>
         )}
 
-        <PuzzleBoard
-          imageKey={board.imageKey}
-          grid={grid}
-          owned={owned}
-          hideLocked={board.hideLocked}
-          selected={picked}
-          onPick={open && !done ? toggle : undefined}
-        />
+        <div className="relative min-h-0 flex-1">
+          <PuzzleBoard
+            imageKey={board.imageKey}
+            image={{ width: board.imageWidth, height: board.imageHeight }}
+            grid={grid}
+            owned={owned}
+            hideLocked={board.hideLocked}
+            selected={picked}
+            onPick={open && !done ? toggle : undefined}
+            resetToken={resetToken}
+          />
 
-        <div className="flex items-center gap-3">
+          {/* On the board and floating, because it is about the board and
+              nothing else — and a reader zoomed into a corner should not have
+              to leave the picture to get back out of it. */}
+          <Button
+            className="absolute top-3 right-3"
+            size="sm"
+            variant="outline"
+            tone="neutral"
+            onClick={() => setResetToken((token) => token + 1)}
+          >
+            Fit
+          </Button>
+        </div>
+      </div>
+
+      {/*
+        Progress and the buy row are ONE bar, stacked with nothing between them.
+        They were a screen apart — the bar pinned to the bottom, the progress
+        left behind at the end of the scrolling column — which read as two
+        unrelated things saying different numbers about the same puzzle.
+      */}
+      <div className="app-column fixed inset-x-0 bottom-[calc(var(--size-tabbar)+env(safe-area-inset-bottom))] z-20 border-border border-t bg-void/95">
+        <div className="flex items-center gap-3 px-4 pt-2">
           <ProgressBar
             className="flex-1"
             size="sm"
@@ -129,27 +170,21 @@ export function PuzzleView() {
           </span>
         </div>
 
-        {done && <p className="font-body text-sm text-lime">Finished — the picture is whole.</p>}
         {failure && (
-          <p role="alert" className="font-body text-sm text-prio-high-fg">
+          <p role="alert" className="px-4 pt-1 font-body text-2xs text-prio-high-fg">
             {failure}
           </p>
         )}
         {full && (
-          <p role="status" className="font-body text-sm text-ink-dim">
+          <p role="status" className="px-4 pt-1 font-body text-2xs text-ink-dim">
             {MAX_PIECES_PER_UNLOCK} at a time. Buy these and pick some more.
           </p>
         )}
-      </div>
 
-      {/*
-        Pinned above the tab bar, not inside the scrolling column. Finding a
-        piece at 4× and then having to scroll away to reach the button loses
-        the place you just found.
-      */}
-      {!done && (
-        <div className="app-column fixed inset-x-0 bottom-[calc(var(--size-tabbar)+env(safe-area-inset-bottom))] z-20 flex items-center justify-between gap-3 border-border border-t bg-void/95 px-4 py-3">
-          {open ? (
+        <div className="flex items-center justify-between gap-3 px-4 pt-1 pb-3">
+          {done ? (
+            <span className="font-body text-sm text-lime">Finished — the picture is whole.</span>
+          ) : open ? (
             <>
               <span className="flex items-center gap-1 font-body text-sm text-ink-secondary">
                 {picked.size === 0 ? (
@@ -195,7 +230,8 @@ export function PuzzleView() {
             </>
           )}
         </div>
-      )}
+      </div>
+
       <DeletePuzzleDialog
         open={deleting}
         title={board.title}
