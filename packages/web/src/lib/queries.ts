@@ -7,6 +7,8 @@ import type {
   LocalDate,
   MomentumReport,
   Occurrence,
+  Puzzle,
+  PuzzleDetail,
   Task,
   Wallet,
 } from "@sticker-collector/shared";
@@ -29,9 +31,30 @@ export const keys = {
   albumsAll: ["albums"] as const,
   albums: (query: AlbumQuery) => ["albums", query.status ?? "all", query.sort] as const,
   album: (id: string) => ["albums", "detail", id] as const,
+  puzzlesAll: ["puzzles"] as const,
+  puzzle: (id: string) => ["puzzles", "detail", id] as const,
   momentum: ["reports", "momentum"] as const,
   effort: ["reports", "effort"] as const,
 };
+
+/**
+ * Every puzzle, for the Albums tab's mixed listing.
+ *
+ * Unpaged, unlike albums: a puzzle is a deliberate, laborious thing to make and
+ * nobody has forty of them. If that stops being true it wants the same paging
+ * the album list already has.
+ */
+export function usePuzzles() {
+  return useQuery({ queryKey: keys.puzzlesAll, queryFn: () => api<Puzzle[]>("/api/puzzles") });
+}
+
+export function usePuzzle(id: string | undefined) {
+  return useQuery({
+    queryKey: keys.puzzle(id ?? ""),
+    queryFn: () => api<PuzzleDetail>(`/api/puzzles/${id}`),
+    enabled: Boolean(id),
+  });
+}
 
 export function useTasks() {
   return useQuery({ queryKey: keys.tasks, queryFn: () => api<Task[]>("/api/tasks") });

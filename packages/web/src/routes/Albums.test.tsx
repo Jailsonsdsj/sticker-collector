@@ -41,6 +41,7 @@ function album(over: Partial<AlbumSummary> = {}): AlbumSummary {
 let fetchMock: ReturnType<typeof vi.fn>;
 let queryClient: QueryClient;
 let albums: AlbumSummary[];
+let puzzles: Record<string, unknown>[];
 let balance: number;
 
 const json = (body: unknown, status = 200) =>
@@ -64,6 +65,7 @@ const dialog = () => within(document.querySelector("dialog[open]") as HTMLElemen
 beforeEach(() => {
   localStorage.clear();
   albums = [album()];
+  puzzles = [];
   balance = 1000;
   queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -71,6 +73,7 @@ beforeEach(() => {
   fetchMock = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
     if ((init?.method ?? "GET") !== "GET") return json({ balance, spentCoins: 200 }, 201);
     if (url.startsWith("/api/albums?")) return json(albums);
+    if (url.startsWith("/api/puzzles")) return json(puzzles);
     if (url.startsWith("/api/wallet")) return json({ balance });
     return json([]);
   });
@@ -99,9 +102,10 @@ describe("the shelf", () => {
   });
 
   it("offers something to do when the shelf is empty", async () => {
+    // "No albums yet" was wrong once the shelf started holding puzzles too.
     albums = [];
     render(<Albums />, { wrapper });
-    await waitFor(() => expect(screen.getByText("No albums yet")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Nothing here yet")).toBeInTheDocument());
   });
 
   it("says so when a filter matches nothing, rather than looking broken", async () => {
@@ -353,5 +357,57 @@ describe("paginate", () => {
 
   it("clamps a negative page too", () => {
     expect(paginate(rows(5), -3).current).toBe(0);
+  });
+});
+
+describe("the shelf holds puzzles too", () => {
+  const puzzle = (over: Record<string, unknown> = {}) => ({
+    id: "p1",
+    title: "The harbour",
+    description: null,
+    imageKey: `img/${"b".repeat(64)}.jpg`,
+    unlockPrice: 100,
+    piecePrice: 25,
+    rows: 2,
+    cols: 3,
+    hideLocked: false,
+    unlockedAt: null,
+    completedAt: null,
+    sealedAt: "2026-09-01T00:00:00Z",
+    createdAt: "2026-09-01T00:00:00Z",
+    ownedCount: 0,
+    ...over,
+  });
+
+  it("shows one beside the albums, badged so you can tell them apart", async () => {
+    puzzles = [puzzle()];
+    render(<Albums />, { wrapper });
+
+    expect(await screen.findByText("The harbour")).toBeInTheDocument();
+    expect(screen.getByText("Puzzle")).toBeInTheDocument();
+  });
+
+  it("filters one by the same tab that filters an album", async () => {
+    const user = userEvent.setup();
+    puzzles = [puzzle()];
+    albums = [];
+    render(<Albums />, { wrapper });
+    await screen.findByText("The harbour");
+
+    await user.click(screen.getByRole("tab", { name: "Done" }));
+
+    expect(screen.queryByText("The harbour")).not.toBeInTheDocument();
+  });
+
+  it("asks for a backup after one is made, not only after an album", async () => {
+    // A puzzle's master image exists nowhere else, which makes it the most
+    // irreplaceable thing the app holds.
+    albums = [];
+    puzzles = [puzzle()];
+    render(<Albums />, { wrapper });
+
+    expect(
+      await screen.findByRole("complementary", { name: "Back up your collection" }),
+    ).toBeInTheDocument();
   });
 });

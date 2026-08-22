@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { TIERS, validateOdds } from "./economy.js";
 import { isImageKey } from "./image.js";
+import { isPiecePreset, MAX_PIECES, MAX_PIECES_PER_UNLOCK } from "./puzzle.js";
 import { WEEKDAYS_MASK_ALL } from "./recurrence.js";
 import { routineSlotSchema, routineSlotsSchema, slotsAgreeWithMask } from "./slots";
 
@@ -448,6 +449,98 @@ export const createAlbumSchema = z
 export type CreateAlbumInput = z.input<typeof createAlbumSchema>;
 export type CreateAlbum = z.output<typeof createAlbumSchema>;
 
+/* ── Jigsaw puzzles ────────────────────────────────────────────────────────
+ * A second thing to spend coins on. One image, cut into a grid, bought back a
+ * piece at a time. The rules that are not shapes — the presets, the grid, where
+ * a piece sits — live in `puzzle.ts`; these are the wire formats.
+ */
+
+export const createPuzzleSchema = z
+  .strictObject({
+    title: titleSchema,
+    description: z.string().max(2000).nullish(),
+    /** The single master. Pieces are windows onto it. */
+    imageKey: imageKeySchema,
+    unlockPrice: z.int().min(0).max(1_000_000),
+    /** Every piece costs this. Shown once on the board, never on a piece. */
+    piecePrice: z.int().min(0).max(1_000_000),
+    /**
+     * A preset, not a free number: a count is not a grid, and only some factor
+     * pairs of a given count make a puzzle. `gridFor` turns this into rows and
+     * cols, and the route stores those.
+     */
+    pieces: z.int().refine(isPiecePreset, "not one of the piece counts on offer"),
+    /** Locked pieces show nothing at all rather than grayscale art. */
+    hideLocked: z.boolean().default(false),
+  })
+  .describe("A puzzle is sealed on create; there is no edit, only delete.");
+
+export type CreatePuzzleInput = z.input<typeof createPuzzleSchema>;
+export type CreatePuzzle = z.output<typeof createPuzzleSchema>;
+
+export const puzzleSchema = z.object({
+  id: idSchema,
+  title: z.string(),
+  description: z.string().nullable(),
+  imageKey: z.string(),
+  unlockPrice: z.int().min(0),
+  piecePrice: z.int().min(0),
+  rows: z.int().min(1),
+  cols: z.int().min(1),
+  hideLocked: z.boolean(),
+  /** Null until bought. No piece can be bought inside a locked puzzle. */
+  unlockedAt: instantSchema.nullable(),
+  /** Set once, when the last piece lands. Until then the cover stays grey. */
+  completedAt: instantSchema.nullable(),
+  sealedAt: instantSchema,
+  createdAt: instantSchema,
+  /** How many pieces are owned — the board needs the count, the list needs it
+   *  for progress, and neither wants every index. */
+  ownedCount: z.int().min(0),
+});
+export type Puzzle = z.infer<typeof puzzleSchema>;
+
+/** The board's read model: the puzzle plus exactly which pieces are owned. */
+export const puzzleDetailSchema = puzzleSchema.extend({
+  /** Reading-order indexes. Absence is locked — there is no row for a piece
+   *  that has not been bought. */
+  ownedPieces: z.array(z.int().min(0)),
+});
+export type PuzzleDetail = z.infer<typeof puzzleDetailSchema>;
+
+/**
+ * Buying pieces: the indexes, in one request, paid for as one sum.
+ *
+ * Capped at `MAX_PIECES_PER_UNLOCK` because the whole purchase is one
+ * `db.batch` — one spend plus one insert per piece — and that batch is the only
+ * all-or-nothing D1 offers.
+ */
+/** What a puzzle purchase gives back: the new balance, and what it bought. */
+export const puzzlePurchaseSchema = z.object({
+  balance: z.int(),
+  spentCoins: z.int().min(0),
+  puzzleId: idSchema,
+  /** The indexes actually granted — never the ones already owned. */
+  pieces: z.array(z.int().min(0)),
+  /** True on the purchase that filled the last hole, and only that one. */
+  completed: z.boolean(),
+});
+export type PuzzlePurchase = z.infer<typeof puzzlePurchaseSchema>;
+
+export const unlockPiecesSchema = z.strictObject({
+  pieces: z
+    .array(
+      z
+        .int()
+        .min(0)
+        .max(MAX_PIECES - 1),
+    )
+    .min(1)
+    .max(MAX_PIECES_PER_UNLOCK)
+    .refine((list) => new Set(list).size === list.length, "the same piece twice"),
+});
+export type UnlockPiecesInput = z.infer<typeof unlockPiecesSchema>;
+
 export const stickerSchema = z.object({
   id: idSchema,
   albumId: idSchema,
@@ -598,6 +691,16 @@ export const backupManifestSchema = z.object({
   albums: z.array(z.record(z.string(), z.unknown())),
   stickers: z.array(z.record(z.string(), z.unknown())),
   holdings: z.array(z.record(z.string(), z.unknown())),
+  /**
+   * Puzzles arrived after version 1, so they are optional and default to empty.
+   *
+   * Not a version bump: a backup taken before they existed has to keep
+   * restoring, and bumping would refuse exactly the old file someone reaches
+   * for when they most need it. The cost is the other direction — a new backup
+   * restored by an old build drops its puzzles — and nobody downgrades.
+   */
+  puzzles: z.array(z.record(z.string(), z.unknown())).default([]),
+  puzzlePieces: z.array(z.record(z.string(), z.unknown())).default([]),
   /** Every image the data references — the irreplaceable half of a backup. */
   imageKeys: z.array(z.string()),
 });
@@ -612,6 +715,8 @@ export const restoreResultSchema = z.object({
     albums: z.int(),
     stickers: z.int(),
     holdings: z.int(),
+    puzzles: z.int().default(0),
+    puzzlePieces: z.int().default(0),
   }),
 });
 export type RestoreResult = z.infer<typeof restoreResultSchema>;
@@ -624,6 +729,8 @@ export const ledgerReasonSchema = z.enum([
   "sticker_buy",
   "random_pull",
   "duplicate_sale",
+  "puzzle_unlock",
+  "piece_unlock",
 ]);
 export type LedgerReason = z.infer<typeof ledgerReasonSchema>;
 

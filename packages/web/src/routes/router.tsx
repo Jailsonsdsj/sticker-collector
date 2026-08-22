@@ -8,6 +8,8 @@ import { Albums } from "./Albums";
 import { Epics } from "./Epics";
 import { Login } from "./Login";
 import { NotFound } from "./NotFound";
+import { PuzzleNew } from "./PuzzleNew";
+import { PuzzleView } from "./PuzzleView";
 import { Reports } from "./Reports";
 import { Settings } from "./Settings";
 import { Tasks } from "./Tasks";
@@ -35,6 +37,8 @@ export const router = createBrowserRouter([
       { path: "albums/new", element: <AlbumNew /> },
       // Placeholder until A-08 — A-06's cards have to lead somewhere.
       { path: "albums/:id", element: <AlbumDetail /> },
+      { path: "puzzles/new", element: <PuzzleNew /> },
+      { path: "puzzles/:id", element: <PuzzleView /> },
       { path: "epics", element: <Epics /> },
       { path: "reports", element: <Reports /> },
       { path: "settings", element: <Settings /> },

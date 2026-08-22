@@ -186,6 +186,84 @@ export const routineSlot = sqliteTable(
   (table) => [unique("routine_slot_task_weekday_unique").on(table.taskId, table.weekday)],
 );
 
+/**
+ * A jigsaw puzzle: one image, a grid, and pieces bought back one at a time.
+ *
+ * Sealed at creation like an album, and for the same reason — `puzzle_frozen`
+ * blocks every change to what a piece costs, so a price cannot be rewritten
+ * after money has changed hands. There is no edit, only delete.
+ *
+ * `rows`/`cols` rather than a piece count: the count is what the author picks,
+ * the grid is what the board lays out, and storing the derived value means the
+ * board never has to agree with `gridFor()` at read time.
+ */
+export const puzzle = sqliteTable(
+  "puzzle",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id),
+    title: text("title").notNull(),
+    description: text("description"),
+    /** The one master. Pieces are windows onto it, never images of their own. */
+    imageKey: text("image_key").notNull(),
+    unlockPrice: integer("unlock_price").notNull(),
+    /** Every piece costs the same; the board shows the price once, on screen. */
+    piecePrice: integer("piece_price").notNull(),
+    rows: integer("rows").notNull(),
+    cols: integer("cols").notNull(),
+    /**
+     * Hide what has not been bought yet, exactly as an album does: set, a
+     * locked piece shows nothing rather than its own art in grayscale. Stored
+     * as 0/1 — D1 has no boolean.
+     */
+    hideLocked: integer("hide_locked").notNull().default(0),
+    unlockedAt: text("unlocked_at"),
+    completedAt: text("completed_at"),
+    sealedAt: text("sealed_at").notNull(),
+    createdAt: text("created_at").notNull(),
+    // Soft, and not by preference: `ledger.puzzle_id` is a foreign key and the
+    // coins spent inside a deleted puzzle must stay spent, so the row has to
+    // survive. The same constraint that makes album deletion soft.
+    deletedAt: text("deleted_at"),
+  },
+  (table) => [
+    check("puzzle_grid_min_1", sql`${table.rows} >= 1 AND ${table.cols} >= 1`),
+    check(
+      "puzzle_prices_non_negative",
+      sql`${table.unlockPrice} >= 0 AND ${table.piecePrice} >= 0`,
+    ),
+  ],
+);
+
+/**
+ * Ownership of one piece. **Absence of a row means locked**, exactly the way
+ * `holding` works for stickers.
+ *
+ * Nothing is written at creation: a 144-piece puzzle is 0 rows until the first
+ * purchase, and the board derives every locked piece from the grid. Seeding 144
+ * rows to represent "not bought yet" would be the same information stored twice.
+ */
+export const puzzlePiece = sqliteTable(
+  "puzzle_piece",
+  {
+    id: text("id").primaryKey(),
+    puzzleId: text("puzzle_id")
+      .notNull()
+      .references(() => puzzle.id),
+    /** Reading order: left to right, top to bottom. See shared/puzzle.ts. */
+    pieceIndex: integer("piece_index").notNull(),
+    acquiredAt: text("acquired_at").notNull(),
+  },
+  (table) => [
+    // UNIQUE, not an index. Buying a piece twice must be impossible at the
+    // database rather than merely unlikely in the route — the second purchase
+    // would take the coins and grant nothing new.
+    unique("puzzle_piece_unique").on(table.puzzleId, table.pieceIndex),
+  ],
+);
+
 // the single source of truth for the wallet. append-only (enforced by the ledger_no_update/ledger_no_delete triggers).
 export const ledger = sqliteTable(
   "ledger",
@@ -196,11 +274,23 @@ export const ledger = sqliteTable(
       .references(() => user.id),
     amountCoins: integer("amount_coins").notNull(),
     reason: text("reason", {
-      enum: ["task_reward", "album_unlock", "sticker_buy", "random_pull", "duplicate_sale"],
+      enum: [
+        "task_reward",
+        "album_unlock",
+        "sticker_buy",
+        "random_pull",
+        "duplicate_sale",
+        "puzzle_unlock",
+        "piece_unlock",
+      ],
     }).notNull(),
     occurrenceId: text("occurrence_id").references(() => occurrence.id),
     albumId: text("album_id").references(() => album.id),
     stickerId: text("sticker_id").references(() => sticker.id),
+    // What a puzzle spend points at. The piece itself is deliberately NOT
+    // referenced: one unlock buys many pieces and pays once, so a per-piece
+    // column could only ever hold one of them.
+    puzzleId: text("puzzle_id").references(() => puzzle.id),
     createdAt: text("created_at").notNull(),
   },
   (table) => [index("ledger_user_created_idx").on(table.userId, table.createdAt)],

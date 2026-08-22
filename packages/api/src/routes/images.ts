@@ -14,8 +14,9 @@ export const imageRoutes = new Hono<{ Bindings: Env; Variables: { userId: string
 
 /**
  * A generous ceiling for a 1772×2480 JPEG at q0.92 — a photographic cover lands
- * around 600 KB. The limit exists so a malformed client cannot make the Worker
- * hash an arbitrarily large body inside a 10 ms CPU budget.
+ * around 600 KB, and it is the largest kind there is: a 1536×1536 puzzle is
+ * barely half its pixels. The limit exists so a malformed client cannot make
+ * the Worker hash an arbitrarily large body inside a 10 ms CPU budget.
  */
 const MAX_BYTES = 5 * 1024 * 1024;
 

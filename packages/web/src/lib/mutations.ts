@@ -2,14 +2,18 @@ import type {
   CompleteOccurrence,
   CreateAlbumInput,
   CreateEpicInput,
+  CreatePuzzleInput,
   CreateTaskInput,
   DeleteEpic,
   Epic,
   PullResult,
   PurchaseResult,
+  Puzzle,
+  PuzzlePurchase,
   SaleResult,
   SealedAlbum,
   Task,
+  UnlockPiecesInput,
   UpdateEpic,
   UpdateTask,
 } from "@sticker-collector/shared";
@@ -331,6 +335,81 @@ export function useDeleteAlbum() {
       }),
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: keys.albumsAll });
+    },
+  });
+}
+
+/**
+ * Creating a puzzle seals it. There is no edit, only delete — `puzzle_frozen`
+ * refuses every change to the grid and the prices from this moment on.
+ */
+export function useCreatePuzzle() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: CreatePuzzleInput) =>
+      api<Puzzle>("/api/puzzles", {
+        method: "POST",
+        body: payload,
+        idempotencyKey: crypto.randomUUID(),
+      }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: keys.puzzlesAll });
+    },
+  });
+}
+
+/** Soft, like an album's: the coins spent inside it stay spent. */
+export function useDeletePuzzle() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      api<{ deleted: number }>(`/api/puzzles/${id}`, {
+        method: "DELETE",
+        idempotencyKey: crypto.randomUUID(),
+      }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: keys.puzzlesAll });
+    },
+  });
+}
+
+/** Opens the puzzle. No piece can be bought inside a locked one. */
+export function useUnlockPuzzle() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      api<PuzzlePurchase>(`/api/puzzles/${id}/unlock`, {
+        method: "POST",
+        idempotencyKey: crypto.randomUUID(),
+      }),
+    onSuccess: (result) => {
+      void client.invalidateQueries({ queryKey: keys.puzzle(result.puzzleId) });
+      void client.invalidateQueries({ queryKey: keys.puzzlesAll });
+      void client.invalidateQueries({ queryKey: keys.wallet });
+    },
+  });
+}
+
+/**
+ * Buys a selection as one payment.
+ *
+ * The whole selection or none of it — that is the Worker's guarantee, not this
+ * one's. What matters here is that the wallet and the board are both refetched
+ * afterwards: the balance moved and so did the picture.
+ */
+export function useUnlockPieces(id: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: UnlockPiecesInput) =>
+      api<PuzzlePurchase>(`/api/puzzles/${id}/pieces`, {
+        method: "POST",
+        body,
+        idempotencyKey: crypto.randomUUID(),
+      }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: keys.puzzle(id) });
+      void client.invalidateQueries({ queryKey: keys.puzzlesAll });
+      void client.invalidateQueries({ queryKey: keys.wallet });
     },
   });
 }

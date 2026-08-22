@@ -5,6 +5,7 @@ export * from "./bytes";
 export * from "./economy";
 export * from "./image";
 export * from "./kdf";
+export * from "./puzzle";
 export * from "./recurrence";
 export * from "./reports";
 export * from "./schema";

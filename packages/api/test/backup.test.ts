@@ -186,9 +186,8 @@ describe("the round trip", () => {
     expect(content(restored.occurrences, ["id", "taskId"])).toEqual(
       content(manifest.occurrences, ["id", "taskId"]),
     );
-    expect(
-      content(restored.ledger, ["id", "userId", "occurrenceId", "albumId", "stickerId"]),
-    ).toEqual(content(manifest.ledger, ["id", "userId", "occurrenceId", "albumId", "stickerId"]));
+    const ledgerRefs = ["id", "userId", "occurrenceId", "albumId", "stickerId", "puzzleId"];
+    expect(content(restored.ledger, ledgerRefs)).toEqual(content(manifest.ledger, ledgerRefs));
 
     // The ids really are new — the point of the remapping.
     expect(restored.albums[0]?.id).not.toBe(seeded.albumId);
@@ -472,5 +471,112 @@ describe("isolation and validation", () => {
       env,
     );
     expect(restored.status).toBe(401);
+  });
+});
+
+describe("puzzles survive the round trip", () => {
+  /** A puzzle with one piece bought and the coins that bought it. */
+  async function seedPuzzle() {
+    const puzzleId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO puzzle (id,user_id,title,description,image_key,unlock_price,piece_price,rows,cols,hide_locked,sealed_at,created_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+    )
+      .bind(
+        puzzleId,
+        userId,
+        "The harbour",
+        null,
+        PUZZLE_KEY,
+        300,
+        25,
+        6,
+        8,
+        1,
+        "2026-08-01T00:00:00Z",
+        "2026-08-01T00:00:00Z",
+      )
+      .run();
+    await env.DB.prepare(
+      "INSERT INTO puzzle_piece (id,puzzle_id,piece_index,acquired_at) VALUES (?,?,?,?)",
+    )
+      .bind(crypto.randomUUID(), puzzleId, 5, "2026-08-02T00:00:00Z")
+      .run();
+    await env.DB.prepare(
+      "INSERT INTO ledger (id,user_id,amount_coins,reason,puzzle_id,created_at) VALUES (?,?,?,?,?,?)",
+    )
+      .bind(crypto.randomUUID(), userId, -25, "piece_unlock", puzzleId, "2026-08-02T00:00:00Z")
+      .run();
+    return puzzleId;
+  }
+
+  const PUZZLE_KEY = `img/${"c".repeat(64)}.jpg`;
+
+  it("carries the puzzle, its pieces and its master image", async () => {
+    // `backup.ts` names its tables by hand. A table missing from either
+    // direction is data that vanishes on restore with nothing to say so — and
+    // the master image is the irreplaceable half.
+    await seedAccount();
+    await seedPuzzle();
+
+    const manifest = await exportManifest();
+    expect(manifest.puzzles).toHaveLength(1);
+    expect(manifest.puzzlePieces).toHaveLength(1);
+    expect(manifest.imageKeys).toContain(PUZZLE_KEY);
+
+    const fresh = await makeUser("Europe/Lisbon");
+    switchTo(fresh);
+    expect((await restore(manifest)).status).toBe(201);
+
+    const restored = await exportManifest();
+    expect(restored.puzzles).toHaveLength(1);
+    expect(restored.puzzles[0]).toMatchObject({ title: "The harbour", rows: 6, cols: 8 });
+    expect(restored.puzzlePieces).toHaveLength(1);
+    expect(restored.puzzlePieces[0]).toMatchObject({ pieceIndex: 5 });
+  });
+
+  it("keeps a piece attached to its own puzzle after the ids are remapped", async () => {
+    await seedAccount();
+    await seedPuzzle();
+    const manifest = await exportManifest();
+
+    const fresh = await makeUser("Europe/Lisbon");
+    switchTo(fresh);
+    await restore(manifest);
+
+    const restored = await exportManifest();
+    expect(restored.puzzlePieces[0]?.puzzleId).toBe(restored.puzzles[0]?.id);
+    // And the id really did move, which is the point of remapping.
+    expect(restored.puzzles[0]?.id).not.toBe(manifest.puzzles[0]?.id);
+  });
+
+  it("keeps a puzzle spend pointing at its puzzle", async () => {
+    await seedAccount();
+    await seedPuzzle();
+    const manifest = await exportManifest();
+
+    const fresh = await makeUser("Europe/Lisbon");
+    switchTo(fresh);
+    await restore(manifest);
+
+    const restored = await exportManifest();
+    const spend = restored.ledger.find((row) => row.reason === "piece_unlock");
+    expect(spend?.puzzleId).toBe(restored.puzzles[0]?.id);
+  });
+
+  it("restores a backup taken before puzzles existed", async () => {
+    // The reason `puzzles` is optional rather than a version bump: the old file
+    // is exactly the one someone reaches for when they most need it.
+    await seedAccount();
+    const manifest = await exportManifest();
+    const old = { ...manifest };
+    delete (old as Record<string, unknown>).puzzles;
+    delete (old as Record<string, unknown>).puzzlePieces;
+
+    const fresh = await makeUser("Europe/Lisbon");
+    switchTo(fresh);
+
+    expect((await restore(old as typeof manifest)).status).toBe(201);
+    expect((await exportManifest()).puzzles).toEqual([]);
   });
 });

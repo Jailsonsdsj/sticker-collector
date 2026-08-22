@@ -258,6 +258,47 @@ it yet).
 
 ---
 
+## Phase 9 — Jigsaw puzzles
+
+Requested 2026-08-21. A second thing to spend coins on, living in the Albums
+tab beside albums: import one image, split it into a grid, and buy the pieces
+back one at a time. Unlock the puzzle, then unlock pieces; the cover stays grey
+until the last piece lands.
+
+Split because it is six sessions' work and the first two are prerequisites for
+everything visible. `P9-01` in particular blocks the rest outright — the image
+endpoint currently refuses a puzzle-shaped image with a 422.
+
+**Decisions taken before any code** (they change the data model, and a migration
+cannot be edited once applied):
+
+| Question | Answer | Why it matters |
+|---|---|---|
+| How is the piece count chosen? | **Presets — 12 / 24 / 48 / 96 / 144 — with the grid derived from the image's aspect** | A count alone is not a grid: 48 is 6×8 or 8×6 or 4×12. A pure function in `packages/shared` picks the factor pair nearest the aspect, so the user keeps thinking in "how hard", and the choice is testable without a DOM |
+| What shape is a puzzle image? | **Square, 1536×1536 — a third `ImageKind`** | `PUT /api/images/:key` validates against `IMAGE_SIZES` and 422s anything else, so a third kind is unavoidable. Square divides evenly on both axes and crops landscape and portrait equally, where the cover's A5 portrait would maul a landscape photo |
+| How many pieces, and how many at once? | **144 maximum, 60 per unlock** | An unlock is one `spend()` plus one insert per piece in a single `db.batch` — the only way D1 gives all-or-nothing. 60 keeps a batch at 61 statements; chunking a larger one would break the guarantee and could charge for pieces it did not grant |
+| Where do puzzles appear? | **One mixed grid in the Albums tab**, each card badged with its kind | The spec asks to open a puzzle "the same way that happens with album". One place for everything bought, at the cost of the listing knowing two shapes |
+| One image or one per piece? | **One master image, pieces are CSS windows onto it** | CLAUDE.md: one colour master per image. 144 pieces would otherwise be 144 R2 objects and 144 uploads on a 10 ms CPU budget — and windows onto one image line up exactly, which is what makes requirement 7 (borders vanish, the picture is whole) true by construction rather than by care |
+| Can a puzzle be deleted? | **Soft, exactly like an album** | `ledger` will carry a `puzzle_id` foreign key and the ledger is append-only, so the row cannot go. This is the same reason album deletion is soft — the coins spent inside it must stay spent |
+
+| ID | Task | Size | Load |
+|---|---|---|---|
+| **P9-01** ✅ | **A third image kind.** `ImageKind` gains `puzzle` (1536×1536): `IMAGE_SIZES`, `imageKindForSize`, `aspectFillRect`/`panFreedom`, the client cropper and the Worker's 422. **No puzzle UI** — this is the unblock, and it is worth landing alone because every existing image path has to keep working. Landed with `IMAGE_KINDS` as the single list both the sizes and the validator derive from, and with the cropper's frame taking its shape from the kind rather than a literal `5 / 7` — a square dragged inside a 5:7 window would have shipped a different crop than the one positioned | S | `packages/shared/src/image.ts`, `packages/api/src/routes/images.ts` |
+| **P9-02** ✅ | **Puzzles in the data.** `puzzle` (title, description, image key, unlock price, rows, cols, unit price, `hide_locked`, `sealed_at`, `unlocked_at`, `completed_at`, `deleted_at`) and `puzzle_piece` (puzzle, index) where **absence of a row is locked**, the way `holding` already works. `ledger.reason` gains `puzzle_unlock`/`piece_unlock` and the table gains a `puzzle_id` column. A `puzzle_frozen` trigger, because "never edit" has to be enforced where the money is. Create + read endpoints, and **both directions of `backup.ts`** — it names its tables by hand, so a puzzle missing from the restore list is a puzzle silently dropped. Landed as migrations `0011` (tables, `ledger.puzzle_id`) and `0012` (the two triggers, hand-written because drizzle-kit cannot generate one). The manifest's new arrays are **optional with a default**, not a version bump — a backup taken before puzzles existed is exactly the file someone reaches for when they most need it | L | `P9-01`, `docs/architecture.md` §4, `docs/prd/09-data-model.md` |
+| **P9-03** ✅ | **Creating one.** The Create button on the Albums tab becomes a choice — Album or Puzzle — and the puzzle form takes title, description, image, unlock price, piece preset, unit price and the same hide-locked checkbox albums have. Sealed at creation; there is no edit — and the screen says so above the button rather than leaving it to be discovered. One screen, not a wizard: an album needs four steps for its per-tier prices and odds, a puzzle is one picture, two prices and a count. It also totals what finishing will cost, because 144 pieces at 10 coins is a fortnight of tasks and the prices are fixed the moment it is made | M | `P9-02`, `docs/prd/04-albums.md` |
+| **P9-04** ✅ | **The board.** One master image, each piece a CSS window onto it; locked pieces grey (or hidden, per the checkbox) and bordered, unlocked pieces bare so the picture is whole. Pan and pinch-zoom with the unlock bar fixed. **The risk lives here**: the sticker viewer already shipped a bug where the page scrolled behind the thing being dragged, and a board that swallows every gesture is the same trap from the other side. Landed: `touch-action: none` on the frame, gesture arithmetic as pure functions in `lib/puzzleBoard.ts`, and a drag that ends over a tile no longer counts as a tap on it. Verified in Chromium — adjacent tiles measure a **zero-pixel gap** on both axes, which is what makes the picture whole rather than nearly whole | L | `P9-02`, `docs/design-system.md` |
+| **P9-05** ✅ | **Buying pieces.** Multi-select on the board, the price shown once on screen and never on a piece, the sum charged as one `spend()` with the piece inserts gated on `PAID_FOR` in the same batch. 402 when the wallet is short, and the completion stamp that turns the cover full colour. Also the puzzle's own unlock, which is the gate on the whole thing. A piece already owned is **dropped from the selection rather than refused** — two taps racing on a flaky connection is normal, and paying twice for one piece is the outcome that cannot be undone | M | `P9-04`, `docs/prd/01-coins.md` |
+| **P9-06** ✅ | **Deleting, and the mixed listing.** Soft delete behind the same confirmation an album uses; puzzles in the Albums grid with its sort, filter, pagination and backup nudge taught the second shape. One comparator in `lib/shelf.ts` mirrors the server's so an album cannot move just because a puzzle exists. Two things the wiring turned up: the backup nudge was typed to albums, so making a puzzle — whose master image exists nowhere else — never prompted the backup that would save it; and a puzzle's cover stays grey until it is **finished**, not until it is unlocked, because a puzzle is one picture rather than a container you open and then fill | S | `P9-03` |
+
+**Known gaps, deliberately out of scope** (recorded so they are not mistaken for
+oversights): a completed puzzle has **no print-ready PDF** — that export is
+album-only and nothing asked for a puzzle one; there is **no duplicate or random
+pull** for pieces, since a piece is bought by pointing at it; and a puzzle does
+**not** contribute to album progress, streaks or any report beyond the coins it
+spends.
+
+---
+
 ## Post-MVP
 
 Phase 7 above holds the *product* features deferred from the spec. This section
