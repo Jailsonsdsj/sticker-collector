@@ -36,11 +36,13 @@ test("a sheet's Cancel and Save clear the status bar", async ({ page }) => {
 
   // Cancel must sit inside the sheet, below its top edge.
   const cancel = page.locator("dialog[open]").getByRole("button", { name: "Cancel" });
-  const [cancelBox, dialogBox] = [
-    await cancel.boundingBox(),
-    await page.locator("dialog[open]").boundingBox(),
-  ];
-  expect(cancelBox!.y).toBeGreaterThanOrEqual(dialogBox!.y);
+  const cancelBox = await cancel.boundingBox();
+  const dialogBox = await page.locator("dialog[open]").boundingBox();
+  // Thrown, not asserted away with `?.`: a missing box means the sheet or its
+  // button never rendered, and comparing `undefined` would pass quietly.
+  if (!cancelBox || !dialogBox) throw new Error("the sheet or its Cancel button is not on screen");
+
+  expect(cancelBox.y).toBeGreaterThanOrEqual(dialogBox.y);
 });
 
 test("Cancel is actually legible, not 6% white", async ({ page }) => {
@@ -146,7 +148,9 @@ test("the effort presets scroll sideways instead of shrinking", async ({ page })
       .locator("dialog[open]")
       .getByRole("button", { name: label, exact: true })
       .boundingBox();
-    expect(box!.width, label).toBeGreaterThan(30);
+    if (!box) throw new Error(`the ${label} preset is not on screen`);
+
+    expect(box.width, label).toBeGreaterThan(30);
   }
 });
 

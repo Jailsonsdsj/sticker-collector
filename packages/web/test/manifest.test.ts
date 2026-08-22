@@ -11,12 +11,6 @@ import { describe, expect, it } from "vitest";
  * manifest that names icons which are missing, or whose real pixel size does
  * not match the `sizes` it declares.
  */
-const web = (path: string) =>
-  resolve(
-    process.cwd(),
-    path.startsWith("src") || path.startsWith("public") || path === "index.html" ? path : path,
-  );
-
 const root = (() => {
   const candidates = [process.cwd(), resolve(process.cwd(), "packages/web")];
   return candidates.find((dir) => existsSync(resolve(dir, "index.html"))) as string;

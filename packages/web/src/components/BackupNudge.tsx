@@ -1,4 +1,3 @@
-import type { AlbumSummary } from "@sticker-collector/shared";
 import { useState } from "react";
 import { Link } from "react-router";
 import { dismissNudge, lastAlbumChange, shouldNudge } from "../lib/backupState";

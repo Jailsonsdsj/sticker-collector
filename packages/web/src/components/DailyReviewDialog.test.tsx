@@ -34,7 +34,7 @@ describe("reading a day back", () => {
   it("counts one thing as one thing", () => {
     render(
       <DailyReviewDialog
-        review={review({ rows: [review().rows[0]!], coins: 30 })}
+        review={review({ rows: review().rows.slice(0, 1), coins: 30 })}
         onClose={vi.fn()}
       />,
     );

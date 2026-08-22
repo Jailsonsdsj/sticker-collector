@@ -128,7 +128,7 @@ describe("restoring", () => {
     await restoreBackup({ archive: archive() });
 
     const uploads = calls.filter((call) => call.startsWith("PUT /api/images/"));
-    const post = calls.findIndex((call) => call === "POST /api/backup/restore");
+    const post = calls.indexOf("POST /api/backup/restore");
 
     expect(uploads).toHaveLength(2);
     for (const upload of uploads) {

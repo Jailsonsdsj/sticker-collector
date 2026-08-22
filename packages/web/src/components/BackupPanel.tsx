@@ -1,4 +1,3 @@
-import { todayIn } from "@sticker-collector/shared";
 import { useRef, useState } from "react";
 import { exportBackup, restoreBackup } from "../lib/backupClient";
 import { lastExportAt, recordExport } from "../lib/backupState";

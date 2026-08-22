@@ -183,6 +183,11 @@ export function PuzzleBoard({
       >
         {Array.from({ length: total }, (_, index) => (
           <Piece
+            /* The index IS the identity here: piece 5 is the fifth cell of a
+               fixed grid and the key a purchase is recorded under. The list is
+               generated from a length, so it can never reorder or be filtered
+               — the two things this rule exists to catch. */
+            // biome-ignore lint/suspicious/noArrayIndexKey: the index is the piece's identity
             key={index}
             index={index}
             grid={grid}
