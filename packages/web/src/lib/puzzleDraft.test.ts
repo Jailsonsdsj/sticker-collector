@@ -137,3 +137,25 @@ describe("the payload", () => {
     expect(toPayload(ready({ hideLocked: true }))).toMatchObject({ hideLocked: true });
   });
 });
+
+describe("pricing the gamble", () => {
+  it("is optional — a puzzle without one simply has no gamble", () => {
+    expect(validate(ready({ randomPrice: "" }))).toBeNull();
+    expect(toPayload(ready({ randomPrice: "" }))).toMatchObject({ randomPrice: null });
+  });
+
+  it("must be worth something once it is offered", () => {
+    // A free pull is not a pull — the same floor an album's random price has.
+    expect(validate(ready({ randomPrice: "0" }))).toMatch(/at least 1/i);
+    expect(validate(ready({ randomPrice: "-5" }))).not.toBeNull();
+    expect(validate(ready({ randomPrice: "2.5" }))).not.toBeNull();
+  });
+
+  it("passes it through as a number", () => {
+    expect(toPayload(ready({ randomPrice: "40" }))).toMatchObject({ randomPrice: 40 });
+  });
+
+  it("counts as a change worth asking about before leaving", () => {
+    expect(isPristine(apply(initialDraft, { kind: "randomPrice", value: "40" }))).toBe(false);
+  });
+});

@@ -1,6 +1,6 @@
 import type { AlbumSummary, Puzzle } from "@sticker-collector/shared";
 import { describe, expect, it } from "vitest";
-import { puzzleStatus, shelf } from "./shelf";
+import { puzzleStatus, shelf, unlockTarget } from "./shelf";
 
 const album = (over: Partial<AlbumSummary> = {}): AlbumSummary =>
   ({
@@ -27,6 +27,7 @@ const puzzle = (over: Partial<Puzzle> = {}): Puzzle => ({
   imageHeight: 1024,
   unlockPrice: 100,
   piecePrice: 25,
+  randomPrice: 40,
   rows: 2,
   cols: 3,
   hideLocked: false,
@@ -150,5 +151,34 @@ describe("the order, which has to match the server's", () => {
     // not be the thing that discovers otherwise.
     const items = shelf([], [puzzle({ rows: 0, cols: 0, ownedCount: 0 })], "all", "progress");
     expect(items).toHaveLength(1);
+  });
+});
+
+describe("what an unlock is about", () => {
+  it("carries the kind, because the two need different mutations", () => {
+    // One dialog, two endpoints. Losing the kind here would post an album
+    // unlock for a puzzle id and 404 at the far end.
+    expect(unlockTarget({ kind: "album", id: "a1", album: album() }).kind).toBe("album");
+    expect(unlockTarget({ kind: "puzzle", id: "p1", puzzle: puzzle() }).kind).toBe("puzzle");
+  });
+
+  it("takes the price and title from whichever thing it is", () => {
+    expect(unlockTarget({ kind: "album", id: "a1", album: album() })).toEqual({
+      kind: "album",
+      id: "a1",
+      title: "Kitchen heroes",
+      unlockPrice: 500,
+    });
+    expect(unlockTarget({ kind: "puzzle", id: "p1", puzzle: puzzle() })).toEqual({
+      kind: "puzzle",
+      id: "p1",
+      title: "The harbour",
+      unlockPrice: 100,
+    });
+  });
+
+  it("takes the shelf item's own id, which is what the mutation is keyed by", () => {
+    const item = { kind: "puzzle", id: "p9", puzzle: puzzle({ id: "p9" }) } as const;
+    expect(unlockTarget(item).id).toBe("p9");
   });
 });

@@ -5,7 +5,8 @@ import { DeletePuzzleDialog } from "../components/DeletePuzzleDialog";
 import { AppHeader } from "../components/layout";
 import { PuzzleBoard } from "../components/PuzzleBoard";
 import { Button, Coin, ErrorState, ProgressBar, Skeleton } from "../components/ui";
-import { useDeletePuzzle, useUnlockPieces, useUnlockPuzzle } from "../lib/mutations";
+import { useDeletePuzzle, usePullPiece, useUnlockPieces, useUnlockPuzzle } from "../lib/mutations";
+import { playPieceLanding } from "../lib/placement";
 import { usePuzzle, useWallet } from "../lib/queries";
 
 /**
@@ -28,6 +29,7 @@ export function PuzzleView() {
   const wallet = useWallet();
   const unlock = useUnlockPuzzle();
   const buy = useUnlockPieces(id ?? "");
+  const pull = usePullPiece(id ?? "");
   const [picked, setPicked] = useState<ReadonlySet<number>>(new Set());
   // Bumped to put the picture back where it opened. A counter rather than a
   // boolean: pressing reset twice in a row has to work the second time.
@@ -75,6 +77,25 @@ export function PuzzleView() {
       return next;
     });
   };
+
+  async function gamble() {
+    if (pull.isPending) return;
+    setFailure(null);
+    try {
+      const result = await pull.mutateAsync();
+      const [landed] = result.pieces;
+      // On the next frame, not this one: the tile only becomes an owned piece
+      // once the refetched board has rendered, and animating the locked one
+      // would drop a grey square into place and then swap it for the picture.
+      if (landed !== undefined) {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => playPieceLanding(landed));
+        });
+      }
+    } catch {
+      setFailure("Could not pull a piece. Try again.");
+    }
+  }
 
   async function purchase() {
     if (picked.size === 0 || buy.isPending) return;
@@ -201,15 +222,32 @@ export function PuzzleView() {
                   </>
                 )}
               </span>
-              <Button
-                tone="lime"
-                size="sm"
-                disabled={picked.size === 0 || !affordable || buy.isPending}
-                loading={buy.isPending}
-                onClick={purchase}
-              >
-                {picked.size > 0 && !affordable ? "Not enough coins" : "Unlock"}
-              </Button>
+              <span className="flex items-center gap-2">
+                {/* Offered only when the author priced one. A puzzle without a
+                    random price simply has no gamble, the same way an album
+                    without one would not. */}
+                {board.randomPrice > 0 && picked.size === 0 && (
+                  <Button
+                    variant="outline"
+                    tone="coin"
+                    size="sm"
+                    disabled={board.randomPrice > balance || pull.isPending}
+                    loading={pull.isPending}
+                    onClick={gamble}
+                  >
+                    Random {board.randomPrice}
+                  </Button>
+                )}
+                <Button
+                  tone="lime"
+                  size="sm"
+                  disabled={picked.size === 0 || !affordable || buy.isPending}
+                  loading={buy.isPending}
+                  onClick={purchase}
+                >
+                  {picked.size > 0 && !affordable ? "Not enough coins" : "Unlock"}
+                </Button>
+              </span>
             </>
           ) : (
             <>

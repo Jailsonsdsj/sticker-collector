@@ -7,7 +7,6 @@ import {
   clampOffset,
   FIXED_IMAGE_KINDS,
   hashFromImageKey,
-  IMAGE_KINDS,
   IMAGE_SIZES,
   type ImageKind,
   imageKey,

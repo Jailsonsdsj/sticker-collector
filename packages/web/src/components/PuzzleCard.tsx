@@ -1,10 +1,14 @@
 import { type Puzzle, pieceCount } from "@sticker-collector/shared";
 import { Link } from "react-router";
 import { imageSrc } from "../lib/imageUpload";
-import { Badge, ImageTile, ProgressBar } from "./ui";
+import { Badge, Button, ImageTile, ProgressBar } from "./ui";
+import { cx } from "./ui/cx";
 
 export interface PuzzleCardProps {
   puzzle: Puzzle;
+  /** Whether the balance covers `unlockPrice` right now. */
+  affordable: boolean;
+  onUnlock: () => void;
 }
 
 /**
@@ -18,10 +22,17 @@ export interface PuzzleCardProps {
  *
  * Badged, because the shelf now holds two kinds of thing and a card that does
  * not say which is a card you have to open to find out.
+ *
+ * Beneath the cover sits the **same single full-width control an album card
+ * has**: *Unlock ‹price›* while locked, the progress bar once it is open. Two
+ * cards side by side in one grid, where one can be bought from the shelf and
+ * the other has to be opened first, is a difference the user has to learn for
+ * no reason.
  */
-export function PuzzleCard({ puzzle }: PuzzleCardProps) {
+export function PuzzleCard({ puzzle, affordable, onUnlock }: PuzzleCardProps) {
   const total = pieceCount({ rows: puzzle.rows, cols: puzzle.cols });
   const done = puzzle.completedAt !== null;
+  const locked = puzzle.unlockedAt === null;
   const percent = total === 0 ? 0 : (puzzle.ownedCount / total) * 100;
 
   return (
@@ -33,12 +44,20 @@ export function PuzzleCard({ puzzle }: PuzzleCardProps) {
         className="relative block overflow-hidden rounded-2xl border border-border focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan"
         style={{ aspectRatio: "var(--aspect-card)" }}
       >
-        {/* `contain`, not `cover`: a puzzle keeps the shape it was imported at,
-            and cropping the card's thumbnail would hide the same ends the
-            import used to cut off. */}
+        {/* Sits behind the cover and does nothing until an unlock plays it. */}
+        <span
+          data-part="unlock-ring"
+          aria-hidden
+          className="pointer-events-none absolute inset-0 m-auto size-32 rounded-full border-2 border-coin opacity-0"
+        />
+
+        {/* `cover`, like an album's. The card is a thumbnail in a grid of
+            thumbnails, and a letterboxed one reads as a broken tile beside
+            them. Nothing is lost by it: the whole picture is what got stored,
+            and the board is where you see all of it. */}
         <ImageTile
           src={imageSrc(puzzle.imageKey)}
-          className="object-contain transition-[filter] duration-500"
+          className="object-cover transition-[filter] duration-500"
           // Grey until finished. Unlocking buys the right to start, not the
           // picture.
           style={{ filter: done ? "var(--filter-unlocked)" : "var(--filter-locked)" }}
@@ -66,19 +85,27 @@ export function PuzzleCard({ puzzle }: PuzzleCardProps) {
         {puzzle.title}
       </h3>
 
-      {puzzle.unlockedAt ? (
+      {locked ? (
+        <Button
+          block
+          size="sm"
+          tone={affordable ? "coin" : "neutral"}
+          variant={affordable ? "solid" : "outline"}
+          onClick={onUnlock}
+          // The affordability cue an album card carries: a thing the balance
+          // could open right now is marked, so "what can I afford" needs no
+          // arithmetic.
+          className={cx(affordable && "shadow-coin")}
+        >
+          Unlock {puzzle.unlockPrice}
+        </Button>
+      ) : (
         <ProgressBar
           size="sm"
           tone={done ? "lime" : "violet"}
           value={percent}
           aria-label={`${puzzle.title} progress`}
         />
-      ) : (
-        // No unlock button here, unlike an album's card. A puzzle is opened
-        // from its own board, where the picture it buys is the thing on screen.
-        <p className="text-center font-numeric text-2xs text-ink-muted">
-          Locked · {puzzle.unlockPrice}
-        </p>
       )}
     </div>
   );

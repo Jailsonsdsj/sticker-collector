@@ -302,3 +302,13 @@ describe("putting the picture back", () => {
     expect(transform()).toBe("translate(0px, 200px) scale(1)");
   });
 });
+
+describe("finding a tile from outside", () => {
+  it("labels each tile with its index, so a landing can find it", () => {
+    // An attribute rather than an id: ids are unique per document, and the same
+    // board can be mounted twice while a route transitions.
+    view();
+
+    expect(pieces()[3]).toHaveAttribute("data-piece-index", "3");
+  });
+});

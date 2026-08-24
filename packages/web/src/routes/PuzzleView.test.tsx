@@ -26,6 +26,7 @@ const puzzle = (over: Partial<PuzzleDetail> = {}): PuzzleDetail => ({
   imageHeight: 1024,
   unlockPrice: 100,
   piecePrice: 25,
+  randomPrice: 40,
   rows: 2,
   cols: 3,
   hideLocked: false,
@@ -338,5 +339,100 @@ describe("the board takes the screen", () => {
     expect(await screen.findByText(/picture is whole/i)).toBeInTheDocument();
     expect(screen.getByRole("progressbar")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Unlock" })).not.toBeInTheDocument();
+  });
+});
+
+describe("the gamble", () => {
+  const posts = (path: string) =>
+    fetchMock.mock.calls.filter(([url, init]) => init?.method === "POST" && url === path);
+
+  it("is offered when the author priced one", async () => {
+    open(puzzle({ randomPrice: 40 }));
+
+    expect(await screen.findByRole("button", { name: /Random 40/ })).toBeInTheDocument();
+  });
+
+  it("is absent when they did not", async () => {
+    // Zero means "no gamble on this puzzle", never "free".
+    open(puzzle({ randomPrice: 0 }));
+    await tiles();
+
+    expect(screen.queryByRole("button", { name: /Random/ })).not.toBeInTheDocument();
+  });
+
+  it("asks the Worker to pick, and names no piece", async () => {
+    // A client that chose its own index would be buying a named piece at the
+    // random price.
+    const user = userEvent.setup();
+    open(puzzle({ randomPrice: 40 }));
+
+    await user.click(await screen.findByRole("button", { name: /Random 40/ }));
+
+    await waitFor(() => expect(posts("/api/puzzles/p1/pieces/random")).toHaveLength(1));
+    const [, init] = posts("/api/puzzles/p1/pieces/random")[0] as [string, RequestInit];
+    expect(init.body).toBeUndefined();
+  });
+
+  it("is off when the wallet cannot cover it", async () => {
+    open(puzzle({ randomPrice: 40 }), 10);
+
+    expect(await screen.findByRole("button", { name: /Random 40/ })).toBeDisabled();
+  });
+
+  it("gets out of the way once pieces are picked", async () => {
+    // Two buttons offering different things at different prices on one bar is
+    // a choice nobody asked for mid-selection.
+    const user = userEvent.setup();
+    open(puzzle({ randomPrice: 40 }));
+    const all = await tiles();
+
+    await user.click(all[0] as HTMLElement);
+
+    expect(screen.queryByRole("button", { name: /Random/ })).not.toBeInTheDocument();
+  });
+
+  it("plays the piece into its slot", async () => {
+    // The animation is the point of the pull: a piece appearing without one is
+    // indistinguishable from the board refetching.
+    const user = userEvent.setup();
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      const read = (init?.method ?? "GET") === "GET";
+      if (read && url.startsWith("/api/puzzles/")) return json(puzzle({ randomPrice: 40 }));
+      if (read && url.startsWith("/api/wallet")) return json({ balance: 1000 });
+      return json(
+        { balance: 960, spentCoins: 40, puzzleId: "p1", pieces: [4], completed: false },
+        201,
+      );
+    });
+    const router = createMemoryRouter([{ path: "/puzzles/:id", element: <PuzzleView /> }], {
+      initialEntries: ["/puzzles/p1"],
+    });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: /Random 40/ }));
+
+    // The tile the Worker chose is the one the board can hand to the animation.
+    await waitFor(() =>
+      expect(document.querySelector('[data-piece-index="4"]')).toBeInTheDocument(),
+    );
+  });
+
+  it("says so when the pull fails", async () => {
+    const user = userEvent.setup();
+    open(puzzle({ randomPrice: 40 }));
+    await screen.findByRole("button", { name: /Random 40/ });
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) =>
+      (init?.method ?? "GET") === "GET"
+        ? json(url.startsWith("/api/wallet") ? { balance: 1000 } : puzzle({ randomPrice: 40 }))
+        : json({ error: "every piece is already yours" }, 409),
+    );
+
+    await user.click(screen.getByRole("button", { name: /Random 40/ }));
+
+    expect(await screen.findByText(/could not pull/i)).toBeInTheDocument();
   });
 });

@@ -103,7 +103,10 @@ beforeEach(() => {
   vi.stubGlobal("fetch", fetchMock);
 });
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
 
 const renderScreen = () => render(<Week />, { wrapper });
 const scheduleCell = (day: string) => screen.getByRole("checkbox", { name: `Stretch — ${day}` });
@@ -259,13 +262,23 @@ describe("opening a block on the agenda", () => {
   it("withholds Done on a day that has not arrived, but still opens it", async () => {
     // T-05 refuses a completion before its day, so the sheet offers everything
     // except the one action the API would 400. W8-05 is where that changes.
+    //
+    // The clock is PINNED to a Wednesday. Deriving "tomorrow" from the real one
+    // was `(weekdayOf(today()) + 1) % 7`, which on a Sunday wraps to Monday —
+    // and Monday's date in the visible week is in the PAST, so Done was offered
+    // and the test failed on Sundays only. Fifth of the TD-30/33/36/39 family,
+    // and the first where the calendar wrapped rather than merely moved.
+    // `toFake: ["Date"]` so userEvent's own timers keep running.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-08-19T12:00:00Z"));
+
     const ahead = (): Task[] => [
       {
         ...(ROUTINES[0] as Task),
         id: "t1",
         title: "Stretch",
         weekdays: WEEKDAYS_MASK_ALL,
-        // Tomorrow, wrapping to Monday when today is Sunday.
+        // Thursday, which is genuinely later in the week than Wednesday.
         slots: [{ weekday: ((weekdayOf(today()) + 1) % 7) as Weekday, startMin: 600, endMin: 660 }],
       },
     ];

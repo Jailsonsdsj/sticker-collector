@@ -34,6 +34,26 @@ export function puzzleStatus(puzzle: Puzzle): AlbumStatus {
   return "locked";
 }
 
+/**
+ * What the shelf's unlock confirmation is about.
+ *
+ * Both cards open the same dialog and then need different mutations, so the
+ * kind travels with the two facts the dialog shows. Flattened here rather than
+ * in the route: reducing an album and a puzzle to the facts they share is what
+ * this module already exists to do.
+ */
+export type UnlockTarget = {
+  kind: ShelfItem["kind"];
+  id: string;
+  title: string;
+  unlockPrice: number;
+};
+
+export function unlockTarget(item: ShelfItem): UnlockTarget {
+  const { title, unlockPrice } = item.kind === "album" ? item.album : item.puzzle;
+  return { kind: item.kind, id: item.id, title, unlockPrice };
+}
+
 function statusOf(item: ShelfItem): AlbumStatus {
   return item.kind === "album" ? item.album.status : puzzleStatus(item.puzzle);
 }

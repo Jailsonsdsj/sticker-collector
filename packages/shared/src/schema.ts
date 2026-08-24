@@ -471,6 +471,15 @@ export const createPuzzleSchema = z
     /** Every piece costs this. Shown once on the board, never on a piece. */
     piecePrice: z.int().min(0).max(1_000_000),
     /**
+     * One random locked piece, at this price.
+     *
+     * **At least 1**, like an album's `randomPrice` and for the same reason: a
+     * free gamble is not a gamble. Optional, because a puzzle whose author does
+     * not want one simply has none — and the route will not sell what has no
+     * price.
+     */
+    randomPrice: z.int().min(1).max(1_000_000).nullish(),
+    /**
      * A preset, not a free number: a count is not a grid, and only some factor
      * pairs of a given count make a puzzle. `gridFor` turns this into rows and
      * cols, and the route stores those.
@@ -493,6 +502,8 @@ export const puzzleSchema = z.object({
   imageHeight: z.int().min(1),
   unlockPrice: z.int().min(0),
   piecePrice: z.int().min(0),
+  /** 0 means the author did not offer one. */
+  randomPrice: z.int().min(0),
   rows: z.int().min(1),
   cols: z.int().min(1),
   hideLocked: z.boolean(),
