@@ -1,4 +1,3 @@
-import type { AlbumStatus } from "@sticker-collector/shared";
 import { ALBUM_SORTS } from "@sticker-collector/shared";
 import { useState } from "react";
 import { Navigate } from "react-router";
@@ -13,7 +12,13 @@ import { ApiError } from "../lib/api";
 import { useUnlockAlbum, useUnlockPuzzle } from "../lib/mutations";
 import { playUnlock } from "../lib/placement";
 import { useAlbums, usePuzzles, useWallet } from "../lib/queries";
-import { shelf, type UnlockTarget, unlockTarget } from "../lib/shelf";
+import {
+  type ShelfFilter,
+  serverStatus,
+  shelf,
+  type UnlockTarget,
+  unlockTarget,
+} from "../lib/shelf";
 
 /**
  * The shelf.
@@ -22,12 +27,42 @@ import { shelf, type UnlockTarget, unlockTarget } from "../lib/shelf";
  * no store (`prd/04-albums.md` §2). Status both filters and sorts (§3): the
  * tabs hide and show, the sort chips only reorder.
  */
-const FILTERS: { value: AlbumStatus | "all"; label: string; tone: "violet" | "cyan" | "lime" }[] = [
-  { value: "all", label: "All", tone: "violet" },
-  { value: "in_progress", label: "Collecting", tone: "cyan" },
+const FILTERS: { value: ShelfFilter; label: string; tone: "violet" | "cyan" | "lime" }[] = [
+  { value: "collecting", label: "Collecting", tone: "cyan" },
   { value: "locked", label: "Locked", tone: "violet" },
-  { value: "completed", label: "Done", tone: "lime" },
+  { value: "all", label: "All", tone: "violet" },
+  { value: "done", label: "Done", tone: "lime" },
 ];
+
+/**
+ * The tab the shelf opens on.
+ *
+ * What you came to look at is the thing you are part-way through; everything
+ * else is either not started or already finished. `All` is still there, one tap
+ * away and in the middle of the row rather than at its head.
+ */
+const DEFAULT_FILTER: ShelfFilter = "collecting";
+
+/**
+ * What an empty grid says.
+ *
+ * Collecting is now a **landing** screen rather than somewhere you chose to go,
+ * so "nothing has that status" would be a true sentence and a dead end — it is
+ * the one filter that has to say where to go next. The other two are a choice
+ * the user made, and telling them the choice came up empty is enough.
+ */
+const NOTHING: Record<ShelfFilter, { title: string; description: string }> = {
+  all: {
+    title: "Nothing here yet",
+    description: "Albums and puzzles are yours to author. Make one, then earn your way through it.",
+  },
+  collecting: {
+    title: "Nothing on the go",
+    description: "Open one from Locked to start collecting, or make something new.",
+  },
+  locked: { title: "Nothing here", description: "Nothing has that status right now." },
+  done: { title: "Nothing here", description: "Nothing has that status right now." },
+};
 
 const SORT_LABELS: Record<(typeof ALBUM_SORTS)[number], string> = {
   status: "Status",
@@ -60,13 +95,15 @@ export function paginate<T>(rows: T[], page: number, perPage = ALBUMS_PER_PAGE) 
 }
 
 export function Albums() {
-  const [filter, setFilter] = useState<AlbumStatus | "all">("all");
+  const [filter, setFilter] = useState<ShelfFilter>(DEFAULT_FILTER);
   const [creating, setCreating] = useState(false);
   const [sort, setSort] = useState<(typeof ALBUM_SORTS)[number]>("status");
   const [unlocking, setUnlocking] = useState<UnlockTarget | null>(null);
   const [page, setPage] = useState(0);
 
-  const albums = useAlbums({ status: filter === "all" ? undefined : filter, sort });
+  // Undefined for a tab that spans two statuses — the server takes one, so
+  // Collecting fetches unfiltered and `shelf` narrows it.
+  const albums = useAlbums({ status: serverStatus(filter), sort });
   const puzzles = usePuzzles();
   const wallet = useWallet();
   const unlockAlbum = useUnlockAlbum();
@@ -152,15 +189,7 @@ export function Albums() {
         // gone when the truth is that the request never landed.
         <ErrorState error={albums.error} onRetry={() => void albums.refetch()} />
       ) : items.length === 0 ? (
-        <EmptyState
-          icon="◈"
-          title={filter === "all" ? "Nothing here yet" : "Nothing here"}
-          description={
-            filter === "all"
-              ? "Albums and puzzles are yours to author. Make one, then earn your way through it."
-              : "Nothing has that status right now."
-          }
-        />
+        <EmptyState icon="◈" {...NOTHING[filter]} />
       ) : (
         <>
           <AlbumGrid>
