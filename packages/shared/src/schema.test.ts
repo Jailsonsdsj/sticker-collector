@@ -106,6 +106,47 @@ describe("createTaskSchema — bounds", () => {
   });
 });
 
+describe("a task's description has no ceiling", () => {
+  // Every other description in the app is a caption on something you look at,
+  // and 2000 characters is generous for those. A task's is the working notes —
+  // the steps, the context, the thing you will have forgotten — and the cap was
+  // a wall you hit mid-sentence in the one place it was ever going to be hit.
+  const long = "x".repeat(50_000);
+
+  it("takes a description far past the old 2000 limit", () => {
+    expect(createTaskSchema.safeParse({ ...routine, description: long }).success).toBe(true);
+  });
+
+  it("takes one on the edit path too, or a long note could be written and never saved", () => {
+    expect(updateTaskSchema.safeParse({ description: long }).success).toBe(true);
+  });
+
+  it("still lets a description be absent, which is not the same as empty", () => {
+    expect(createTaskSchema.safeParse({ ...routine, description: null }).success).toBe(true);
+    expect(createTaskSchema.safeParse(routine).success).toBe(true);
+  });
+
+  it("keeps every other description capped, since only the task's was the problem", () => {
+    // An album's blurb is a caption. Removing its bound was not asked for and
+    // would let one paste bloat the listing payload for every card on it.
+    const album = {
+      title: "Kitchen heroes",
+      coverKey: `img/${"a".repeat(64)}.jpg`,
+      unlockPrice: 200,
+      randomPrice: 40,
+      prices: { common: 10, rare: 20, epic: 30, legendary: 40 },
+      odds: { common: 60, rare: 25, epic: 12, legendary: 3 },
+      stickers: [{ imageKey: `img/${"b".repeat(64)}.jpg`, tier: "common" }],
+    };
+
+    // Asserted first, and it is the half that matters: without it the payload
+    // could be rejected for a missing field and this test would pass whatever
+    // the cap did. It did exactly that until a mutant caught it.
+    expect(createAlbumSchema.safeParse(album).success).toBe(true);
+    expect(createAlbumSchema.safeParse({ ...album, description: long }).success).toBe(false);
+  });
+});
+
 describe("createTaskSchema — the economy is integer coins", () => {
   it("defaults the reward to the effort", () => {
     const parsed = createTaskSchema.parse({ ...routine, effortMinutes: 45 });

@@ -1,6 +1,14 @@
 import type { AlbumSummary, Puzzle } from "@sticker-collector/shared";
 import { describe, expect, it } from "vitest";
-import { puzzleStatus, type ShelfFilter, serverStatus, shelf, unlockTarget } from "./shelf";
+import {
+  matching,
+  ofKind,
+  puzzleStatus,
+  type ShelfFilter,
+  serverStatus,
+  shelf,
+  unlockTarget,
+} from "./shelf";
 
 const album = (over: Partial<AlbumSummary> = {}): AlbumSummary =>
   ({
@@ -249,5 +257,109 @@ describe("what an unlock is about", () => {
   it("takes the shelf item's own id, which is what the mutation is keyed by", () => {
     const item = { kind: "puzzle", id: "p9", puzzle: puzzle({ id: "p9" }) } as const;
     expect(unlockTarget(item).id).toBe("p9");
+  });
+});
+
+describe("searching the shelf", () => {
+  const items = shelf(
+    [album({ id: "a1", title: "Kitchen heroes" }), album({ id: "a2", title: "Garden birds" })],
+    [puzzle({ id: "p1", title: "The harbour" })],
+    "all",
+    "title",
+  );
+
+  it("keeps what the title contains, whatever kind it is", () => {
+    expect(ids(matching(items, "har"))).toEqual(["p1"]);
+    expect(ids(matching(items, "heroes"))).toEqual(["a1"]);
+  });
+
+  it("ignores case, because nobody types a capital into a search box", () => {
+    expect(ids(matching(items, "KITCHEN"))).toEqual(["a1"]);
+  });
+
+  it("matches inside a word, not only at the start", () => {
+    // "bird" would be found by a prefix match; "arden" is the one that proves
+    // it is a contains.
+    expect(ids(matching(items, "arden"))).toEqual(["a2"]);
+  });
+
+  it("takes everything back when the box is emptied", () => {
+    expect(ids(matching(items, ""))).toEqual(ids(items));
+    expect(ids(matching(items, "   "))).toEqual(ids(items));
+  });
+
+  it("ignores space either side, which a paste brings with it", () => {
+    expect(ids(matching(items, "  harbour  "))).toEqual(["p1"]);
+  });
+
+  it("returns nothing rather than everything when nothing matches", () => {
+    // The failure that matters: a filter that falls back to the whole list on
+    // no match looks like it is working right up until you search.
+    expect(matching(items, "zzz")).toEqual([]);
+  });
+
+  it("keeps the order it was given, since the sort already ran", () => {
+    const wide = shelf(
+      [album({ id: "z", title: "Alpha" }), album({ id: "a", title: "Beta" })],
+      [puzzle({ id: "p", title: "Gamma" })],
+      "all",
+      "title",
+    );
+    expect(ids(matching(wide, "a"))).toEqual(ids(wide));
+  });
+
+  it("does not hand back the array it was given", () => {
+    // Callers paginate the result; mutating the caller's list would be a
+    // surprise the type does not warn about.
+    const same = matching(items, "");
+    expect(same).not.toBe(items);
+  });
+});
+
+describe("showing one kind of thing", () => {
+  const mixed = shelf(
+    [album({ id: "a1", title: "Kitchen heroes" }), album({ id: "a2", title: "Garden birds" })],
+    [puzzle({ id: "p1", title: "The harbour" })],
+    "all",
+    "title",
+  );
+
+  it("keeps only the albums", () => {
+    expect(ids(ofKind(mixed, "album")).sort()).toEqual(["a1", "a2"]);
+  });
+
+  it("keeps only the puzzles", () => {
+    expect(ids(ofKind(mixed, "puzzle"))).toEqual(["p1"]);
+  });
+
+  it("keeps everything when the answer is both", () => {
+    expect(ids(ofKind(mixed, "both")).sort()).toEqual(["a1", "a2", "p1"]);
+  });
+
+  it("is a separate axis from the tab, not another tab", () => {
+    // Status and kind are two questions. Folding them into one row would make
+    // the answers to both unavailable at once — this is what proves they
+    // compose rather than replace each other.
+    const collecting = shelf(
+      [album({ id: "going", status: "in_progress" }), album({ id: "shut", status: "locked" })],
+      [puzzle({ id: "p1" })],
+      "collecting",
+      "title",
+    );
+
+    expect(ids(ofKind(collecting, "album"))).toEqual(["going"]);
+  });
+
+  it("keeps the order it was given", () => {
+    expect(ids(ofKind(mixed, "both"))).toEqual(ids(mixed));
+  });
+
+  it("does not hand back the array it was given", () => {
+    expect(ofKind(mixed, "both")).not.toBe(mixed);
+  });
+
+  it("returns nothing when the shelf holds none of that kind", () => {
+    const albumsOnly = shelf([album({ id: "a1" })], [], "all", "title");
+    expect(ofKind(albumsOnly, "puzzle")).toEqual([]);
   });
 });

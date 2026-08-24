@@ -31,7 +31,7 @@ test("a completed task pays, and the coins unlock an album and buy a sticker", a
   await expectBalance(page, opening + 30);
 
   // ── Unlock ──────────────────────────────────────────────────────────────
-  await page.getByRole("link", { name: /albums/i }).click();
+  await page.getByRole("link", { name: /collection/i }).click();
 
   // The shelf opens on Collecting, which shows what is on the go and what is
   // finished — not what is still shut. Forest Friends is locked until three

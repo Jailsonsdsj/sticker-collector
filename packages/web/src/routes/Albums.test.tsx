@@ -38,6 +38,28 @@ function album(over: Partial<AlbumSummary> = {}): AlbumSummary {
   };
 }
 
+/** The listing reads a handful of a puzzle's fields; these are those. */
+const aPuzzle = (over: Record<string, unknown> = {}) => ({
+  id: "p1",
+  title: "The harbour",
+  description: null,
+  imageKey: `img/${"b".repeat(64)}.jpg`,
+  imageWidth: 1536,
+  imageHeight: 1024,
+  unlockPrice: 100,
+  piecePrice: 25,
+  randomPrice: 0,
+  rows: 2,
+  cols: 3,
+  hideLocked: false,
+  unlockedAt: "2026-08-01T00:00:00Z",
+  completedAt: null,
+  sealedAt: "2026-09-01T00:00:00Z",
+  createdAt: "2026-09-01T00:00:00Z",
+  ownedCount: 1,
+  ...over,
+});
+
 let fetchMock: ReturnType<typeof vi.fn>;
 let queryClient: QueryClient;
 let albums: AlbumSummary[];
@@ -206,6 +228,266 @@ describe("the tab it opens on", () => {
     await showAll();
 
     expect(await screen.findByText("Nothing here yet")).toBeInTheDocument();
+  });
+});
+
+describe("searching the shelf", () => {
+  const typed = async (text: string) => {
+    const user = userEvent.setup();
+    render(<Albums />, { wrapper });
+    await showAll();
+    await user.type(screen.getByRole("searchbox", { name: /search your collection/i }), text);
+    return user;
+  };
+
+  it("sits between the tabs and the chip rows", async () => {
+    // Position is the request, so it is the assertion. Under the tabs, which
+    // say which shelf you are looking at; above the chips, which decide what is
+    // shown of it and in what order.
+    render(<Albums />, { wrapper });
+
+    const box = await screen.findByRole("searchbox", { name: /search your collection/i });
+    const tab = screen.getByRole("tab", { name: "Collecting" });
+    const kind = screen.getByRole("button", { name: "Both" });
+    const sort = screen.getByRole("button", { name: "Newest" });
+
+    // Node.DOCUMENT_POSITION_FOLLOWING is 4.
+    expect(tab.compareDocumentPosition(box) & 4).toBeTruthy();
+    expect(box.compareDocumentPosition(kind) & 4).toBeTruthy();
+    expect(box.compareDocumentPosition(sort) & 4).toBeTruthy();
+  });
+
+  it("narrows to what matches, and drops what does not", async () => {
+    albums = [
+      album({ id: "a", title: "Kitchen heroes" }),
+      album({ id: "b", title: "Garden birds" }),
+    ];
+    await typed("garden");
+
+    await waitFor(() => expect(screen.queryByText("Kitchen heroes")).not.toBeInTheDocument());
+    expect(screen.getByText("Garden birds")).toBeInTheDocument();
+  });
+
+  it("finds a puzzle by the same box that finds an album", async () => {
+    // `puzzle()` belongs to the describe below; the shelf only reads a handful
+    // of these fields, so the literal is honest here.
+    albums = [album({ title: "Kitchen heroes" })];
+    puzzles = [
+      {
+        id: "p1",
+        title: "The harbour",
+        description: null,
+        imageKey: `img/${"b".repeat(64)}.jpg`,
+        unlockPrice: 100,
+        piecePrice: 25,
+        randomPrice: 0,
+        rows: 2,
+        cols: 3,
+        hideLocked: false,
+        unlockedAt: "2026-08-01T00:00:00Z",
+        completedAt: null,
+        sealedAt: "2026-09-01T00:00:00Z",
+        createdAt: "2026-09-01T00:00:00Z",
+        ownedCount: 1,
+      },
+    ];
+    await typed("harbour");
+
+    await waitFor(() => expect(screen.queryByText("Kitchen heroes")).not.toBeInTheDocument());
+    expect(screen.getByText("The harbour")).toBeInTheDocument();
+  });
+
+  it("gives everything back when the box is cleared", async () => {
+    albums = [
+      album({ id: "a", title: "Kitchen heroes" }),
+      album({ id: "b", title: "Garden birds" }),
+    ];
+    const user = await typed("garden");
+    await waitFor(() => expect(screen.queryByText("Kitchen heroes")).not.toBeInTheDocument());
+
+    await user.click(screen.getByRole("button", { name: "Clear" }));
+
+    expect(await screen.findByText("Kitchen heroes")).toBeInTheDocument();
+  });
+
+  it("says the search came up empty, not that the collection is", async () => {
+    // "Make one, then earn your way through it" is the wrong answer to someone
+    // who has forty albums and typed a typo.
+    albums = [album({ title: "Kitchen heroes" })];
+    await typed("zzz");
+
+    expect(await screen.findByText("Nothing here matches that")).toBeInTheDocument();
+    expect(screen.queryByText("Nothing here yet")).not.toBeInTheDocument();
+  });
+
+  it("offers the way back out of a search that found nothing", async () => {
+    albums = [album({ title: "Kitchen heroes" })];
+    const user = await typed("zzz");
+
+    await user.click(screen.getByRole("button", { name: "Clear the search" }));
+
+    expect(await screen.findByText("Kitchen heroes")).toBeInTheDocument();
+  });
+
+  it("still says the collection is empty when it actually is", async () => {
+    // An empty shelf and a search with no hits are different problems, and the
+    // no-match copy would tell a new user their typing was the trouble.
+    albums = [];
+    render(<Albums />, { wrapper });
+    await showAll();
+
+    expect(await screen.findByText("Nothing here yet")).toBeInTheDocument();
+  });
+
+  it("goes back to the first page, since page 3 of the old list is not page 3 of the new", async () => {
+    const user = userEvent.setup();
+    albums = Array.from({ length: 12 }, (_, i) =>
+      album({ id: `a${i}`, title: `Album ${String(i).padStart(2, "0")}` }),
+    );
+    render(<Albums />, { wrapper });
+    await showAll();
+    await screen.findByText("Album 00");
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    expect(await screen.findByText("2 of 2")).toBeInTheDocument();
+
+    await user.type(screen.getByRole("searchbox", { name: /search your collection/i }), "Album");
+
+    await waitFor(() => expect(screen.getByText("Album 00")).toBeInTheDocument());
+  });
+
+  it("searches inside the tab rather than escaping it", async () => {
+    // The search refines the view. Finding a locked album while Collecting is
+    // selected would make the chosen tab a lie.
+    albums = [
+      album({ id: "a", title: "Shut one", status: "locked" }),
+      album({ id: "b", title: "Shut two", status: "locked" }),
+    ];
+    const user = userEvent.setup();
+    render(<Albums />, { wrapper });
+    await user.type(screen.getByRole("searchbox", { name: /search your collection/i }), "Shut one");
+
+    await waitFor(() => expect(screen.queryByText("Shut one")).not.toBeInTheDocument());
+  });
+});
+
+describe("what the screen is called", () => {
+  it("is the Collection, not the Albums", async () => {
+    // It has held puzzles since P9-06. A heading naming one of the two kinds
+    // reads as the other being a guest there.
+    render(<Albums />, { wrapper });
+
+    expect(await screen.findByRole("heading", { name: "Collection" })).toBeInTheDocument();
+  });
+});
+
+describe("showing one kind of thing", () => {
+  const both = async () => {
+    const user = userEvent.setup();
+    albums = [album({ title: "Kitchen heroes", status: "in_progress", unlockedAt: "x" })];
+    puzzles = [aPuzzle()];
+    render(<Albums />, { wrapper });
+    await screen.findByText("Kitchen heroes");
+    return user;
+  };
+
+  it("offers the two kinds the shelf actually holds", async () => {
+    render(<Albums />, { wrapper });
+
+    expect(await screen.findByRole("button", { name: "Both" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Albums" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Puzzles" })).toBeInTheDocument();
+  });
+
+  it("shows both until asked otherwise", async () => {
+    await both();
+
+    expect(screen.getByText("Kitchen heroes")).toBeInTheDocument();
+    expect(screen.getByText("The harbour")).toBeInTheDocument();
+  });
+
+  it("drops the puzzles when asked for albums", async () => {
+    const user = await both();
+
+    await user.click(screen.getByRole("button", { name: "Albums" }));
+
+    await waitFor(() => expect(screen.queryByText("The harbour")).not.toBeInTheDocument());
+    expect(screen.getByText("Kitchen heroes")).toBeInTheDocument();
+  });
+
+  it("drops the albums when asked for puzzles", async () => {
+    const user = await both();
+
+    await user.click(screen.getByRole("button", { name: "Puzzles" }));
+
+    await waitFor(() => expect(screen.queryByText("Kitchen heroes")).not.toBeInTheDocument());
+    expect(screen.getByText("The harbour")).toBeInTheDocument();
+  });
+
+  it("narrows the tab rather than replacing it", async () => {
+    // Status and kind are two questions asked at once. A kind chip that reset
+    // the tab, or a tab that reset the kind, would answer one of them only.
+    const user = userEvent.setup();
+    albums = [
+      album({ id: "a", title: "Shut album", status: "locked" }),
+      album({ id: "b", title: "Open album", status: "in_progress", unlockedAt: "x" }),
+    ];
+    puzzles = [aPuzzle()];
+    render(<Albums />, { wrapper });
+    await screen.findByText("Open album");
+
+    await user.click(screen.getByRole("button", { name: "Albums" }));
+    await user.click(screen.getByRole("tab", { name: "Locked" }));
+
+    await waitFor(() => expect(screen.getByText("Shut album")).toBeInTheDocument());
+    expect(screen.queryByText("Open album")).not.toBeInTheDocument();
+    expect(screen.queryByText("The harbour")).not.toBeInTheDocument();
+  });
+
+  it("says which kind is missing, not that the tab is empty", async () => {
+    // The tab has an album on it. "Nothing here" would blame the tab for what
+    // the kind chip did.
+    const user = userEvent.setup();
+    albums = [album({ title: "Shut album", status: "locked" })];
+    puzzles = [aPuzzle()]; // in progress, so not on Locked
+    render(<Albums />, { wrapper });
+    await screen.findByText("The harbour");
+
+    await user.click(screen.getByRole("tab", { name: "Locked" }));
+    await screen.findByText("Shut album");
+    await user.click(screen.getByRole("button", { name: "Puzzles" }));
+
+    expect(await screen.findByText("No puzzles here")).toBeInTheDocument();
+    expect(screen.queryByText("Nothing here")).not.toBeInTheDocument();
+  });
+
+  it("goes back to the first page, since the list just got shorter", async () => {
+    const user = userEvent.setup();
+    albums = Array.from({ length: 12 }, (_, i) =>
+      album({
+        id: `a${i}`,
+        title: `Album ${String(i).padStart(2, "0")}`,
+        status: "in_progress",
+        unlockedAt: "x",
+      }),
+    );
+    render(<Albums />, { wrapper });
+    await screen.findByText("Album 00");
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    expect(await screen.findByText("2 of 2")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Albums" }));
+
+    await waitFor(() => expect(screen.getByText("Album 00")).toBeInTheDocument());
+  });
+
+  it("composes with the search rather than fighting it", async () => {
+    const user = await both();
+
+    await user.click(screen.getByRole("button", { name: "Albums" }));
+    await user.type(screen.getByRole("searchbox", { name: /search your collection/i }), "kitchen");
+
+    await waitFor(() => expect(screen.getByText("Kitchen heroes")).toBeInTheDocument());
+    expect(screen.queryByText("The harbour")).not.toBeInTheDocument();
   });
 });
 

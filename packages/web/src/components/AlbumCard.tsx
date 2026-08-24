@@ -45,10 +45,28 @@ export function AlbumCard({ album, onUnlock }: AlbumCardProps) {
           style={{ filter: locked ? "var(--filter-locked)" : "var(--filter-unlocked)" }}
         />
 
+        {/* Says what it is, because the shelf holds two kinds of thing and a
+            puzzle has said so since it arrived. A card that names one kind and
+            not the other reads as the unnamed one being the default, which is
+            not how the shelf works.
+
+            `overlay` is a scrim and **ignores the tone by design** — it has to
+            read on any artwork — so the word is what tells the two apart, not
+            the colour. The tone is set to the card's own accent to match how
+            the puzzle card declares its badge, and for the day the variant
+            starts honouring it. */}
+        <span className="absolute top-2 left-2">
+          <Badge tone="cyan" variant="overlay" size="sm">
+            Album
+          </Badge>
+        </span>
+
+        {/* Moved to the right to make room, which is where a puzzle's status
+            badge already sits. */}
         {/* The last slot is the hardest and the most motivating, so the app
             points at it rather than leaving the user to count. */}
         {album.almostThere && (
-          <span className="absolute top-2 left-2">
+          <span className="absolute top-2 right-2">
             <Badge tone="coin" variant="overlay" size="sm">
               {album.remaining === 1 ? "1 to go" : `${album.remaining} to go`}
             </Badge>
@@ -56,7 +74,7 @@ export function AlbumCard({ album, onUnlock }: AlbumCardProps) {
         )}
 
         {album.status === "completed" && (
-          <span className="absolute top-2 left-2">
+          <span className="absolute top-2 right-2">
             <Badge tone="lime" variant="overlay" size="sm">
               Complete
             </Badge>
