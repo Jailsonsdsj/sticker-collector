@@ -98,9 +98,25 @@ const idSchema = z.string().min(1);
 
 // ── Task ─────────────────────────────────────────────────────────────────────
 
+/**
+ * A task's notes, uncapped.
+ *
+ * Every other description in the app is a caption on a thing you look at — an
+ * album's blurb, a sticker's flavour text — and 2000 characters is generous for
+ * those. A task's description is the **working notes**: the steps, the context,
+ * the thing you will have forgotten by the time you come back to it. A cap
+ * there is a wall you hit mid-sentence, and the one place it was ever going to
+ * be hit is the one place it should not have been.
+ *
+ * There is no storage reason for a limit either — the column is SQLite `TEXT`,
+ * with no length constraint and no CHECK. The cap was only ever the schema's
+ * own idea.
+ */
+const taskDescriptionSchema = z.string().nullish();
+
 const taskCommonFields = {
   title: titleSchema,
-  description: z.string().max(2000).nullish(),
+  description: taskDescriptionSchema,
   url: z.url().nullish(),
   epicId: idSchema.nullish(),
   effortMinutes: effortMinutesSchema,
@@ -162,7 +178,7 @@ export type CreateTask = z.output<typeof createTaskSchema>;
 export const updateTaskSchema = z
   .strictObject({
     title: titleSchema,
-    description: z.string().max(2000).nullish(),
+    description: taskDescriptionSchema,
     url: z.url().nullish(),
     epicId: idSchema.nullish(),
     effortMinutes: effortMinutesSchema,

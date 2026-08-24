@@ -17,14 +17,19 @@ import { APP_WIDTH } from "./appWidth";
  * first visit to every screen.
  *
  * Only Tasks is `end`-matched — every other tab stays lit on its descendants,
- * which is what the design does when you open an album from the Albums tab.
+ * which is what the design does when you open an album from the Collection tab.
  */
 const TABS = [
   { to: "/", icon: "tasks", label: "TASKS", accent: "--color-coin", end: true },
   { to: "/week", icon: "week", label: "WEEK", accent: "--color-cyan" },
-  // Magenta, not violet: the design gives Albums the pink sticker page and
+  // "Collection", not "Albums": the tab has held puzzles as well since P9-06,
+  // and a label naming one of the two kinds reads as the other being a guest
+  // there. The route stays `/albums` — renaming a URL breaks every bookmark and
+  // buys nothing the label has not already bought.
+  //
+  // Magenta, not violet: the design gives this tab the pink sticker page and
   // Epics the violet gem, and two violet tabs side by side is one tab.
-  { to: "/albums", icon: "albums", label: "ALBUMS", accent: "--color-magenta" },
+  { to: "/albums", icon: "albums", label: "COLLECTION", accent: "--color-magenta" },
   { to: "/epics", icon: "epics", label: "EPICS", accent: "--color-violet" },
   { to: "/reports", icon: "stats", label: "STATS", accent: "--color-lime" },
 ] as const;

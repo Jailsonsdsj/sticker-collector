@@ -2,12 +2,12 @@ import { addDays, type Epic, type Task, todayIn } from "@sticker-collector/share
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate } from "react-router";
 import { DailyReviewDialog } from "../components/DailyReviewDialog";
+import { SearchField } from "../components/SearchField";
 import { SectionHeading, type SectionTone } from "../components/SectionHeading";
 import { SelectionBar } from "../components/SelectionBar";
 import { SwipeRow } from "../components/SwipeRow";
 import { TaskForm } from "../components/TaskForm";
 import { TaskRow } from "../components/TaskRow";
-import { TaskSearch } from "../components/TaskSearch";
 import { TaskView } from "../components/TaskView";
 import { Button, Dialog, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { WalletCard } from "../components/WalletCard";
@@ -282,7 +282,7 @@ export function Tasks() {
         <>
           {/* Above the buttons: this screen is read far more often than it is
               added to. */}
-          <TaskSearch value={query} onChange={setQuery} />
+          <SearchField id="task-search" noun="tasks" value={query} onChange={setQuery} />
 
           <div className="mb-5 flex gap-2">
             {/* The only way in now. The one-line quick-add sat above it and

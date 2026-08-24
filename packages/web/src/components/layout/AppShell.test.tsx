@@ -42,7 +42,7 @@ describe("a crashed screen", () => {
     // well, which is the blank screen again with better typography.
     shell("/boom");
 
-    expect(screen.getByRole("link", { name: /albums/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /collection/i })).toBeInTheDocument();
   });
 
   it("clears itself when the user navigates away", async () => {

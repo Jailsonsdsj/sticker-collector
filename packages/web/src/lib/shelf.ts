@@ -76,6 +76,50 @@ export function puzzleStatus(puzzle: Puzzle): AlbumStatus {
 }
 
 /**
+ * Which kind of thing to show, independent of status.
+ *
+ * `both` rather than a second `all`: the tabs already own that word for
+ * statuses, and two controls on one screen both saying All is a screen that
+ * has to be read twice.
+ */
+export type ShelfKind = "both" | "album" | "puzzle";
+
+/**
+ * Narrowing the shelf to one kind of thing.
+ *
+ * A separate axis from the tabs, not another tab. Status and kind are two
+ * questions — "what am I part-way through" and "am I looking at albums or
+ * puzzles" — and folding them into one row would make the answers to both
+ * unavailable at once.
+ */
+export function ofKind(items: readonly ShelfItem[], kind: ShelfKind): ShelfItem[] {
+  if (kind === "both") return [...items];
+  return items.filter((item) => item.kind === kind);
+}
+
+/**
+ * Narrowing the shelf to what matches a search.
+ *
+ * Composed with `shelf` rather than folded into it: the tab decides what is on
+ * the shelf and the search decides what you can see of it, and keeping them
+ * apart means each can be tested without setting up the other.
+ *
+ * **Title only**, the same rule the task search follows. A card shows its title
+ * and nothing else, so matching a description would put tiles on screen with no
+ * visible reason to be there.
+ *
+ * The search runs *inside* the current tab. It is a refinement of the view, not
+ * an escape from it — searching on Locked and getting a finished album back
+ * would make the selected tab a lie.
+ */
+export function matching(items: readonly ShelfItem[], query: string): ShelfItem[] {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return [...items];
+
+  return items.filter((item) => titleOf(item).toLowerCase().includes(needle));
+}
+
+/**
  * What the shelf's unlock confirmation is about.
  *
  * Both cards open the same dialog and then need different mutations, so the

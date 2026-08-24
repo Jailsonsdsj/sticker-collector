@@ -1,5 +1,6 @@
 import type { Epic, Task } from "@sticker-collector/shared";
 import { WEEKDAYS } from "@sticker-collector/shared";
+import { Markdown } from "./Markdown";
 import { DeleteTaskAction } from "./taskForm/DeleteTaskAction";
 import { Button, Coin, Sheet } from "./ui";
 
@@ -70,13 +71,16 @@ export function TaskView({
           {task.title}
         </h2>
         {task.description ? (
-          // `whitespace-pre-line`: the author typed those line breaks into a
-          // six-row textarea — a list of steps arrives as a list of steps, not
-          // as one run-on paragraph. `pre-line` and not `pre-wrap` so runs of
-          // spaces still collapse; it is prose, not code.
-          <p className="mt-2 whitespace-pre-line font-body text-md text-ink-secondary leading-relaxed">
+          // Rendered as markdown, so what the author formatted is what shows.
+          // A description written before this existed is unaffected: plain
+          // prose is valid markdown and comes out as the same paragraph.
+          //
+          // The line breaks the author typed still survive: `Markdown` runs
+          // `remark-breaks`, so a single newline is still a line break rather
+          // than markdown's default space.
+          <Markdown className="mt-2 font-body text-md text-ink-secondary leading-relaxed">
             {task.description}
-          </p>
+          </Markdown>
         ) : (
           <p className="mt-2 font-body text-sm text-ink-faint italic">No description.</p>
         )}

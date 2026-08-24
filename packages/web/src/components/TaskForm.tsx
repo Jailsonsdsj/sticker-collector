@@ -156,12 +156,23 @@ export function TaskForm({
       <Textarea
         id="task-description"
         label="Description"
+        // Says what the field accepts, because markdown you do not know is
+        // there is markdown you never use. No literal "url" in it — the field
+        // below is the URL field, and a hint is part of a field's accessible
+        // name, so the word would make "the URL field" ambiguous to anything
+        // querying by label, screen readers included.
+        hint="markdown — **bold**, *italic*, - lists, [text](link)"
         // Six rows, three times the primitive's default two. A task's
         // description is where the *how* goes — steps, links, the thing you
         // will have forgotten by the time you come back to it — and two rows
         // made a paragraph feel like the wrong place to put it. The sheet
         // scrolls, so the extra height costs nothing above it.
         rows={6}
+        // The one field in the app that earns a drag handle. Everywhere else a
+        // textarea holds a caption and the design keeps it fixed, which is
+        // right; this one holds however much the task needs, and six rows is a
+        // starting guess rather than a limit.
+        resizable
         placeholder="Notes, context, links…"
         value={state.description}
         onChange={(e) => dispatch({ kind: "description", value: e.target.value })}

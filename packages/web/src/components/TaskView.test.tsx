@@ -60,12 +60,25 @@ describe("reading a task", () => {
   it("keeps the line breaks the author typed", () => {
     // The form gives six rows to write in; a list of steps written as a list
     // arrived here as one run-on paragraph, because HTML collapses newlines.
+    //
+    // Markdown collapses them too — one newline is a space by its own rules —
+    // so this is the assertion that catches the description being silently
+    // reflowed. It asserts the *result*, not `whitespace-pre-line`, because the
+    // promise is "the lines stay lines" and not any one way of keeping it.
     const steps = "Water the big one.\nThen the herbs.\nSkip the cactus.";
     open({ task: task({ description: steps }) });
 
     const paragraph = screen.getByText(/Skip the cactus/);
-    expect(paragraph.className).toContain("whitespace-pre-line");
+    expect(paragraph.querySelectorAll("br")).toHaveLength(2);
     expect(paragraph.textContent).toBe(steps);
+  });
+
+  it("renders the formatting the author wrote, rather than its punctuation", () => {
+    open({ task: task({ description: "Water the **big** one, then the *herbs*." }) });
+
+    expect(screen.getByText("big").tagName).toBe("STRONG");
+    expect(screen.getByText("herbs").tagName).toBe("EM");
+    expect(screen.queryByText(/\*\*/)).not.toBeInTheDocument();
   });
 
   it("says there is no description rather than leaving a hole", () => {

@@ -175,3 +175,49 @@ describe("the title", () => {
     expect(screen.getByRole("heading", { level: 3 }).className).toContain("text-center");
   });
 });
+
+describe("saying what it is", () => {
+  it("wears its kind, the way a puzzle card does", () => {
+    // The shelf holds two kinds of thing. A card that names one and not the
+    // other reads as the unnamed one being the default, which is not how the
+    // shelf works — and there is now a filter that asks you to tell them apart.
+    renderCard();
+    expect(screen.getByText("Album")).toBeInTheDocument();
+  });
+
+  it("wears it whatever state it is in", () => {
+    renderCard({ status: "completed", unlockedAt: "x", percent: 100 });
+    expect(screen.getByText("Album")).toBeInTheDocument();
+  });
+
+  it("keeps the status badge out of the kind badge's corner", () => {
+    // Both used to sit top-left. Overlapping badges is the failure this
+    // prevents, and it is invisible to a text query.
+    const { container } = render(
+      <MemoryRouter>
+        <AlbumCard album={album({ status: "completed", unlockedAt: "x" })} onUnlock={vi.fn()} />
+      </MemoryRouter>,
+    );
+
+    const kind = screen.getByText("Album").closest("span[class*='absolute']");
+    const status = screen.getByText("Complete").closest("span[class*='absolute']");
+    expect(kind?.className).toContain("left-2");
+    expect(status?.className).toContain("right-2");
+    expect(container.querySelectorAll("span.absolute.top-2.left-2")).toHaveLength(1);
+  });
+
+  it("moves the almost-there nudge to the same free corner", () => {
+    render(
+      <MemoryRouter>
+        <AlbumCard
+          album={album({ status: "in_progress", unlockedAt: "x", almostThere: true, remaining: 1 })}
+          onUnlock={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("1 to go").closest("span[class*='absolute']")?.className).toContain(
+      "right-2",
+    );
+  });
+});

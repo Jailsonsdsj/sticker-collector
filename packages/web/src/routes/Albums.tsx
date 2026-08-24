@@ -6,6 +6,7 @@ import { BackupNudge } from "../components/BackupNudge";
 import { CreateChoiceDialog } from "../components/CreateChoiceDialog";
 import { AlbumGrid, AppHeader } from "../components/layout";
 import { PuzzleCard } from "../components/PuzzleCard";
+import { SearchField } from "../components/SearchField";
 import { UnlockDialog } from "../components/UnlockDialog";
 import { Button, Chip, EmptyState, ErrorState, Skeleton, Tabs } from "../components/ui";
 import { ApiError } from "../lib/api";
@@ -13,7 +14,10 @@ import { useUnlockAlbum, useUnlockPuzzle } from "../lib/mutations";
 import { playUnlock } from "../lib/placement";
 import { useAlbums, usePuzzles, useWallet } from "../lib/queries";
 import {
+  matching,
+  ofKind,
   type ShelfFilter,
+  type ShelfKind,
   serverStatus,
   shelf,
   type UnlockTarget,
@@ -64,6 +68,24 @@ const NOTHING: Record<ShelfFilter, { title: string; description: string }> = {
   done: { title: "Nothing here", description: "Nothing has that status right now." },
 };
 
+/**
+ * The kinds on offer, and what they are called.
+ *
+ * A second axis rather than four more tabs: status and kind are two questions,
+ * and one row of tabs can only answer one of them at a time.
+ */
+const KINDS: { value: ShelfKind; label: string }[] = [
+  { value: "both", label: "Both" },
+  { value: "album", label: "Albums" },
+  { value: "puzzle", label: "Puzzles" },
+];
+
+/** What a kind-filtered shelf says when that kind is not on this tab. */
+const NO_KIND: Record<Exclude<ShelfKind, "both">, string> = {
+  album: "No albums here",
+  puzzle: "No puzzles here",
+};
+
 const SORT_LABELS: Record<(typeof ALBUM_SORTS)[number], string> = {
   status: "Status",
   progress: "Progress",
@@ -98,6 +120,8 @@ export function Albums() {
   const [filter, setFilter] = useState<ShelfFilter>(DEFAULT_FILTER);
   const [creating, setCreating] = useState(false);
   const [sort, setSort] = useState<(typeof ALBUM_SORTS)[number]>("status");
+  const [query, setQuery] = useState("");
+  const [kind, setKind] = useState<ShelfKind>("both");
   const [unlocking, setUnlocking] = useState<UnlockTarget | null>(null);
   const [page, setPage] = useState(0);
 
@@ -119,14 +143,23 @@ export function Albums() {
   // albums; `shelf` mixes the puzzles in and re-sorts the whole thing with a
   // comparator that matches the server's, so an album does not move just
   // because a puzzle exists.
-  const items = shelf(rows, puzzles.data ?? [], filter, sort);
+  const onTab = shelf(rows, puzzles.data ?? [], filter, sort);
+  const shown = ofKind(onTab, kind);
+  const items = matching(shown, query);
+  // A search that matches nothing is not an empty shelf, and saying "make one"
+  // to someone who has forty is the wrong answer to the wrong question. Judged
+  // against `shown`, not `onTab`: an empty list because the kind filter is on
+  // is not a search that missed.
+  const noMatches = query.trim() !== "" && items.length === 0 && shown.length > 0;
+  // Likewise, a tab with albums on it but no puzzles is not "nothing on the go".
+  const noneOfKind = kind !== "both" && shown.length === 0 && onTab.length > 0;
 
   const { pages, current, visible } = paginate(items, page);
 
   return (
     <>
       <AppHeader
-        title="Albums"
+        title="Collection"
         trailing={
           // §Creating 1: the listing is where a new album starts — and now a
           // puzzle too, so the link became a fork.
@@ -154,9 +187,43 @@ export function Albums() {
           setFilter(next);
           setPage(0);
         }}
-        label="Album status"
+        label="Collection status"
         className="mb-3"
       />
+
+      {/* Directly under the tabs. The tabs say which shelf you are looking at;
+          the search says which part of it — and both come before the chips
+          that decide what is shown and in what order. */}
+      <SearchField
+        id="shelf-search"
+        noun="your collection"
+        value={query}
+        onChange={(next) => {
+          setQuery(next);
+          // Page 3 of the old list is not page 3 of the new one.
+          setPage(0);
+        }}
+      />
+
+      <div className="mb-2 flex items-center gap-2 overflow-x-auto">
+        <span className="font-body text-2xs tracking-kicker text-ink-muted uppercase">Show</span>
+        {KINDS.map((option) => (
+          <Chip
+            key={option.value}
+            size="sm"
+            tone="violet"
+            fill="tint"
+            font="body"
+            selected={kind === option.value}
+            onClick={() => {
+              setKind(option.value);
+              setPage(0);
+            }}
+          >
+            {option.label}
+          </Chip>
+        ))}
+      </div>
 
       <div className="mb-5 flex items-center gap-2 overflow-x-auto">
         <span className="font-body text-2xs tracking-kicker text-ink-muted uppercase">Sort</span>
@@ -188,6 +255,23 @@ export function Albums() {
         // either, and "No albums yet" would tell someone their collection is
         // gone when the truth is that the request never landed.
         <ErrorState error={albums.error} onRetry={() => void albums.refetch()} />
+      ) : noMatches ? (
+        <EmptyState
+          icon="⌕"
+          title="Nothing here matches that"
+          description="Search looks at titles only."
+          action={
+            <Button variant="outline" tone="neutral" onClick={() => setQuery("")}>
+              Clear the search
+            </Button>
+          }
+        />
+      ) : noneOfKind ? (
+        <EmptyState
+          icon="◈"
+          title={NO_KIND[kind as Exclude<ShelfKind, "both">]}
+          description="Nothing of that kind has this status. Try Both, or another tab."
+        />
       ) : items.length === 0 ? (
         <EmptyState icon="◈" {...NOTHING[filter]} />
       ) : (

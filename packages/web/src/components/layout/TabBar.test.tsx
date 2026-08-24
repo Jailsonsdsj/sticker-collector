@@ -22,7 +22,7 @@ describe("the tab bar's icons", () => {
   it("gives every tab its own artwork", () => {
     at("/");
 
-    // The glyphs this replaced used `◈` and `◆` for Albums and Epics — a
+    // The glyphs this replaced used `◈` and `◆` for Collection and Epics — a
     // distinction nobody can make at 16px.
     for (const name of ["tasks", "week", "albums", "epics", "stats"]) {
       expect(icon(`${name}-on`)).toHaveAttribute("src", `/nav/${name}-on.png`);
@@ -50,7 +50,7 @@ describe("the tab bar's icons", () => {
   it("stays lit on a tab's descendants, except for Tasks", () => {
     at("/albums/abc");
 
-    // Opening an album does not leave the Albums tab, but every path starts
+    // Opening an album does not leave the Collection tab, but every path starts
     // with "/" — which is why only Tasks is end-matched.
     expect(lit("albums-on")).toBe(true);
     expect(lit("tasks-on")).toBe(false);
@@ -74,13 +74,28 @@ describe("the tab bar's labels", () => {
     expect(tasks.className).toContain("uppercase");
   });
 
-  it("gives Albums and Epics different accents", () => {
+  it("gives Collection and Epics different accents", () => {
     at("/");
 
     // Two violet tabs side by side is one tab.
-    const albums = screen.getByRole("link", { name: /albums/i });
+    const albums = screen.getByRole("link", { name: /collection/i });
     const epics = screen.getByRole("link", { name: /epics/i });
     expect(albums.style.getPropertyValue("--ui-accent")).toBe("var(--color-magenta)");
     expect(epics.style.getPropertyValue("--ui-accent")).toBe("var(--color-violet)");
+  });
+});
+
+describe("what the shelf tab is called", () => {
+  it("says Collection, because it holds puzzles as well as albums", () => {
+    at("/");
+    expect(screen.getByRole("link", { name: /collection/i })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /^albums$/i })).not.toBeInTheDocument();
+  });
+
+  it("still points at /albums, because a URL is a bookmark", () => {
+    // Renaming the route would break every link anyone has kept and buy
+    // nothing the label has not already bought.
+    at("/");
+    expect(screen.getByRole("link", { name: /collection/i })).toHaveAttribute("href", "/albums");
   });
 });

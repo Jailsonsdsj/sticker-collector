@@ -1,5 +1,5 @@
 import type { Epic, Task } from "@sticker-collector/shared";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { TaskForm } from "./TaskForm";
@@ -681,5 +681,39 @@ describe("saying when a routine runs", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Mon start")).toHaveValue("12:00");
     expect(save()).toBeDisabled(); // nothing changed, which is a different reason
+  });
+});
+
+describe("writing the description", () => {
+  it("can be dragged taller, which no other textarea in the app can", () => {
+    // The design keeps textareas fixed because everywhere else one holds a
+    // caption. This one holds however much the task needs, and six rows is a
+    // starting guess rather than a limit.
+    setup();
+
+    const box = screen.getByLabelText(/description/i);
+    expect(box.className).toContain("resize-y");
+    expect(box.className).not.toContain("resize-none");
+  });
+
+  it("says the field takes markdown, because syntax you do not know is syntax you never use", () => {
+    setup();
+    expect(screen.getByText(/markdown/i)).toBeInTheDocument();
+  });
+
+  it("saves a description longer than the old 2000-character limit", async () => {
+    const user = userEvent.setup();
+    const { onSubmit, save } = setup();
+    const long = "y".repeat(3000);
+
+    await fillValidRoutine(user);
+    // Pasted, not typed: `user.type` of 3000 characters is a 3000-event test.
+    await user.click(screen.getByLabelText(/description/i));
+    await user.paste(long);
+    await user.click(save());
+
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ description: long })),
+    );
   });
 });
