@@ -33,6 +33,15 @@ test("a completed task pays, and the coins unlock an album and buy a sticker", a
   // ── Unlock ──────────────────────────────────────────────────────────────
   await page.getByRole("link", { name: /albums/i }).click();
 
+  // The shelf opens on Collecting, which shows what is on the go and what is
+  // finished — not what is still shut. Forest Friends is locked until three
+  // lines from now, so this journey has to say which shelf it means.
+  //
+  // All, not Locked. On Locked the card would vanish the instant it is
+  // unlocked, which makes the `Unlock 200` assertion below pass for the wrong
+  // reason and leaves nothing to click through to the album.
+  await page.getByRole("tab", { name: "All" }).click();
+
   // The cover really renders. Nothing else in this journey would notice if the
   // art were missing — a broken <img> leaves the card intact — and the images
   // are the half of a sticker album that cannot be regenerated.
