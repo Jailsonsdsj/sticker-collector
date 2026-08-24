@@ -1,6 +1,6 @@
 import type { AlbumSummary, Puzzle } from "@sticker-collector/shared";
 import { describe, expect, it } from "vitest";
-import { puzzleStatus, shelf, unlockTarget } from "./shelf";
+import { puzzleStatus, type ShelfFilter, serverStatus, shelf, unlockTarget } from "./shelf";
 
 const album = (over: Partial<AlbumSummary> = {}): AlbumSummary =>
   ({
@@ -83,7 +83,76 @@ describe("one shelf, two kinds of thing", () => {
   });
 
   it("shows nothing rather than everything when a tab matches nothing", () => {
-    expect(shelf([], [puzzle()], "completed", "title")).toEqual([]);
+    expect(shelf([], [puzzle()], "done", "title")).toEqual([]);
+  });
+});
+
+describe("which tab shows what", () => {
+  const on = (filter: ShelfFilter) =>
+    ids(
+      shelf(
+        [
+          album({ id: "shut", status: "locked" }),
+          album({ id: "going", status: "in_progress" }),
+          album({ id: "finished", status: "completed" }),
+        ],
+        [],
+        filter,
+        "title",
+      ),
+    ).sort();
+
+  it("keeps a finished collection on Collecting, beside the ones on the go", () => {
+    // The work is the same work. Moving a collection out of sight the moment
+    // the last sticker lands makes the shelf emptier the more you have done —
+    // and Collecting is the tab the app opens on.
+    expect(on("collecting")).toEqual(["finished", "going"]);
+  });
+
+  it("still narrows to the finished ones on Done", () => {
+    expect(on("done")).toEqual(["finished"]);
+  });
+
+  it("leaves Locked alone", () => {
+    expect(on("locked")).toEqual(["shut"]);
+  });
+
+  it("shows everything on All, including what the other tabs split", () => {
+    expect(on("all")).toEqual(["finished", "going", "shut"]);
+  });
+
+  it("lets a finished collection answer two tabs, which is the point", () => {
+    expect(on("collecting")).toContain("finished");
+    expect(on("done")).toContain("finished");
+  });
+
+  it("does the same for a puzzle, since the tabs do not know the difference", () => {
+    const items = shelf(
+      [],
+      [
+        puzzle({ id: "whole", completedAt: "2026-07-03T00:00:00Z" }),
+        puzzle({ id: "part-way" }),
+        puzzle({ id: "shut", unlockedAt: null }),
+      ],
+      "collecting",
+      "title",
+    );
+
+    expect(ids(items).sort()).toEqual(["part-way", "whole"]);
+  });
+});
+
+describe("what the server can be asked for", () => {
+  it("names the one status a single-status tab wants", () => {
+    expect(serverStatus("locked")).toBe("locked");
+    expect(serverStatus("done")).toBe("completed");
+  });
+
+  it("asks for nothing when the tab spans more than one", () => {
+    // `?status=` takes a single value. A tab covering two has to fetch
+    // unfiltered and let `shelf` narrow it, or half its rows never arrive.
+    expect(serverStatus("collecting")).toBeUndefined();
+    expect(serverStatus("all")).toBeUndefined();
   });
 });
 

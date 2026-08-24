@@ -41,20 +41,35 @@ export interface PuzzleDraft {
 }
 
 /**
- * 48 pieces to start: enough to feel like a puzzle, few enough that finishing
- * one is imaginable at a sane price.
+ * The full 144: the author's own default, set from use rather than from guessing.
+ *
+ * It was 48, on the reasoning that a smaller puzzle is finishable at a sane
+ * price. In practice every puzzle made was the big one — a picture worth
+ * cutting up is worth cutting up properly — and starting two taps away from the
+ * count you always pick is a form arguing with its user.
  */
-export const DEFAULT_PIECES: PiecePreset = 48;
+export const DEFAULT_PIECES: PiecePreset = 144;
 
+/**
+ * Where the form starts.
+ *
+ * These are prices, not rules: every one of them is editable before sealing and
+ * none is enforced anywhere. They are here so the common puzzle takes a title
+ * and a picture and nothing else.
+ *
+ * Note what the random price being *filled in* means — a new puzzle now offers
+ * the gamble by default, where an empty field means no gamble at all. Clearing
+ * it is still how you opt out.
+ */
 export const initialDraft: PuzzleDraft = {
   title: "",
   description: "",
   imageKey: null,
   imageWidth: 0,
   imageHeight: 0,
-  unlockPrice: "200",
-  piecePrice: "10",
-  randomPrice: "",
+  unlockPrice: "1000",
+  piecePrice: "150",
+  randomPrice: "100",
   pieces: DEFAULT_PIECES,
   hideLocked: false,
 };

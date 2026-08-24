@@ -58,6 +58,35 @@ describe("what the form refuses to seal", () => {
   });
 });
 
+describe("where the form starts", () => {
+  it("opens on the numbers the author actually uses", () => {
+    // Set from use, not guessed. Pinned here because they are the whole point
+    // of the defaults: drifting one back to a "sensible" round number would
+    // otherwise be a silent change to every puzzle made afterwards.
+    expect(initialDraft.pieces).toBe(144);
+    expect(initialDraft.unlockPrice).toBe("1000");
+    expect(initialDraft.piecePrice).toBe("150");
+    expect(initialDraft.randomPrice).toBe("100");
+  });
+
+  it("offers the gamble out of the box, where it used to be off", () => {
+    // An empty random price means no gamble at all, so a filled-in default is a
+    // change of behaviour and not only of number.
+    expect(toPayload(ready())?.randomPrice).toBe(100);
+  });
+
+  it("still lets the author turn the gamble off by clearing it", () => {
+    expect(toPayload(ready({ randomPrice: "" }))?.randomPrice).toBeNull();
+  });
+
+  it("starts on a draft that only needs a title and a picture", () => {
+    // Every default has to be a *valid* value. One that fails validation would
+    // put an error on a form the user has not touched yet.
+    expect(validate(ready())).toBeNull();
+    expect(validate({ ...initialDraft, title: "x", imageKey: KEY })).toBeNull();
+  });
+});
+
 describe("leaving without saving", () => {
   it("is pristine before anything is touched", () => {
     expect(isPristine(initialDraft)).toBe(true);
@@ -105,7 +134,7 @@ describe("the grid the form shows", () => {
 
   it("starts at a count worth playing", () => {
     expect(initialDraft.pieces).toBe(DEFAULT_PIECES);
-    expect(draftGrid(initialDraft)).toEqual({ rows: 6, cols: 8 });
+    expect(draftGrid(initialDraft)).toEqual({ rows: 12, cols: 12 });
   });
 });
 

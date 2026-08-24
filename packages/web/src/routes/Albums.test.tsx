@@ -82,9 +82,21 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllGlobals());
 
+/**
+ * Switches an already-rendered shelf to All.
+ *
+ * The shelf **opens on Collecting**, and most of what is tested in this file —
+ * unlocking, pagination, the backup nudge, the puzzle cards — uses locked
+ * fixtures that Collecting hides by design. Switching once keeps those tests
+ * about their own subject rather than about the tab they happen to land on.
+ * The tests that ARE about the landing tab do not call this.
+ */
+const showAll = () => userEvent.setup().click(screen.getByRole("tab", { name: "All" }));
+
 async function open() {
   const user = userEvent.setup();
   render(<Albums />, { wrapper });
+  await showAll();
   await waitFor(() => expect(screen.getByText("Kitchen heroes")).toBeInTheDocument());
   return user;
 }
@@ -96,6 +108,7 @@ describe("the shelf", () => {
       album({ id: "b", title: "Open one", status: "in_progress", unlockedAt: "x", percent: 40 }),
     ];
     render(<Albums />, { wrapper });
+    await showAll();
 
     await waitFor(() => expect(screen.getByText("Locked one")).toBeInTheDocument());
     expect(screen.getByText("Open one")).toBeInTheDocument();
@@ -105,6 +118,7 @@ describe("the shelf", () => {
     // "No albums yet" was wrong once the shelf started holding puzzles too.
     albums = [];
     render(<Albums />, { wrapper });
+    await showAll();
     await waitFor(() => expect(screen.getByText("Nothing here yet")).toBeInTheDocument());
   });
 
@@ -113,6 +127,85 @@ describe("the shelf", () => {
     albums = [];
     await user.click(screen.getByRole("tab", { name: "Done" }));
     await waitFor(() => expect(screen.getByText("Nothing here")).toBeInTheDocument());
+  });
+});
+
+describe("the tab it opens on", () => {
+  it("lands on Collecting, not on everything", async () => {
+    // What you came to look at is the thing you are part-way through.
+    render(<Albums />, { wrapper });
+
+    const collecting = await screen.findByRole("tab", { name: "Collecting" });
+    expect(collecting).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "All" })).toHaveAttribute("aria-selected", "false");
+  });
+
+  it("asks for every status, because Collecting spans two of them", async () => {
+    // `?status=` takes one value and Collecting shows in-progress *and*
+    // finished, so asking for either one would silently drop the other half of
+    // the tab. The narrowing happens in `shelf`.
+    render(<Albums />, { wrapper });
+
+    await waitFor(() => expect(albumCalls()[0]).toBeDefined());
+    expect(albumCalls()[0]).not.toContain("status=");
+  });
+
+  it("shows what is on the go and what is finished, and hides what is shut", async () => {
+    // A finished collection stays on the tab the app opens on: the work is the
+    // same work, and hiding it the moment the last sticker lands makes the
+    // shelf emptier the more you have done.
+    albums = [
+      album({ id: "a", title: "Locked one", status: "locked" }),
+      album({ id: "b", title: "Open one", status: "in_progress", unlockedAt: "x", percent: 40 }),
+      album({ id: "c", title: "Finished one", status: "completed", percent: 100 }),
+    ];
+    render(<Albums />, { wrapper });
+
+    expect(await screen.findByText("Open one")).toBeInTheDocument();
+    expect(screen.getByText("Finished one")).toBeInTheDocument();
+    expect(screen.queryByText("Locked one")).not.toBeInTheDocument();
+  });
+
+  it("keeps Done as the narrower question", async () => {
+    const user = userEvent.setup();
+    albums = [
+      album({ id: "b", title: "Open one", status: "in_progress", unlockedAt: "x", percent: 40 }),
+      album({ id: "c", title: "Finished one", status: "completed", percent: 100 }),
+    ];
+    render(<Albums />, { wrapper });
+    await screen.findByText("Open one");
+
+    await user.click(screen.getByRole("tab", { name: "Done" }));
+
+    await waitFor(() => expect(screen.queryByText("Open one")).not.toBeInTheDocument());
+    expect(screen.getByText("Finished one")).toBeInTheDocument();
+  });
+
+  it("puts the tabs in the order they are worth reading", async () => {
+    // Collecting first because it is where you land; All in the middle rather
+    // than at the head, since it is the escape hatch and not the destination.
+    render(<Albums />, { wrapper });
+
+    const labels = (await screen.findAllByRole("tab")).map((tab) => tab.textContent);
+    expect(labels).toEqual(["Collecting", "Locked", "All", "Done"]);
+  });
+
+  it("points somewhere when nothing is on the go, rather than dead-ending", async () => {
+    // Collecting is a landing screen now. "Nothing has that status right now"
+    // is a true sentence and a dead end on the first thing the user sees.
+    albums = [album({ status: "locked" })];
+    render(<Albums />, { wrapper });
+
+    expect(await screen.findByText("Nothing on the go")).toBeInTheDocument();
+    expect(screen.getByText(/Open one from Locked/i)).toBeInTheDocument();
+  });
+
+  it("still says the collection is empty when it is, over on All", async () => {
+    albums = [];
+    render(<Albums />, { wrapper });
+    await showAll();
+
+    expect(await screen.findByText("Nothing here yet")).toBeInTheDocument();
   });
 });
 
@@ -146,9 +239,12 @@ describe("filtering and sorting", () => {
   });
 
   it("does not send a status for All — that would hide albums", async () => {
+    // The LAST call, not the first: the shelf opens on Collecting, so the
+    // first thing it ever asks for is `status=in_progress`.
     await open();
-    expect(albumCalls()[0]).toContain("sort=status");
-    expect(albumCalls()[0]).not.toContain("status=");
+    const last = albumCalls().at(-1) as string;
+    expect(last).toContain("sort=status");
+    expect(last).not.toContain("status=");
   });
 
   it("re-sorts without filtering", async () => {
@@ -247,6 +343,7 @@ describe("an expired session", () => {
   it("goes to the login screen instead of showing an empty shelf", async () => {
     fetchMock.mockImplementation(async () => json({ error: "unauthorized" }, 401));
     render(<Albums />, { wrapper });
+    await showAll();
 
     await waitFor(() => expect(screen.queryByText("Albums")).not.toBeInTheDocument());
   });
@@ -262,6 +359,7 @@ describe("pagination", () => {
   const openShelf = async () => {
     const user = userEvent.setup();
     render(<Albums />, { wrapper });
+    await showAll();
     await waitFor(() => expect(screen.getByText("Album 00")).toBeInTheDocument());
     return user;
   };
@@ -382,6 +480,7 @@ describe("the shelf holds puzzles too", () => {
   it("shows one beside the albums, badged so you can tell them apart", async () => {
     puzzles = [puzzle()];
     render(<Albums />, { wrapper });
+    await showAll();
 
     expect(await screen.findByText("The harbour")).toBeInTheDocument();
     expect(screen.getByText("Puzzle")).toBeInTheDocument();
@@ -392,6 +491,7 @@ describe("the shelf holds puzzles too", () => {
     puzzles = [puzzle()];
     albums = [];
     render(<Albums />, { wrapper });
+    await showAll();
     await screen.findByText("The harbour");
 
     await user.click(screen.getByRole("tab", { name: "Done" }));
@@ -405,6 +505,7 @@ describe("the shelf holds puzzles too", () => {
     albums = [];
     puzzles = [puzzle()];
     render(<Albums />, { wrapper });
+    await showAll();
 
     expect(
       await screen.findByRole("complementary", { name: "Back up your collection" }),
@@ -418,6 +519,7 @@ describe("the shelf holds puzzles too", () => {
     albums = [];
     puzzles = [puzzle()];
     render(<Albums />, { wrapper });
+    await showAll();
     await screen.findByText("The harbour");
 
     await user.click(screen.getByRole("button", { name: "Unlock 100" }));
@@ -437,6 +539,7 @@ describe("the shelf holds puzzles too", () => {
     albums = [];
     puzzles = [puzzle()];
     render(<Albums />, { wrapper });
+    await showAll();
     await screen.findByText("The harbour");
 
     await user.click(screen.getByRole("button", { name: "Unlock 100" }));
@@ -453,6 +556,7 @@ describe("the shelf holds puzzles too", () => {
     const user = userEvent.setup();
     puzzles = [puzzle()];
     render(<Albums />, { wrapper });
+    await showAll();
     await screen.findByText("The harbour");
 
     await user.click(screen.getByRole("button", { name: "Unlock 100" }));
@@ -472,6 +576,7 @@ describe("the shelf holds puzzles too", () => {
       puzzle({ id: "dear", title: "Dear one", unlockPrice: 5000 }),
     ];
     render(<Albums />, { wrapper });
+    await showAll();
     await screen.findByText("Cheap one");
 
     expect(screen.getByRole("button", { name: "Unlock 100" }).className).toContain("shadow-coin");
@@ -486,6 +591,7 @@ describe("the shelf holds puzzles too", () => {
     albums = [];
     puzzles = [puzzle()];
     render(<Albums />, { wrapper });
+    await showAll();
     await screen.findByText("The harbour");
 
     await user.click(screen.getByRole("button", { name: "Unlock 100" }));

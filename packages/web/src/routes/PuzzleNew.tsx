@@ -85,7 +85,10 @@ export function PuzzleNew() {
           onChange={(e) => dispatch({ kind: "description", value: e.target.value })}
         />
 
-        <Field label="Picture" hint="square — it is cut into a grid">
+        {/* Not "square" any more. P9-07 stopped cropping the import, so the
+            hint was telling the author to bring a shape the form no longer
+            wants and no longer produces. */}
+        <Field label="Picture" hint="any shape — it is cut into a grid">
           {draft.imageKey ? (
             <div className="flex items-center gap-3">
               {/* Full colour here. The grey cover is what the LIST shows for an

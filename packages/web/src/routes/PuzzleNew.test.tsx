@@ -105,18 +105,21 @@ describe("before it can be made", () => {
 
 describe("the choices it puts in front of you", () => {
   it("shows the cut for the count that is selected", () => {
-    // 48 pieces is 6 × 8, and the author should see the shape before sealing.
+    // The form opens on 144, which is 12 × 12, and the author should see the
+    // shape before sealing.
     open();
-    expect(screen.getByText(/cut 6 × 8/)).toBeInTheDocument();
+    expect(screen.getByText(/cut 12 × 12/)).toBeInTheDocument();
   });
 
   it("re-cuts when the count changes", async () => {
+    // Away from the default, deliberately. Clicking the preset the form already
+    // opens on would assert the starting state and call it a change.
     const user = userEvent.setup();
     open();
 
-    await user.click(screen.getByRole("button", { name: "144" }));
+    await user.click(screen.getByRole("button", { name: "48" }));
 
-    expect(screen.getByText(/cut 12 × 12/)).toBeInTheDocument();
+    expect(screen.getByText(/cut 6 × 8/)).toBeInTheDocument();
   });
 
   it("adds up what finishing it will cost", async () => {
@@ -127,8 +130,8 @@ describe("the choices it puts in front of you", () => {
 
     await user.click(screen.getByRole("button", { name: "12" }));
 
-    // 200 to unlock, 12 pieces at 10.
-    expect(screen.getByText("320")).toBeInTheDocument();
+    // 1000 to unlock, 12 pieces at 150.
+    expect(screen.getByText("2800")).toBeInTheDocument();
   });
 
   it("warns that there is no edit, before the button rather than after", () => {
@@ -176,7 +179,12 @@ describe("making it", () => {
     await user.click(seal());
 
     await waitFor(() => expect(posted()).not.toBeNull());
-    expect(posted()).toMatchObject({ unlockPrice: 200, piecePrice: 10, hideLocked: false });
+    expect(posted()).toMatchObject({
+      unlockPrice: 1000,
+      piecePrice: 150,
+      randomPrice: 100,
+      hideLocked: false,
+    });
   });
 
   it("carries the hide-locked choice", async () => {

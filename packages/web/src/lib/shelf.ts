@@ -17,6 +17,47 @@ import { pieceCount } from "@sticker-collector/shared";
  */
 export type ShelfSort = "status" | "title" | "progress" | "created";
 
+/**
+ * The tabs, which are **not** the statuses.
+ *
+ * They were the same list until `Collecting` had to hold finished collections
+ * too, and one name meaning both "this tab" and "this status" is what made that
+ * a type change rather than a line change. A tab is a question the user asks;
+ * a status is a fact about one thing on the shelf.
+ */
+export type ShelfFilter = "collecting" | "locked" | "all" | "done";
+
+/**
+ * Which statuses each tab shows.
+ *
+ * `collecting` is deliberately two. A finished collection is still one you are
+ * collecting — the work is the same work, and moving it out of sight the moment
+ * the last sticker lands makes the shelf emptier the more you have done. `done`
+ * is still there for when the finished ones are the question.
+ *
+ * The overlap is the point, not an oversight: an album can legitimately answer
+ * two of these tabs.
+ */
+const SHOWS: Record<ShelfFilter, readonly AlbumStatus[]> = {
+  collecting: ["in_progress", "completed"],
+  locked: ["locked"],
+  all: ["locked", "in_progress", "completed"],
+  done: ["completed"],
+};
+
+/**
+ * The status to ask the server for, or nothing when the tab spans more than one.
+ *
+ * `GET /api/albums?status=` takes a single value, so a tab covering two has to
+ * fetch unfiltered and let `shelf` narrow it — which it does anyway, since the
+ * puzzles arrive unfiltered regardless. Derived from `SHOWS` rather than
+ * written out again: a second list is a second thing to keep in step.
+ */
+export function serverStatus(filter: ShelfFilter): AlbumStatus | undefined {
+  const statuses = SHOWS[filter];
+  return statuses.length === 1 ? statuses[0] : undefined;
+}
+
 export type ShelfItem =
   | { kind: "album"; id: string; album: AlbumSummary }
   | { kind: "puzzle"; id: string; puzzle: Puzzle };
@@ -107,7 +148,7 @@ function comparator(sort: ShelfSort) {
 export function shelf(
   albums: readonly AlbumSummary[],
   puzzles: readonly Puzzle[],
-  filter: AlbumStatus | "all",
+  filter: ShelfFilter,
   sort: ShelfSort,
 ): ShelfItem[] {
   const items: ShelfItem[] = [
@@ -115,7 +156,5 @@ export function shelf(
     ...puzzles.map((puzzle): ShelfItem => ({ kind: "puzzle", id: puzzle.id, puzzle })),
   ];
 
-  return items
-    .filter((item) => filter === "all" || statusOf(item) === filter)
-    .sort(comparator(sort));
+  return items.filter((item) => SHOWS[filter].includes(statusOf(item))).sort(comparator(sort));
 }
