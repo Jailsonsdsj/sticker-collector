@@ -232,6 +232,14 @@ export const puzzle = sqliteTable(
     unlockPrice: integer("unlock_price").notNull(),
     /** Every piece costs the same; the board shows the price once, on screen. */
     piecePrice: integer("piece_price").notNull(),
+    /**
+     * One random locked piece, at this price. Defaulted so the column arrives
+     * as an `ADD COLUMN` rather than a table rebuild — a rebuild drops
+     * `puzzle_frozen` without a word — and 0 is the honest backfill: puzzles
+     * made before this had no random pull at all, and the route refuses to sell
+     * one until the author sets a price.
+     */
+    randomPrice: integer("random_price").notNull().default(0),
     rows: integer("rows").notNull(),
     cols: integer("cols").notNull(),
     /**

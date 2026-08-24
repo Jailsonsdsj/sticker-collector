@@ -358,6 +358,28 @@ export function useCreatePuzzle() {
   });
 }
 
+/**
+ * The gamble: one random locked piece, at the puzzle's own price.
+ *
+ * The Worker picks. A client that chose its own index would be buying a named
+ * piece at the random price.
+ */
+export function usePullPiece(id: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      api<PuzzlePurchase>(`/api/puzzles/${id}/pieces/random`, {
+        method: "POST",
+        idempotencyKey: crypto.randomUUID(),
+      }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: keys.puzzle(id) });
+      void client.invalidateQueries({ queryKey: keys.puzzlesAll });
+      void client.invalidateQueries({ queryKey: keys.wallet });
+    },
+  });
+}
+
 /** Soft, like an album's: the coins spent inside it stay spent. */
 export function useDeletePuzzle() {
   const client = useQueryClient();

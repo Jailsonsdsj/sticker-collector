@@ -410,4 +410,86 @@ describe("the shelf holds puzzles too", () => {
       await screen.findByRole("complementary", { name: "Back up your collection" }),
     ).toBeInTheDocument();
   });
+  it("opens a locked one from the shelf, the same way an album opens", async () => {
+    // It used to say `Locked · 100` and send you to the board. Two cards in one
+    // grid where only one can be bought where it sits is a difference the user
+    // has to learn for no reason.
+    const user = userEvent.setup();
+    albums = [];
+    puzzles = [puzzle()];
+    render(<Albums />, { wrapper });
+    await screen.findByText("The harbour");
+
+    await user.click(screen.getByRole("button", { name: "Unlock 100" }));
+    await user.click(dialog().getByRole("button", { name: "Spend 100" }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/puzzles/p1/unlock",
+        expect.objectContaining({ method: "POST" }),
+      ),
+    );
+  });
+
+  it("asks before spending, rather than buying on the tap", async () => {
+    // The ledger is append-only: a mis-tap costs coins no undo can return.
+    const user = userEvent.setup();
+    albums = [];
+    puzzles = [puzzle()];
+    render(<Albums />, { wrapper });
+    await screen.findByText("The harbour");
+
+    await user.click(screen.getByRole("button", { name: "Unlock 100" }));
+
+    expect(dialog().getByRole("button", { name: "Spend 100" })).toBeInTheDocument();
+    expect(
+      fetchMock.mock.calls.filter(
+        ([, init]) => (init as RequestInit | undefined)?.method === "POST",
+      ),
+    ).toHaveLength(0);
+  });
+
+  it("names the puzzle in the confirmation, not the album beside it", async () => {
+    const user = userEvent.setup();
+    puzzles = [puzzle()];
+    render(<Albums />, { wrapper });
+    await screen.findByText("The harbour");
+
+    await user.click(screen.getByRole("button", { name: "Unlock 100" }));
+
+    expect(dialog().getByText("Unlock The harbour?")).toBeInTheDocument();
+  });
+
+  it("marks one the wallet could open, and leaves one it could not", async () => {
+    // An album's affordability arrives computed by the server; a puzzle's is
+    // worked out here against the wallet this screen already holds. Getting
+    // that arithmetic wrong marks every puzzle as affordable, which is exactly
+    // as useful as marking none of them.
+    albums = [];
+    balance = 1000;
+    puzzles = [
+      puzzle({ id: "cheap", title: "Cheap one", unlockPrice: 100 }),
+      puzzle({ id: "dear", title: "Dear one", unlockPrice: 5000 }),
+    ];
+    render(<Albums />, { wrapper });
+    await screen.findByText("Cheap one");
+
+    expect(screen.getByRole("button", { name: "Unlock 100" }).className).toContain("shadow-coin");
+    expect(screen.getByRole("button", { name: "Unlock 5000" }).className).not.toContain(
+      "shadow-coin",
+    );
+  });
+
+  it("says the coins are short when they are, and spends nothing", async () => {
+    const user = userEvent.setup();
+    balance = 20;
+    albums = [];
+    puzzles = [puzzle()];
+    render(<Albums />, { wrapper });
+    await screen.findByText("The harbour");
+
+    await user.click(screen.getByRole("button", { name: "Unlock 100" }));
+
+    expect(dialog().getByRole("button", { name: "Not enough coins" })).toBeDisabled();
+  });
 });

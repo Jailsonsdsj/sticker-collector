@@ -1,4 +1,4 @@
-import type { AlbumStatus, AlbumSummary } from "@sticker-collector/shared";
+import type { AlbumStatus } from "@sticker-collector/shared";
 import { ALBUM_SORTS } from "@sticker-collector/shared";
 import { useState } from "react";
 import { Navigate } from "react-router";
@@ -10,10 +10,10 @@ import { PuzzleCard } from "../components/PuzzleCard";
 import { UnlockDialog } from "../components/UnlockDialog";
 import { Button, Chip, EmptyState, ErrorState, Skeleton, Tabs } from "../components/ui";
 import { ApiError } from "../lib/api";
-import { useUnlockAlbum } from "../lib/mutations";
+import { useUnlockAlbum, useUnlockPuzzle } from "../lib/mutations";
 import { playUnlock } from "../lib/placement";
 import { useAlbums, usePuzzles, useWallet } from "../lib/queries";
-import { shelf } from "../lib/shelf";
+import { shelf, type UnlockTarget, unlockTarget } from "../lib/shelf";
 
 /**
  * The shelf.
@@ -63,18 +63,20 @@ export function Albums() {
   const [filter, setFilter] = useState<AlbumStatus | "all">("all");
   const [creating, setCreating] = useState(false);
   const [sort, setSort] = useState<(typeof ALBUM_SORTS)[number]>("status");
-  const [unlocking, setUnlocking] = useState<AlbumSummary | null>(null);
+  const [unlocking, setUnlocking] = useState<UnlockTarget | null>(null);
   const [page, setPage] = useState(0);
 
   const albums = useAlbums({ status: filter === "all" ? undefined : filter, sort });
   const puzzles = usePuzzles();
   const wallet = useWallet();
-  const unlock = useUnlockAlbum();
+  const unlockAlbum = useUnlockAlbum();
+  const unlockPuzzle = useUnlockPuzzle();
 
   if (albums.error instanceof ApiError && albums.error.status === 401) {
     return <Navigate to="/login" replace />;
   }
 
+  const balance = wallet.data?.balance ?? 0;
   const rows = albums.data ?? [];
   // One grid, both kinds. The server has already filtered and sorted the
   // albums; `shelf` mixes the puzzles in and re-sorts the whole thing with a
@@ -167,10 +169,19 @@ export function Albums() {
                 <AlbumCard
                   key={item.id}
                   album={item.album}
-                  onUnlock={() => setUnlocking(item.album)}
+                  onUnlock={() => setUnlocking(unlockTarget(item))}
                 />
               ) : (
-                <PuzzleCard key={item.id} puzzle={item.puzzle} />
+                <PuzzleCard
+                  key={item.id}
+                  puzzle={item.puzzle}
+                  // An album's affordability is computed by the server, which
+                  // knows the balance while it builds the row. A puzzle's is
+                  // computed here, against the wallet this screen already
+                  // holds — one number, two ways of reaching it.
+                  affordable={item.puzzle.unlockPrice <= balance}
+                  onUnlock={() => setUnlocking(unlockTarget(item))}
+                />
               ),
             )}
           </AlbumGrid>
@@ -205,19 +216,21 @@ export function Albums() {
         </>
       )}
 
+      {/* One dialog for both kinds. The question is identical — what does
+          this cost, and what is left — and only the mutation differs. */}
       <UnlockDialog
-        album={unlocking}
-        balance={wallet.data?.balance ?? 0}
-        pending={unlock.isPending}
+        item={unlocking}
+        balance={balance}
+        pending={unlockAlbum.isPending || unlockPuzzle.isPending}
         onClose={() => setUnlocking(null)}
         onConfirm={async () => {
           if (!unlocking) return;
-          const unlocked = unlocking.id;
-          await unlock.mutateAsync(unlocked);
+          const { kind, id } = unlocking;
+          await (kind === "album" ? unlockAlbum : unlockPuzzle).mutateAsync(id);
           setUnlocking(null);
           // After the dialog closes and the card re-renders unlocked: the ring
           // is on the card, and the card is only there once the list refreshes.
-          requestAnimationFrame(() => playUnlock(unlocked));
+          requestAnimationFrame(() => playUnlock(id));
         }}
       />
     </>

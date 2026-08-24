@@ -7,6 +7,7 @@ import {
   useState,
 } from "react";
 import { imageSrc } from "../lib/imageUpload";
+import { PIECE_ATTRIBUTE } from "../lib/placement";
 import {
   distance,
   type Frame,
@@ -306,6 +307,10 @@ function Piece({
   return (
     <button
       type="button"
+      // How the landing animation finds this tile. An attribute rather than an
+      // id: ids are unique per document, and the same board can legitimately be
+      // mounted twice while a route transitions.
+      {...{ [PIECE_ATTRIBUTE]: index }}
       // A button per tile rather than one hit-test on the board: the browser
       // already knows which element a tap landed on at any zoom, and it makes
       // every piece reachable by keyboard for free.

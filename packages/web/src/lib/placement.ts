@@ -72,14 +72,17 @@ export function placeSticker(stickerId: string, root: ParentNode = document): HT
 }
 
 /**
- * The moment an album stops being locked.
+ * The moment a thing on the shelf stops being locked.
  *
- * Unlocking costs real coins and is the gate on everything else in an album, so
- * it earns more than a filter quietly lifting. A burst behind the cover plus a
+ * Unlocking costs real coins and is the gate on everything behind it, so it
+ * earns more than a filter quietly lifting. A burst behind the cover plus a
  * short pop, on the card the user just paid for — found the same way a placed
  * sticker is, by an attribute rather than an id.
  */
 export const ALBUM_ATTRIBUTE = "data-album-id";
+
+/** The other kind of card in the same grid, celebrated the same way. */
+export const PUZZLE_ATTRIBUTE = "data-puzzle-id";
 
 /**
  * How long a direct purchase celebrates.
@@ -90,8 +93,13 @@ export const ALBUM_ATTRIBUTE = "data-album-id";
  */
 export const BUY_MS = 2000;
 
-export function playUnlock(albumId: string, root: ParentNode = document): HTMLElement | null {
-  const card = root.querySelector<HTMLElement>(`[${ALBUM_ATTRIBUTE}="${albumId}"]`);
+export function playUnlock(id: string, root: ParentNode = document): HTMLElement | null {
+  // Either kind of card. The shelf mixes albums and puzzles in one grid, and a
+  // burst that fired for one but not the other would read as the puzzle's
+  // purchase not having landed. Ids are UUIDs, so the two never collide.
+  const card = root.querySelector<HTMLElement>(
+    `[${ALBUM_ATTRIBUTE}="${id}"],[${PUZZLE_ATTRIBUTE}="${id}"]`,
+  );
   if (!card || !prefersMotion()) return card;
 
   const context = gsap.context(() => {
@@ -174,4 +182,141 @@ export function celebrateSticker(
   // would keep every bought sticker's animation alive for the session.
   window.setTimeout(() => context.revert(), BUY_MS + 300);
   return slot;
+}
+
+/** Which piece a board tile is, for the landing animation to find it. */
+export const PIECE_ATTRIBUTE = "data-piece-index";
+
+/**
+ * How long a random piece takes to land, glow and settle.
+ *
+ * Three seconds is the ceiling the whole sequence answers to, and it is a
+ * ceiling rather than a target: the piece is *in place* well before the glow
+ * has finished fading, so the board is usable while the light is still going
+ * out. An animation that holds the screen hostage for its full length is one
+ * people learn to sit through rather than enjoy.
+ */
+export const LAND_MS = 3000;
+
+/** The snap, and the glow. Kept apart so the piece is readable before the
+ *  light around it has gone. */
+const SNAP_MS = 0.55;
+const GLOW_MS = 1.6;
+
+/**
+ * The colours a landing can glow in.
+ *
+ * **Tokens, never a generated colour.** Computing one would be a line shorter
+ * and would fail CI — colours come from `styles/tokens.css` only (CLAUDE.md) —
+ * and it would put light on screen in a hue the palette does not contain. These
+ * five are the app's own accents, the same set every button tone is drawn from,
+ * so a landing is a surprise within the design rather than an escape from it.
+ */
+export const GLOW_TONES = ["coin", "lime", "cyan", "magenta", "violet"] as const;
+
+export type GlowTone = (typeof GLOW_TONES)[number];
+
+/** The last one used, so the next one is never the same. */
+let lastTone: GlowTone | null = null;
+
+/**
+ * A colour for the next landing, never the one before it.
+ *
+ * Five colours means a naive draw repeats one pull in five, and two identical
+ * flourishes in a row read as the effect having failed to change rather than as
+ * chance. Excluding the last one costs a line and removes the only case anyone
+ * would notice.
+ *
+ * `Math.random` rather than the crypto entropy the pull itself uses: this
+ * decides a colour, not who gets paid.
+ */
+export function pickGlowTone(): GlowTone {
+  const choices = GLOW_TONES.filter((tone) => tone !== lastTone);
+  const tone = choices[Math.floor(Math.random() * choices.length)] as GlowTone;
+  lastTone = tone;
+  return tone;
+}
+
+/**
+ * How large the piece starts — near enough to read as being held up to the
+ * screen, not so large that a corner tile is mostly clipped by the board.
+ */
+const NEAR_SCALE = 2.4;
+
+/**
+ * A random piece arriving in its slot.
+ *
+ * Two things at once, deliberately. The tile **comes in from close to the
+ * screen** — large, and shrinking to exactly its own size in its own slot,
+ * which is what makes it read as a piece being pressed into place rather than
+ * a colour fading up. And light spreads **from beneath it on all four sides**,
+ * a shadow cast outwards rather than a border drawn on: a piece pushed into a
+ * gap lights the gap, and the gap is on every side of it.
+ *
+ * **No travel and no rotation.** It grows from the middle of its own slot, so
+ * it is over the right hole for the whole animation — a piece that flies in
+ * from somewhere else has to be followed, and one that arrives crooked reads as
+ * misaligned on a picture whose whole point is that the pieces line up.
+ *
+ * The glow is a `box-shadow`, not an extra element. A ring would have to be
+ * positioned against a tile whose size depends on the grid, the zoom and the
+ * picture's shape; a shadow is defined relative to the box it belongs to and is
+ * right at every one of them.
+ *
+ * Returns the tile it acted on, or null when the board is not showing it — a
+ * puzzle can legitimately be off screen by the time the request lands.
+ */
+export function playPieceLanding(index: number, root: ParentNode = document): HTMLElement | null {
+  const tile = root.querySelector<HTMLElement>(`[${PIECE_ATTRIBUTE}="${index}"]`);
+  if (!tile || !prefersMotion()) return tile;
+
+  const glow = `var(--color-${pickGlowTone()})`;
+
+  const context = gsap.context(() => {
+    // Lifted above its neighbours for the duration. A tile at 2.4x that is
+    // still in grid order is half-hidden behind the pieces around it, which
+    // reads as growing *underneath* the board rather than in front of it.
+    gsap.set(tile, { zIndex: 30, position: "relative" });
+
+    gsap.fromTo(
+      tile,
+      { scale: NEAR_SCALE, autoAlpha: 0.2 },
+      {
+        scale: 1,
+        autoAlpha: 1,
+        duration: SNAP_MS,
+        // `power4.out`, and NOT a `back` ease. `back` overshoots past its
+        // target — which on a value that is *shrinking* means going below it:
+        // measured at 0.80, the piece visibly became smaller than its own hole
+        // and grew back, which reads as a squash rather than a snap. This
+        // covers most of the distance immediately and decelerates hard into
+        // place, never passing it.
+        ease: "power4.out",
+      },
+    );
+
+    // From beneath, on all four sides: a spread with no offset, growing out of
+    // nothing and fading back to it.
+    gsap.fromTo(
+      tile,
+      { boxShadow: `0 0 0 0 ${glow}` },
+      {
+        boxShadow: `0 0 28px 10px color-mix(in srgb, ${glow} 0%, transparent)`,
+        keyframes: {
+          boxShadow: [
+            `0 0 0 0 color-mix(in srgb, ${glow} 85%, transparent)`,
+            `0 0 30px 12px color-mix(in srgb, ${glow} 55%, transparent)`,
+            `0 0 40px 16px color-mix(in srgb, ${glow} 0%, transparent)`,
+          ],
+          easeEach: "power2.out",
+        },
+        duration: GLOW_MS,
+      },
+    );
+  });
+
+  // Reverted once the sequence is over, and never later: an unreverted context
+  // per pull would keep every landing of the session alive in memory.
+  window.setTimeout(() => context.revert(), LAND_MS);
+  return tile;
 }

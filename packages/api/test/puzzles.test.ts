@@ -32,6 +32,7 @@ function body(over: Partial<CreatePuzzleInput> = {}): CreatePuzzleInput {
     imageHeight: 1024,
     unlockPrice: 300,
     piecePrice: 25,
+    randomPrice: 40,
     pieces: 48,
     ...over,
   };
@@ -420,6 +421,107 @@ describe("buying into a puzzle", () => {
       expect(
         (await call("POST", `/api/puzzles/${made.id}/pieces`, { pieces: [3, 3] })).status,
       ).toBe(400);
+    });
+  });
+
+  describe("the gamble", () => {
+    const pull = (id: string) => call("POST", `/api/puzzles/${id}/pieces/random`);
+
+    it("charges the puzzle's random price and grants one piece", async () => {
+      await fund(1000);
+      const made = await unlocked({ unlockPrice: 0, piecePrice: 5, randomPrice: 40 });
+
+      const res = await pull(made.id);
+
+      expect(res.status).toBe(201);
+      const body = (await res.json()) as PuzzlePurchase;
+      expect(body.spentCoins).toBe(40);
+      expect(body.pieces).toHaveLength(1);
+      expect(await balanceNow()).toBe(960);
+    });
+
+    it("charges the random price, not the piece price", async () => {
+      // The two are separate on purpose: the gamble is priced against the
+      // convenience of choosing, not against a piece.
+      await fund(1000);
+      const made = await unlocked({ unlockPrice: 0, piecePrice: 5, randomPrice: 40 });
+
+      await pull(made.id);
+
+      expect(await balanceNow()).toBe(960);
+    });
+
+    it("only ever gives a piece that was locked", async () => {
+      // The album refuses a pull when no unowned sticker can come back. A piece
+      // has no duplicate to give and no refund to soften one, so the draw is
+      // from the locked pieces and never lands on an owned one.
+      await fund(100000);
+      const made = await unlocked({ pieces: 12, unlockPrice: 0, piecePrice: 1, randomPrice: 1 });
+      const seen = new Set<number>();
+
+      for (let i = 0; i < 12; i++) {
+        const body = (await (await pull(made.id)).json()) as PuzzlePurchase;
+        const [piece] = body.pieces;
+        expect(seen.has(piece as number)).toBe(false);
+        seen.add(piece as number);
+      }
+
+      expect(seen.size).toBe(12);
+    });
+
+    it("refuses once every piece is owned, rather than selling nothing", async () => {
+      await fund(100000);
+      const made = await unlocked({ pieces: 12, unlockPrice: 0, piecePrice: 1, randomPrice: 1 });
+      await call("POST", `/api/puzzles/${made.id}/pieces`, {
+        pieces: Array.from({ length: 12 }, (_, i) => i),
+      });
+      const before = await balanceNow();
+
+      expect((await pull(made.id)).status).toBe(409);
+      expect(await balanceNow()).toBe(before);
+    });
+
+    it("will not gamble inside a locked puzzle", async () => {
+      await fund(1000);
+      const made = await create({ randomPrice: 40 });
+
+      expect((await pull(made.id)).status).toBe(409);
+    });
+
+    it("offers nothing when the author priced no gamble", async () => {
+      // Zero is "not offered", never "free" — a free pull is not a pull.
+      await fund(1000);
+      const made = await unlocked({ unlockPrice: 0, randomPrice: null });
+
+      expect((await pull(made.id)).status).toBe(409);
+      expect(await balanceNow()).toBe(1000);
+    });
+
+    it("grants nothing when the wallet is short", async () => {
+      await fund(10);
+      const made = await unlocked({ unlockPrice: 0, randomPrice: 40 });
+
+      expect((await pull(made.id)).status).toBe(402);
+
+      const rows = await env.DB.prepare(
+        "SELECT COUNT(*) AS n FROM puzzle_piece WHERE puzzle_id = ?",
+      )
+        .bind(made.id)
+        .first<{ n: number }>();
+      expect(rows?.n).toBe(0);
+      expect(await balanceNow()).toBe(10);
+    });
+
+    it("finishes the puzzle when the pull fills the last hole", async () => {
+      await fund(100000);
+      const made = await unlocked({ pieces: 12, unlockPrice: 0, piecePrice: 1, randomPrice: 1 });
+      await call("POST", `/api/puzzles/${made.id}/pieces`, {
+        pieces: Array.from({ length: 11 }, (_, i) => i),
+      });
+
+      const body = (await (await pull(made.id)).json()) as PuzzlePurchase;
+
+      expect(body.completed).toBe(true);
     });
   });
 

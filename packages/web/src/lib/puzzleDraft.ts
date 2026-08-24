@@ -34,6 +34,8 @@ export interface PuzzleDraft {
   imageHeight: number;
   unlockPrice: string;
   piecePrice: string;
+  /** One random locked piece. Empty means the author is not offering one. */
+  randomPrice: string;
   pieces: PiecePreset;
   hideLocked: boolean;
 }
@@ -52,6 +54,7 @@ export const initialDraft: PuzzleDraft = {
   imageHeight: 0,
   unlockPrice: "200",
   piecePrice: "10",
+  randomPrice: "",
   pieces: DEFAULT_PIECES,
   hideLocked: false,
 };
@@ -62,6 +65,7 @@ export type DraftAction =
   | { kind: "image"; value: string; width: number; height: number }
   | { kind: "unlockPrice"; value: string }
   | { kind: "piecePrice"; value: string }
+  | { kind: "randomPrice"; value: string }
   | { kind: "pieces"; value: PiecePreset }
   | { kind: "hideLocked"; value: boolean };
 
@@ -82,6 +86,8 @@ export function reduce(state: PuzzleDraft, action: DraftAction): PuzzleDraft {
       return { ...state, unlockPrice: action.value };
     case "piecePrice":
       return { ...state, piecePrice: action.value };
+    case "randomPrice":
+      return { ...state, randomPrice: action.value };
     case "pieces":
       return { ...state, pieces: action.value };
     case "hideLocked":
@@ -97,6 +103,7 @@ export function isPristine(draft: PuzzleDraft): boolean {
     draft.imageKey === null &&
     draft.unlockPrice === initialDraft.unlockPrice &&
     draft.piecePrice === initialDraft.piecePrice &&
+    draft.randomPrice === initialDraft.randomPrice &&
     draft.pieces === initialDraft.pieces &&
     draft.hideLocked === initialDraft.hideLocked
   );
@@ -125,6 +132,12 @@ export function validate(draft: PuzzleDraft): string | null {
     return "The piece price must be a whole number of coins.";
   }
   if (!PIECE_PRESETS.includes(draft.pieces)) return "Pick how many pieces.";
+  // Empty is a real answer — no gamble on this puzzle. A price that is *there*
+  // has to be worth something: a free pull is not a pull.
+  if (draft.randomPrice.trim() !== "") {
+    const random = coins(draft.randomPrice);
+    if (random === null || random < 1) return "A random piece must cost at least 1 coin.";
+  }
   return null;
 }
 
@@ -166,6 +179,7 @@ export function toPayload(draft: PuzzleDraft): CreatePuzzleInput | null {
     imageHeight: draft.imageHeight,
     unlockPrice: coins(draft.unlockPrice) ?? 0,
     piecePrice: coins(draft.piecePrice) ?? 0,
+    randomPrice: draft.randomPrice.trim() === "" ? null : (coins(draft.randomPrice) ?? null),
     pieces: draft.pieces,
     hideLocked: draft.hideLocked,
   };

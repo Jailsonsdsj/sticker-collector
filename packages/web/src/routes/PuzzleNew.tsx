@@ -166,6 +166,16 @@ export function PuzzleNew() {
           />
         </div>
 
+        <Input
+          id="puzzle-random-price"
+          type="number"
+          tone="numeric"
+          label="Random piece"
+          hint="optional — leave empty for no gamble"
+          value={draft.randomPrice}
+          onChange={(e) => dispatch({ kind: "randomPrice", value: e.target.value })}
+        />
+
         {/* Two small numbers multiply into a large one: 144 pieces at 10 coins
             is a fortnight of tasks. Worth knowing while the prices can still
             be changed. */}

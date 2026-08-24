@@ -1,0 +1,1 @@
+ALTER TABLE `puzzle` ADD `random_price` integer DEFAULT 0 NOT NULL;

@@ -1,8 +1,19 @@
-import type { AlbumSummary } from "@sticker-collector/shared";
 import { Button, Dialog } from "./ui";
 
+/**
+ * The two facts a confirmation needs.
+ *
+ * An album and a puzzle are different things everywhere else in the app; at the
+ * moment of spending they ask the identical question — what does this cost, and
+ * what is left — so they get the identical dialog rather than a copy of it.
+ */
+export interface Unlockable {
+  title: string;
+  unlockPrice: number;
+}
+
 export interface UnlockDialogProps {
-  album: AlbumSummary | null;
+  item: Unlockable | null;
   balance: number;
   pending: boolean;
   onConfirm: () => void;
@@ -10,23 +21,23 @@ export interface UnlockDialogProps {
 }
 
 /**
- * Confirms an album unlock.
+ * Confirms an unlock, of either kind of thing on the shelf.
  *
  * Spending is irreversible — the ledger is append-only, so a mis-tap costs
  * coins that no amount of undo can return. This is also the only place the two
  * numbers that matter can sit side by side: what it costs, and what is left
  * afterwards.
  */
-export function UnlockDialog({ album, balance, pending, onConfirm, onClose }: UnlockDialogProps) {
-  const price = album?.unlockPrice ?? 0;
+export function UnlockDialog({ item, balance, pending, onConfirm, onClose }: UnlockDialogProps) {
+  const price = item?.unlockPrice ?? 0;
   const affordable = balance >= price;
   const after = balance - price;
 
   return (
     <Dialog
-      open={album !== null}
+      open={item !== null}
       onClose={onClose}
-      title={album ? `Unlock ${album.title}?` : "Unlock"}
+      title={item ? `Unlock ${item.title}?` : "Unlock"}
       footer={
         <>
           <Button variant="ghost" tone="neutral" onClick={onClose}>

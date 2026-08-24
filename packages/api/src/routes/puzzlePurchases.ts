@@ -182,3 +182,110 @@ puzzlePurchaseRoutes.post("/:id/pieces", idempotency, async (c) => {
   };
   return c.json(body, 201);
 });
+
+/**
+ * POST /api/puzzles/:id/pieces/random — the gamble.
+ *
+ * The album's rule, in a place with no tiers: *a pull is refused whenever no
+ * unowned thing can come back*, because otherwise the user pays for a
+ * guaranteed nothing (`prd/05-stickers.md` §Random 6).
+ *
+ * Where the album applies that per tier and still allows a duplicate — the
+ * gamble is which sticker, and a repeat pays a refund — a puzzle piece has no
+ * duplicate to give. `puzzle_piece` is UNIQUE on (puzzle, index) and there is
+ * no refund to soften it, so the draw is from the **locked pieces only** and an
+ * exhausted puzzle is a 409 rather than a sale. That is the same rule reaching
+ * the same end by the only route open to it.
+ *
+ * The entropy is the Worker's, never the client's: a caller that chose its own
+ * piece would be buying a named one at the random price.
+ */
+puzzlePurchaseRoutes.post("/:id/pieces/random", idempotency, async (c) => {
+  const database = db(c.env);
+  const userId = c.get("userId");
+  const puzzleId = c.req.param("id");
+
+  const row = await database
+    .select({
+      randomPrice: puzzle.randomPrice,
+      rows: puzzle.rows,
+      cols: puzzle.cols,
+      unlockedAt: puzzle.unlockedAt,
+    })
+    .from(puzzle)
+    .where(and(eq(puzzle.id, puzzleId), livePuzzles(userId)))
+    .get();
+  if (!row) return c.json({ error: "puzzle not found" }, 404);
+  if (!row.unlockedAt) return c.json({ error: "puzzle is locked" }, 409);
+  // Zero is "the author did not offer one", not "free". A free gamble is not a
+  // gamble, which is why the schema floors a declared price at 1.
+  if (row.randomPrice < 1) return c.json({ error: "no random pull on this puzzle" }, 409);
+
+  const owned = new Set(
+    (
+      await database
+        .select({ pieceIndex: puzzlePiece.pieceIndex })
+        .from(puzzlePiece)
+        .where(eq(puzzlePiece.puzzleId, puzzleId))
+    ).map((piece) => piece.pieceIndex),
+  );
+
+  const locked: number[] = [];
+  for (let index = 0; index < row.rows * row.cols; index++) {
+    if (!owned.has(index)) locked.push(index);
+  }
+  if (locked.length === 0) return c.json({ error: "every piece is already yours" }, 409);
+
+  const chosen = locked[Math.floor(randomFraction() * locked.length)] as number;
+  const ledgerId = crypto.randomUUID();
+  const now = new Date().toISOString();
+
+  const results = await c.env.DB.batch([
+    spendStatement(
+      c.env.DB,
+      {
+        id: ledgerId,
+        userId,
+        amountCoins: -row.randomPrice,
+        reason: "piece_unlock",
+        puzzleId,
+        createdAt: now,
+      },
+      // Re-checked at the moment of payment: a second request that got past the
+      // read above must not buy a piece that has since been bought.
+      {
+        sql: "NOT EXISTS (SELECT 1 FROM puzzle_piece WHERE puzzle_id = ? AND piece_index = ?)",
+        binds: [puzzleId, chosen],
+      },
+    ),
+    c.env.DB.prepare(
+      `INSERT INTO puzzle_piece (id, puzzle_id, piece_index, acquired_at)
+       SELECT ?1, ?2, ?3, ?4 WHERE ${PAID_FOR}`,
+    ).bind(crypto.randomUUID(), puzzleId, chosen, now, ledgerId),
+    c.env.DB.prepare(
+      `UPDATE puzzle SET completed_at = ?1
+         WHERE id = ?2
+           AND completed_at IS NULL
+           AND (SELECT COUNT(*) FROM puzzle_piece WHERE puzzle_id = ?2) = rows * cols
+           AND ${PAID_FOR}`,
+    ).bind(now, puzzleId, ledgerId),
+  ]);
+
+  if (results[0]?.meta.changes !== 1) return c.json({ error: "insufficient coins" }, 402);
+
+  const body: PuzzlePurchase = {
+    balance: await balance(c.env.DB, userId),
+    spentCoins: row.randomPrice,
+    puzzleId,
+    pieces: [chosen],
+    completed: (results[results.length - 1]?.meta.changes ?? 0) === 1,
+  };
+  return c.json(body, 201);
+});
+
+/** Entropy, the same shape the album's pull uses. */
+function randomFraction(): number {
+  const buffer = new Uint32Array(1);
+  crypto.getRandomValues(buffer);
+  return (buffer[0] as number) / 0x1_0000_0000;
+}
