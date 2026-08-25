@@ -89,6 +89,25 @@ describe("what the card says", () => {
     expect(screen.getByRole("progressbar")).toBeInTheDocument();
   });
 
+  it("writes the figure inside the bar, the way an album's does", () => {
+    // A thin unlabelled sliver beside a full labelled bar, in one grid, reads
+    // as two different kinds of progress rather than the same thing twice.
+    card({ unlockedAt: "2026-08-01T00:00:00Z", ownedCount: 3 });
+
+    expect(screen.getAllByText("50%").length).toBeGreaterThan(0);
+  });
+
+  it("shows the whole title rather than cutting it off", () => {
+    // A cut title tells you a name exists and refuses to say what it is, on a
+    // card whose job is to be recognised.
+    const long = "A very long puzzle title that will not fit on one line at all";
+    card({ title: long });
+
+    const heading = screen.getByRole("heading", { level: 3 });
+    expect(heading.textContent).toBe(long);
+    expect(heading.className).not.toContain("truncate");
+  });
+
   it("names the pieces owned in the link, for anyone not looking at the bar", () => {
     card({ unlockedAt: "2026-08-01T00:00:00Z", ownedCount: 3 });
 
@@ -211,5 +230,65 @@ describe("the same control, not a lookalike", () => {
 
   it("looks exactly like an album's when they are not", () => {
     expect(puzzleButton(false)).toEqual(albumButton({ affordable: false }));
+  });
+});
+
+describe("the progress bar is the album's, not a lookalike", () => {
+  /**
+   * Same reasoning as the unlock button below: the request was for *the
+   * album's* bar, and the way that decays is quietly — someone changes one and
+   * the other keeps a size or a tone nobody notices. So this renders both at
+   * the same progress and compares them, rather than pinning the classes a
+   * half-full bar happens to have today.
+   */
+  const shape = (bar: HTMLElement) => ({
+    className: bar.className,
+    accent: bar.style.getPropertyValue("--ui-accent"),
+    fill: (bar.firstElementChild as HTMLElement).style.width,
+    label: bar.textContent,
+  });
+
+  const albumBar = (over: Partial<AlbumSummary> = {}) => {
+    const album = {
+      id: "a1",
+      title: "Kitchen heroes",
+      coverKey: `img/${"a".repeat(64)}.jpg`,
+      status: "in_progress",
+      percent: 50,
+      owned: 6,
+      total: 12,
+      remaining: 6,
+      almostThere: false,
+      unlockPrice: 100,
+      unlockedAt: "x",
+      affordable: true,
+      ...over,
+    } as AlbumSummary;
+    const { unmount } = render(
+      <MemoryRouter>
+        <AlbumCard album={album} onUnlock={vi.fn()} />
+      </MemoryRouter>,
+    );
+    const out = shape(screen.getByRole("progressbar"));
+    unmount();
+    return out;
+  };
+
+  const puzzleBar = (over: Partial<Puzzle> = {}) => {
+    const { unmount } = card({ unlockedAt: "x", ownedCount: 3, ...over });
+    const out = shape(screen.getByRole("progressbar"));
+    unmount();
+    return out;
+  };
+
+  it("is the same bar at the same progress", () => {
+    // 3 of 6 pieces is 50%, the same as 6 of 12 stickers.
+    expect(puzzleBar()).toEqual(albumBar());
+  });
+
+  it("is the same bar when it is finished", () => {
+    expect(puzzleBar({ ownedCount: 6, completedAt: "2026-08-02T00:00:00Z" })).toEqual(
+      albumBar({ status: "completed", percent: 100, owned: 12 }),
+    );
   });
 });

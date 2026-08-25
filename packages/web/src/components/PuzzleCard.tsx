@@ -78,10 +78,21 @@ export function PuzzleCard({ puzzle, affordable, onUnlock }: PuzzleCardProps) {
         )}
       </Link>
 
-      <h3
-        className="truncate text-center font-body text-sm font-bold text-ink"
-        title={puzzle.title}
-      >
+      {/* Wraps rather than truncates. A cut title tells you a name exists and
+          refuses to say what it is, on a card whose whole job is to be
+          recognised — and the tooltip that used to carry the rest is not
+          reachable on the phone this is mostly used on. `break-words` handles
+          the single unbroken word a title can be.
+
+          One step down, not two. Measured at 390px: 10px, 11px and 12px all
+          wrap real titles to the same number of lines, so the extra step bought
+          nothing and cost legibility on the smallest text on the screen.
+
+          `min-h-[2lh]` keeps two cards in a row aligned. Once titles can wrap,
+          a one-line title beside a two-line one staggers the bars underneath
+          them, and a grid of tiles that do not line up reads as broken rather
+          than as one title being longer. */}
+      <h3 className="min-h-[2lh] text-center font-body text-xs font-bold break-words text-ink">
         {puzzle.title}
       </h3>
 
@@ -100,11 +111,16 @@ export function PuzzleCard({ puzzle, affordable, onUnlock }: PuzzleCardProps) {
           Unlock {puzzle.unlockPrice}
         </Button>
       ) : (
+        // The album card's bar, exactly: same size, same tones, same number
+        // written inside it. Side by side in one grid, a thin unlabelled sliver
+        // next to a full labelled bar read as two different kinds of progress
+        // rather than as the same thing measured twice.
         <ProgressBar
-          size="sm"
-          tone={done ? "lime" : "violet"}
           value={percent}
-          aria-label={`${puzzle.title} progress`}
+          size="md"
+          tone={done ? "lime" : "cyan"}
+          label={`${Math.round(percent)}%`}
+          aria-label={`${puzzle.title}: ${puzzle.ownedCount} of ${total} pieces`}
         />
       )}
     </div>

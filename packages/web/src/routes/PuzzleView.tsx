@@ -178,16 +178,25 @@ export function PuzzleView() {
         unrelated things saying different numbers about the same puzzle.
       */}
       <div className="app-column fixed inset-x-0 bottom-[calc(var(--size-tabbar)+env(safe-area-inset-bottom))] z-20 border-border border-t bg-void/95">
+        {/* The album's bar, same size and tones. The count moved *inside* it,
+            where an album writes its percentage — pieces rather than percent,
+            because that is the unit this screen is priced and bought in. */}
         <div className="flex items-center gap-3 px-4 pt-2">
           <ProgressBar
             className="flex-1"
-            size="sm"
-            tone={done ? "lime" : "violet"}
+            tone={done ? "lime" : "cyan"}
             value={(owned.size / total) * 100}
-            aria-label={`${board.title} progress`}
+            label={`${owned.size}/${total}`}
+            aria-label={`${board.title}: ${owned.size} of ${total} pieces`}
           />
-          <span className="font-numeric text-2xs font-bold text-ink-muted">
-            {owned.size}/{total}
+
+          {/* What you have to spend, the same figure an album detail puts on
+              its own buying screen. Here rather than on the row below: at 390px
+              that row already carries a price and two buttons, and a 2xl number
+              pushes the last of them off the edge. */}
+          <span className="flex shrink-0 items-center gap-1 font-numeric text-2xl font-bold text-coin">
+            <Coin size="md" />
+            {balance.toLocaleString()}
           </span>
         </div>
 
