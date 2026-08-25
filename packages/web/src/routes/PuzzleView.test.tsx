@@ -436,3 +436,35 @@ describe("the gamble", () => {
     expect(await screen.findByText(/could not pull/i)).toBeInTheDocument();
   });
 });
+
+describe("the bar at the bottom", () => {
+  it("shows what there is to spend, the way an album's buying screen does", async () => {
+    // The number you check before deciding, on the screen where the deciding
+    // happens. Without it the only way to know whether a piece is affordable is
+    // to leave, look, and come back.
+    open(puzzle({ unlockedAt: "2026-08-01T00:00:00Z" }), 1234);
+
+    expect(await screen.findByText("1,234")).toBeInTheDocument();
+  });
+
+  it("shows it while the puzzle is still shut, since that is a purchase too", async () => {
+    open(puzzle({ unlockedAt: null }), 1234);
+
+    expect(await screen.findByText("1,234")).toBeInTheDocument();
+  });
+
+  it("writes the pieces inside the bar rather than beside it", async () => {
+    // An album writes its percentage in the bar; a puzzle writes its pieces,
+    // because that is the unit it is priced and bought in.
+    open(puzzle({ unlockedAt: "2026-08-01T00:00:00Z", ownedPieces: [0, 1, 2] }));
+
+    await screen.findByRole("progressbar");
+    expect(screen.getAllByText("3/6").length).toBeGreaterThan(0);
+  });
+
+  it("keeps the progress readable to a screen reader as pieces, not a percentage", async () => {
+    open(puzzle({ unlockedAt: "2026-08-01T00:00:00Z", ownedPieces: [0, 1, 2] }));
+
+    expect(await screen.findByRole("progressbar", { name: /3 of 6 pieces/i })).toBeInTheDocument();
+  });
+});

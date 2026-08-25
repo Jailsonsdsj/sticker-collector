@@ -221,3 +221,17 @@ describe("saying what it is", () => {
     );
   });
 });
+
+describe("the title", () => {
+  it("shows in full rather than being cut off", () => {
+    // Same treatment as a puzzle card's: the two sit in one grid, and one
+    // showing its whole name beside the other hiding half would be a new
+    // inconsistency in place of the one being fixed.
+    const long = "A very long album title that will not fit on one line at all";
+    renderCard({ title: long });
+
+    const heading = screen.getByRole("heading", { level: 3 });
+    expect(heading.textContent).toBe(long);
+    expect(heading.className).not.toContain("truncate");
+  });
+});

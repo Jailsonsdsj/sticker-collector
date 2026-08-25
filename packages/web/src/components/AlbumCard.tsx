@@ -82,7 +82,11 @@ export function AlbumCard({ album, onUnlock }: AlbumCardProps) {
         )}
       </Link>
 
-      <h3 className="truncate text-center font-body text-sm font-bold text-ink" title={album.title}>
+      {/* Wraps rather than truncates — see `PuzzleCard`. Changed here too so
+          the two cards in one grid keep the same title treatment; a puzzle
+          showing its whole name beside an album hiding half of its would be a
+          new inconsistency in place of the one being fixed. */}
+      <h3 className="min-h-[2lh] text-center font-body text-xs font-bold break-words text-ink">
         {album.title}
       </h3>
 
