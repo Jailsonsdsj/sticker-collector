@@ -1,6 +1,6 @@
 import { ALBUM_SORTS } from "@sticker-collector/shared";
 import { useState } from "react";
-import { Navigate } from "react-router";
+import { Navigate, useSearchParams } from "react-router";
 import { AlbumCard } from "../components/AlbumCard";
 import { BackupNudge } from "../components/BackupNudge";
 import { CreateChoiceDialog } from "../components/CreateChoiceDialog";
@@ -23,6 +23,7 @@ import {
   type UnlockTarget,
   unlockTarget,
 } from "../lib/shelf";
+import { readShelf, type ShelfState, writeShelf } from "../lib/shelfParams";
 
 /**
  * The shelf.
@@ -37,15 +38,6 @@ const FILTERS: { value: ShelfFilter; label: string; tone: "violet" | "cyan" | "l
   { value: "all", label: "All", tone: "violet" },
   { value: "done", label: "Done", tone: "lime" },
 ];
-
-/**
- * The tab the shelf opens on.
- *
- * What you came to look at is the thing you are part-way through; everything
- * else is either not started or already finished. `All` is still there, one tap
- * away and in the middle of the row rather than at its head.
- */
-const DEFAULT_FILTER: ShelfFilter = "collecting";
 
 /**
  * What an empty grid says.
@@ -117,13 +109,29 @@ export function paginate<T>(rows: T[], page: number, perPage = ALBUMS_PER_PAGE) 
 }
 
 export function Albums() {
-  const [filter, setFilter] = useState<ShelfFilter>(DEFAULT_FILTER);
   const [creating, setCreating] = useState(false);
-  const [sort, setSort] = useState<(typeof ALBUM_SORTS)[number]>("status");
-  const [query, setQuery] = useState("");
-  const [kind, setKind] = useState<ShelfKind>("both");
   const [unlocking, setUnlocking] = useState<UnlockTarget | null>(null);
-  const [page, setPage] = useState(0);
+
+  /**
+   * The filters live in the URL, not in this component.
+   *
+   * They were `useState`, which meant they died with the component: pick
+   * Locked, open an album, press back, and the shelf returned on Collecting.
+   * The browser restored the page it was told about, and the page had never
+   * been told.
+   */
+  const [params, setParams] = useSearchParams();
+  const { filter, kind, sort, query, page } = readShelf(params);
+
+  /**
+   * **`replace`, never push.** A pushed entry per keystroke would turn Back
+   * into an undo button for the search box, and the way out of the shelf would
+   * be however many taps the user had spent filtering it. Replacing keeps one
+   * entry for the shelf, holding whatever state it is in when something is
+   * opened from it — which is the entry Back comes home to.
+   */
+  const update = (next: Partial<ShelfState>) =>
+    setParams(writeShelf({ filter, kind, sort, query, page, ...next }), { replace: true });
 
   // Undefined for a tab that spans two statuses — the server takes one, so
   // Collecting fetches unfiltered and `shelf` narrows it.
@@ -183,10 +191,7 @@ export function Albums() {
       <Tabs
         items={FILTERS}
         value={filter}
-        onChange={(next) => {
-          setFilter(next);
-          setPage(0);
-        }}
+        onChange={(next) => update({ filter: next, page: 0 })}
         label="Collection status"
         className="mb-3"
       />
@@ -198,11 +203,8 @@ export function Albums() {
         id="shelf-search"
         noun="your collection"
         value={query}
-        onChange={(next) => {
-          setQuery(next);
-          // Page 3 of the old list is not page 3 of the new one.
-          setPage(0);
-        }}
+        // Page 3 of the old list is not page 3 of the new one.
+        onChange={(next) => update({ query: next, page: 0 })}
       />
 
       <div className="mb-2 flex items-center gap-2 overflow-x-auto">
@@ -215,10 +217,7 @@ export function Albums() {
             fill="tint"
             font="body"
             selected={kind === option.value}
-            onClick={() => {
-              setKind(option.value);
-              setPage(0);
-            }}
+            onClick={() => update({ kind: option.value, page: 0 })}
           >
             {option.label}
           </Chip>
@@ -235,10 +234,7 @@ export function Albums() {
             fill="tint"
             font="body"
             selected={sort === option}
-            onClick={() => {
-              setSort(option);
-              setPage(0);
-            }}
+            onClick={() => update({ sort: option, page: 0 })}
           >
             {SORT_LABELS[option]}
           </Chip>
@@ -261,7 +257,7 @@ export function Albums() {
           title="Nothing here matches that"
           description="Search looks at titles only."
           action={
-            <Button variant="outline" tone="neutral" onClick={() => setQuery("")}>
+            <Button variant="outline" tone="neutral" onClick={() => update({ query: "" })}>
               Clear the search
             </Button>
           }
@@ -308,7 +304,7 @@ export function Albums() {
                 variant="outline"
                 tone="neutral"
                 disabled={current === 0}
-                onClick={() => setPage(current - 1)}
+                onClick={() => update({ page: current - 1 })}
               >
                 Previous
               </Button>
@@ -320,7 +316,7 @@ export function Albums() {
                 variant="outline"
                 tone="neutral"
                 disabled={current === pages - 1}
-                onClick={() => setPage(current + 1)}
+                onClick={() => update({ page: current + 1 })}
               >
                 Next
               </Button>

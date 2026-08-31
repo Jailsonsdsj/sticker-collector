@@ -123,3 +123,47 @@ export function placePiece(index: number, grid: Grid): PiecePlacement {
 export function isPieceIndex(index: number, grid: Grid): boolean {
   return Number.isInteger(index) && index >= 0 && index < pieceCount(grid);
 }
+
+/**
+ * What a puzzle has cost so far, and what finishing it still costs.
+ *
+ * The unlock counts as spent only once it has been paid, and every owned piece
+ * counts at the puzzle's frozen `piecePrice` — the price cannot change after
+ * sealing, so one multiplication is the whole of it and there is no need to
+ * walk the ledger. Deliberately **not** a ledger query: the ledger is the
+ * authority on the wallet, but this is the puzzle's own arithmetic and the
+ * board already holds every number it needs.
+ *
+ * Coins, not minutes. One coin is one minute (`prd/04-albums.md` §The album
+ * economy 1) and `coinsToHours` does that conversion, but the economy is
+ * integer coins everywhere and this stays in them.
+ */
+export interface PuzzleSpend {
+  /** Paid already: the unlock if bought, plus every piece owned. */
+  spent: number;
+  /** Still to pay: the unlock if it is not, plus every piece still locked. */
+  remaining: number;
+  /** Start to finish, whatever has been paid so far. */
+  total: number;
+}
+
+export function puzzleSpend(input: {
+  unlockPrice: number;
+  piecePrice: number;
+  /** How many the grid holds. */
+  pieces: number;
+  /** How many are owned. Clamped, so a stale read cannot make this negative. */
+  owned: number;
+  unlocked: boolean;
+}): PuzzleSpend {
+  const { unlockPrice, piecePrice, pieces, unlocked } = input;
+  const owned = Math.max(0, Math.min(pieces, input.owned));
+
+  const spent = (unlocked ? unlockPrice : 0) + piecePrice * owned;
+  const remaining = (unlocked ? 0 : unlockPrice) + piecePrice * (pieces - owned);
+
+  // `total` is computed from the two rather than independently, so the identity
+  // the caller will assume — spent + remaining is the whole cost — is true by
+  // construction rather than by two expressions agreeing.
+  return { spent, remaining, total: spent + remaining };
+}

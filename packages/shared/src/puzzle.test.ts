@@ -10,6 +10,7 @@ import {
   PIECE_PRESETS,
   pieceCount,
   placePiece,
+  puzzleSpend,
 } from "./puzzle";
 
 describe("the counts on offer", () => {
@@ -146,5 +147,67 @@ describe("which indexes exist", () => {
 
   it("refuses a fraction, which a JSON body can carry", () => {
     expect(isPieceIndex(1.5, grid)).toBe(false);
+  });
+});
+
+describe("what a puzzle has cost, and what it still will", () => {
+  const board = { unlockPrice: 200, piecePrice: 10, pieces: 12, owned: 3, unlocked: true };
+
+  it("counts the unlock as spent once it is paid", () => {
+    expect(puzzleSpend(board).spent).toBe(200 + 30);
+  });
+
+  it("counts it as still to pay while the puzzle is shut", () => {
+    const shut = puzzleSpend({ ...board, owned: 0, unlocked: false });
+    expect(shut.spent).toBe(0);
+    expect(shut.remaining).toBe(200 + 120);
+  });
+
+  it("prices the pieces still locked, not the ones already bought", () => {
+    expect(puzzleSpend(board).remaining).toBe(10 * 9);
+  });
+
+  it("adds up to the whole cost, whatever has been paid", () => {
+    // The identity a reader will assume. It holds at both ends and in between,
+    // which is what stops the three numbers on screen contradicting each other.
+    for (const owned of [0, 1, 7, 12]) {
+      const spend = puzzleSpend({ ...board, owned });
+      expect(spend.spent + spend.remaining).toBe(spend.total);
+      expect(spend.total).toBe(200 + 120);
+    }
+  });
+
+  it("leaves nothing to pay on a finished puzzle", () => {
+    const done = puzzleSpend({ ...board, owned: 12 });
+    expect(done.remaining).toBe(0);
+    expect(done.spent).toBe(done.total);
+  });
+
+  it("costs the same whole whether it is shut or finished", () => {
+    // Unlocking moves coins from `remaining` to `spent`; it does not change
+    // what the puzzle costs.
+    expect(puzzleSpend({ ...board, owned: 0, unlocked: false }).total).toBe(
+      puzzleSpend({ ...board, owned: 12 }).total,
+    );
+  });
+
+  it("clamps an owned count that outruns the grid", () => {
+    // A stale board read during a refetch can briefly claim more pieces than
+    // the grid holds; a negative `remaining` would print as time owed.
+    const spend = puzzleSpend({ ...board, owned: 99 });
+    expect(spend.remaining).toBe(0);
+    expect(spend.spent).toBe(200 + 120);
+  });
+
+  it("clamps a negative owned count too", () => {
+    expect(puzzleSpend({ ...board, owned: -5 }).spent).toBe(200);
+  });
+
+  it("handles a free puzzle without inventing a cost", () => {
+    expect(puzzleSpend({ ...board, unlockPrice: 0, piecePrice: 0, owned: 0 })).toEqual({
+      spent: 0,
+      remaining: 0,
+      total: 0,
+    });
   });
 });

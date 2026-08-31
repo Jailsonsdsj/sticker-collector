@@ -1,9 +1,10 @@
-import { MAX_PIECES_PER_UNLOCK, pieceCount } from "@sticker-collector/shared";
+import { MAX_PIECES_PER_UNLOCK, pieceCount, puzzleSpend } from "@sticker-collector/shared";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { DeletePuzzleDialog } from "../components/DeletePuzzleDialog";
 import { AppHeader } from "../components/layout";
 import { PuzzleBoard } from "../components/PuzzleBoard";
+import { PuzzleInfoDialog } from "../components/PuzzleInfoDialog";
 import { Button, Coin, ErrorState, ProgressBar, Skeleton } from "../components/ui";
 import { useDeletePuzzle, usePullPiece, useUnlockPieces, useUnlockPuzzle } from "../lib/mutations";
 import { playPieceLanding } from "../lib/placement";
@@ -26,6 +27,7 @@ export function PuzzleView() {
   const puzzle = usePuzzle(id);
   const remove = useDeletePuzzle();
   const [deleting, setDeleting] = useState(false);
+  const [showing, setShowing] = useState(false);
   const wallet = useWallet();
   const unlock = useUnlockPuzzle();
   const buy = useUnlockPieces(id ?? "");
@@ -60,6 +62,16 @@ export function PuzzleView() {
   const owned = new Set(board.ownedPieces);
   const done = board.completedAt !== null;
   const open = board.unlockedAt !== null;
+
+  // What it has cost and what finishing costs, in coins — the dialog turns
+  // them into time, because one coin is one minute.
+  const spend = puzzleSpend({
+    unlockPrice: board.unlockPrice,
+    piecePrice: board.piecePrice,
+    pieces: total,
+    owned: owned.size,
+    unlocked: open,
+  });
 
   const cost = board.piecePrice * picked.size;
   const balance = wallet.data?.balance ?? 0;
@@ -138,11 +150,10 @@ export function PuzzleView() {
           query in the subtree goes down with it — a Tailwind arbitrary value
           lives in a stylesheet the tests never parse. */}
       <div className="-mx-4 flex h-[calc(100dvh_-_var(--size-tabbar)_-_env(safe-area-inset-bottom)_-_9rem)] flex-col">
-        {board.description && (
-          <p className="shrink-0 whitespace-pre-line px-4 pb-2 font-body text-sm text-ink-secondary">
-            {board.description}
-          </p>
-        )}
+        {/* The description is NOT here any more — it is behind the `i`. It sat
+            above the picture eating the height the board spent P9-04 winning
+            back, and it is prose you read once against a picture you return to
+            for weeks. Two copies would also be two things to keep in step. */}
 
         <div className="relative min-h-0 flex-1">
           <PuzzleBoard
@@ -212,11 +223,35 @@ export function PuzzleView() {
         )}
 
         <div className="flex items-center justify-between gap-3 px-4 pt-1 pb-3">
+          {/* Left of the price, and present in every state — what it has cost
+              is worth asking while the puzzle is shut, and worth asking again
+              once it is finished. Its own element rather than a corner of the
+              price span, so the price stays a price. */}
+          {/* 44px of tappable area around a 28px ring — the same trick the
+              Tasks header uses for its glyph, and the same 44px rule the
+              settings icon is held to. Negative margins keep the extra area
+              from pushing the row taller than the buttons beside it. */}
+          <button
+            type="button"
+            aria-label="Puzzle details"
+            onClick={() => setShowing(true)}
+            className="group -my-2 -ml-2 flex min-h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan"
+          >
+            <span
+              aria-hidden
+              className="flex size-7 items-center justify-center rounded-full border border-border font-numeric text-sm font-bold text-ink-secondary transition-colors group-hover:border-cyan group-hover:text-cyan"
+            >
+              i
+            </span>
+          </button>
+
           {done ? (
-            <span className="font-body text-sm text-lime">Finished — the picture is whole.</span>
+            <span className="mr-auto font-body text-sm text-lime">
+              Finished — the picture is whole.
+            </span>
           ) : open ? (
             <>
-              <span className="flex items-center gap-1 font-body text-sm text-ink-secondary">
+              <span className="mr-auto flex items-center gap-1 font-body text-sm text-ink-secondary">
                 {picked.size === 0 ? (
                   <>
                     <Coin size="xs" />
@@ -260,7 +295,7 @@ export function PuzzleView() {
             </>
           ) : (
             <>
-              <span className="flex items-center gap-1 font-body text-sm text-ink-secondary">
+              <span className="mr-auto flex items-center gap-1 font-body text-sm text-ink-secondary">
                 Opens for
                 <Coin size="xs" />
                 <span className="font-numeric font-bold text-coin">{board.unlockPrice}</span>
@@ -278,6 +313,14 @@ export function PuzzleView() {
           )}
         </div>
       </div>
+
+      <PuzzleInfoDialog
+        open={showing}
+        title={board.title}
+        description={board.description}
+        spend={spend}
+        onClose={() => setShowing(false)}
+      />
 
       <DeletePuzzleDialog
         open={deleting}
