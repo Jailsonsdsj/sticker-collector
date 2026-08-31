@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
-import { MemoryRouter } from "react-router";
+import { createMemoryRouter, MemoryRouter, RouterProvider } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ALBUMS_PER_PAGE, Albums, paginate } from "./Albums";
 
@@ -879,5 +879,127 @@ describe("the shelf holds puzzles too", () => {
     await user.click(screen.getByRole("button", { name: "Unlock 100" }));
 
     expect(dialog().getByRole("button", { name: "Not enough coins" })).toBeDisabled();
+  });
+});
+
+describe("the filters survive leaving and coming back", () => {
+  /**
+   * The reported bug: pick a tab, open an album, press Back, and the shelf
+   * returned on Collecting. The filters were `useState`, so they died with the
+   * component — the browser restored the page it was told about, and the page
+   * had never been told.
+   *
+   * A real router, not `MemoryRouter` with one entry: the whole defect lives in
+   * navigating away and back, which needs history.
+   */
+  const shelfAt = (entry: string) => {
+    const router = createMemoryRouter(
+      [
+        { path: "/", element: <p>somewhere else</p> },
+        { path: "/albums", element: <Albums /> },
+        { path: "/albums/:id", element: <p>an album</p> },
+      ],
+      { initialEntries: [entry] },
+    );
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+    return router;
+  };
+
+  it("comes back to the tab that was chosen, not to the default", async () => {
+    const user = userEvent.setup();
+    albums = [
+      album({ id: "a", title: "Shut one", status: "locked" }),
+      album({ id: "b", title: "Open one", status: "in_progress", unlockedAt: "x" }),
+    ];
+    const router = shelfAt("/albums");
+    await screen.findByText("Open one");
+
+    await user.click(screen.getByRole("tab", { name: "Locked" }));
+    await screen.findByText("Shut one");
+
+    // Into the album, and back out the way a browser goes back.
+    await user.click(screen.getByRole("link", { name: /Shut one/ }));
+    await screen.findByText("an album");
+    await router.navigate(-1);
+
+    expect(await screen.findByText("Shut one")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Locked" })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("keeps the search, the kind and the sort too", async () => {
+    const user = userEvent.setup();
+    albums = [album({ title: "Kitchen heroes", status: "in_progress", unlockedAt: "x" })];
+    const router = shelfAt("/albums");
+    await screen.findByText("Kitchen heroes");
+
+    await user.click(screen.getByRole("button", { name: "Albums" }));
+    await user.click(screen.getByRole("button", { name: "Title" }));
+    await user.type(screen.getByRole("searchbox", { name: /search your collection/i }), "kitchen");
+    await waitFor(() => expect(router.state.location.search).toContain("q=kitchen"));
+
+    await user.click(screen.getByRole("link", { name: /Kitchen heroes/ }));
+    await screen.findByText("an album");
+    await router.navigate(-1);
+
+    await screen.findByText("Kitchen heroes");
+    expect(screen.getByRole("searchbox", { name: /search your collection/i })).toHaveValue(
+      "kitchen",
+    );
+    expect(screen.getByRole("button", { name: "Albums" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Title" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("leaves the shelf on one Back, however much filtering happened", async () => {
+    // Each change REPLACES the entry. Pushing one per keystroke would turn Back
+    // into an undo button for the search box, and the way out of the shelf
+    // would be however many taps had been spent filtering it.
+    const user = userEvent.setup();
+    albums = [album({ status: "in_progress", unlockedAt: "x" })];
+    // Start elsewhere and push the shelf on, so there is somewhere to go back
+    // to that is not the shelf itself.
+    const router = shelfAt("/");
+    await screen.findByText("somewhere else");
+    await router.navigate("/albums");
+    await screen.findByText("Kitchen heroes");
+
+    await user.click(screen.getByRole("tab", { name: "All" }));
+    await user.click(screen.getByRole("button", { name: "Title" }));
+    await user.type(screen.getByRole("searchbox", { name: /search your collection/i }), "kit");
+
+    const before = router.state.location.search;
+    expect(before).toContain("q=kit");
+
+    await router.navigate(-1);
+
+    // One step leaves the shelf entirely rather than undoing a keystroke.
+    expect(router.state.location.pathname).not.toBe("/albums");
+  });
+
+  it("opens straight onto a filtered shelf when the URL says so", async () => {
+    // Falls out of the fix, and is worth having: a link to a filtered view is
+    // a link someone can keep.
+    albums = [
+      album({ id: "a", title: "Shut one", status: "locked" }),
+      album({ id: "b", title: "Open one", status: "in_progress", unlockedAt: "x" }),
+    ];
+    shelfAt("/albums?status=locked");
+
+    expect(await screen.findByText("Shut one")).toBeInTheDocument();
+    expect(screen.queryByText("Open one")).not.toBeInTheDocument();
+  });
+
+  it("shows the default shelf for a URL asking for nonsense", async () => {
+    albums = [album({ title: "Kitchen heroes", status: "in_progress", unlockedAt: "x" })];
+    shelfAt("/albums?status=banana&page=three");
+
+    expect(await screen.findByText("Kitchen heroes")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Collecting" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
   });
 });

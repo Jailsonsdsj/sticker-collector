@@ -468,3 +468,80 @@ describe("the bar at the bottom", () => {
     expect(await screen.findByRole("progressbar", { name: /3 of 6 pieces/i })).toBeInTheDocument();
   });
 });
+
+describe("the details behind the i", () => {
+  const info = () => screen.getByRole("button", { name: "Puzzle details" });
+
+  it("sits left of the price, which is where it was asked for", async () => {
+    open(puzzle({ unlockedAt: "2026-08-01T00:00:00Z" }));
+    await screen.findByRole("progressbar");
+
+    const price = screen.getByText(/a\s*piece/i);
+    // Node.DOCUMENT_POSITION_FOLLOWING is 4 — the price comes after the button.
+    expect(info().compareDocumentPosition(price) & 4).toBeTruthy();
+  });
+
+  it("is there while the puzzle is still shut", async () => {
+    // What it will cost is worth asking before paying to start, not only after.
+    open(puzzle({ unlockedAt: null }));
+    await screen.findByRole("progressbar");
+
+    expect(info()).toBeInTheDocument();
+  });
+
+  it("is there once it is finished", async () => {
+    open(puzzle({ ownedPieces: [0, 1, 2, 3, 4, 5], completedAt: "2026-08-09T00:00:00Z" }));
+    await screen.findByRole("progressbar");
+
+    expect(info()).toBeInTheDocument();
+  });
+
+  it("opens on a tap and shows what has gone into the puzzle", async () => {
+    const user = userEvent.setup();
+    // 100 to unlock, paid; 2 of 6 pieces at 25. Spent 150, 100 to go.
+    open(puzzle({ ownedPieces: [0, 1] }));
+    await screen.findByRole("progressbar");
+
+    await user.click(info());
+
+    expect(await screen.findByText("Time spent")).toBeVisible();
+    expect(screen.getByText("2h 30m")).toBeInTheDocument();
+    expect(screen.getByText("1h 40m")).toBeInTheDocument();
+  });
+
+  it("counts the unlock as still to pay while the puzzle is shut", async () => {
+    const user = userEvent.setup();
+    // Nothing paid: 100 + 6 x 25 = 250 to go, which is 4h 10m.
+    open(puzzle({ unlockedAt: null }));
+    await screen.findByRole("progressbar");
+
+    await user.click(info());
+
+    // `4h 10m` twice: with nothing paid, what remains IS the whole picture.
+    expect(await screen.findByText("0m")).toBeVisible();
+    expect(screen.getAllByText("4h 10m")).toHaveLength(2);
+  });
+
+  it("carries the description, and is the only place that does", async () => {
+    // It used to sit above the picture, eating the height the full-bleed board
+    // won back — prose you read once, above a picture you return to for weeks.
+    const user = userEvent.setup();
+    open(puzzle({ description: "Taken from the north pier." }));
+    await screen.findByRole("progressbar");
+
+    expect(screen.queryByText("Taken from the north pier.")).not.toBeVisible();
+
+    await user.click(info());
+
+    const shown = screen.getAllByText("Taken from the north pier.");
+    expect(shown).toHaveLength(1);
+    expect(shown[0]).toBeVisible();
+  });
+
+  it("stays shut until it is asked for", async () => {
+    open();
+    await screen.findByRole("progressbar");
+
+    expect(screen.queryByText("Time spent")).not.toBeVisible();
+  });
+});
