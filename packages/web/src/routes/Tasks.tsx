@@ -21,6 +21,7 @@ import {
   HOME_WINDOW_FORWARD,
   type HomeItem,
   isEmpty,
+  startedToday,
 } from "../lib/home";
 import {
   useBulkDeleteTasks,
@@ -358,7 +359,7 @@ export function Tasks() {
                   setViewing(null);
                 }
           }
-          started={Boolean(viewing.item.task.startedAt)}
+          started={startedToday(viewing.item.task, today, timeZone)}
           // Offered only where it would actually move the row. *In progress*
           // takes a routine through TODAY's occurrence alone, so starting one
           // on a day it does not run sets a flag and changes nothing on screen.

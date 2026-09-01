@@ -11,6 +11,7 @@ import { WeeklyGrid } from "../components/WeeklyGrid";
 import type { AgendaBlock } from "../lib/agenda";
 import { ApiError } from "../lib/api";
 import { usePendingCompletions } from "../lib/completionQueue";
+import { startedToday } from "../lib/home";
 import {
   useCreateTask,
   useDeleteTask,
@@ -18,7 +19,7 @@ import {
   useUpdateTask,
 } from "../lib/mutations";
 import { useEpics, useOccurrences, useTasks } from "../lib/queries";
-import { today } from "../lib/timezone";
+import { appTimeZone, today } from "../lib/timezone";
 import { weekDates } from "../lib/week";
 
 /**
@@ -190,7 +191,7 @@ export function Week() {
                   setViewing(null);
                 }
           }
-          started={Boolean(viewing.task.startedAt)}
+          started={startedToday(viewing.task, localToday, appTimeZone())}
           // A routine reaches *In progress* through today's occurrence only, so
           // the offer stands on today's block and nowhere else in the week.
           onToggleStart={

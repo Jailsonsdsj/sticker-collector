@@ -1,6 +1,6 @@
 import { addDays, type Occurrence, type Task } from "@sticker-collector/shared";
 import { describe, expect, it } from "vitest";
-import { buildHome, filterHome, isEmpty } from "./home";
+import { buildHome, filterHome, isEmpty, startedToday } from "./home";
 
 const TODAY = "2026-08-05";
 const UTC = "UTC";
@@ -336,7 +336,11 @@ describe("missed — an overdue capture", () => {
 });
 
 describe("in progress", () => {
-  const STARTED = "2026-08-01T09:00:00Z";
+  // Started TODAY. These cases are about *where* a started task is listed, not
+  // about when it was started — but "started" only counts for the day it
+  // happened on now, so the instant has to be today or they would all be
+  // asserting the reset instead.
+  const STARTED = `${TODAY}T09:00:00Z`;
 
   it("lists a started ROUTINE once, not once per day", () => {
     // The bug this exists for: `startedAt` belongs to the task, and a routine
@@ -644,5 +648,99 @@ describe("searching", () => {
     );
 
     expect(isEmpty(filterHome(withNotes, "corner"))).toBe(true);
+  });
+});
+
+describe("in progress does not outlive the day it was started", () => {
+  // Reported from the device: a routine started yesterday came up "in progress"
+  // again this morning instead of in For today.
+  const yesterday = addDays(TODAY, -1);
+
+  it("puts a routine started TODAY in In progress", () => {
+    const t = task({ id: "r", startedAt: `${TODAY}T09:00:00Z` });
+    const home = buildHome([occ("r", TODAY, "pending")], [t], TODAY, UTC);
+
+    expect(home.inProgress.map((i) => i.task.id)).toEqual(["r"]);
+    expect(home.forToday).toHaveLength(0);
+  });
+
+  it("puts a routine started YESTERDAY back in For today", () => {
+    // `startedAt` is set once and nothing clears it — nothing runs at midnight
+    // to. So it has to be compared against today, the way `missed` and
+    // `pending` are derived rather than stored.
+    const t = task({ id: "r", startedAt: `${yesterday}T09:00:00Z` });
+    const home = buildHome([occ("r", TODAY, "pending")], [t], TODAY, UTC);
+
+    expect(home.forToday.map((i) => i.task.id)).toEqual(["r"]);
+    expect(home.inProgress).toHaveLength(0);
+  });
+
+  it("leaves a one-off started days ago in progress, because it is not day-shaped", () => {
+    // There is one of it. You started it, and it stays started until it is
+    // finished or explicitly stopped — a one-off has no next occurrence to
+    // fall back into.
+    const t = oneoff({ id: "o", dueAt: `${TODAY}T00:00:00Z`, startedAt: `${yesterday}T09:00:00Z` });
+    const home = buildHome([occ("o", TODAY, "pending")], [t], TODAY, UTC);
+
+    expect(home.inProgress.map((i) => i.task.id)).toEqual(["o"]);
+  });
+
+  it("leaves an undated one-off started days ago in progress too", () => {
+    const t = oneoff({ id: "u", startedAt: `${yesterday}T09:00:00Z` });
+    const home = buildHome([], [t], TODAY, UTC);
+
+    expect(home.inProgress.map((i) => i.task.id)).toEqual(["u"]);
+  });
+
+  it("reads the day in the user's timezone, not the browser's", () => {
+    // Started at 23:00 in São Paulo is 02:00 UTC the NEXT day. Comparing the
+    // raw instant would call a routine started this evening "yesterday's".
+    const t = task({ id: "r", startedAt: "2026-08-06T02:00:00Z" });
+    const home = buildHome([occ("r", TODAY, "pending")], [t], TODAY, "America/Sao_Paulo");
+
+    expect(home.inProgress.map((i) => i.task.id)).toEqual(["r"]);
+  });
+});
+
+describe("whether a task counts as started today", () => {
+  /**
+   * The Start/Stop button reads this, not `startedAt`. If it read the raw flag
+   * while the list read this, a routine would sit in For today and offer to
+   * *stop* it in the same breath.
+   */
+  it("is false for a task nobody started", () => {
+    expect(startedToday(task({ startedAt: null }), TODAY, UTC)).toBe(false);
+  });
+
+  it("is true for a routine started earlier today", () => {
+    expect(startedToday(task({ startedAt: `${TODAY}T09:00:00Z` }), TODAY, UTC)).toBe(true);
+  });
+
+  it("is false for a routine started yesterday", () => {
+    expect(startedToday(task({ startedAt: `${addDays(TODAY, -1)}T23:59:00Z` }), TODAY, UTC)).toBe(
+      false,
+    );
+  });
+
+  it("is false for a routine started tomorrow, which a clock skew can produce", () => {
+    expect(startedToday(task({ startedAt: `${addDays(TODAY, 1)}T00:01:00Z` }), TODAY, UTC)).toBe(
+      false,
+    );
+  });
+
+  it("is true for a one-off whenever it was started", () => {
+    // Not day-shaped: there is one of it, and it stays started until it is
+    // finished or stopped.
+    expect(startedToday(oneoff({ startedAt: "2020-01-01T00:00:00Z" }), TODAY, UTC)).toBe(true);
+  });
+
+  it("answers in the user's timezone, not UTC", () => {
+    // 02:00 UTC on the 6th is 23:00 on the 5th in São Paulo — this evening,
+    // not tomorrow. Comparing the raw instant would reset a routine the user
+    // started an hour ago.
+    const evening = task({ startedAt: "2026-08-06T02:00:00Z" });
+
+    expect(startedToday(evening, TODAY, "America/Sao_Paulo")).toBe(true);
+    expect(startedToday(evening, TODAY, UTC)).toBe(false);
   });
 });

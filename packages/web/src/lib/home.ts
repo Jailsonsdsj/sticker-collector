@@ -62,6 +62,37 @@ function completedOn(occurrence: Occurrence, timeZone: string): LocalDate | null
   return localDateIn(timeZone, new Date(occurrence.completedAt));
 }
 
+/**
+ * Whether a task counts as started **today**.
+ *
+ * `startedAt` is an instant on the TASK, and nothing ever clears it — there is
+ * no midnight job, and the only thing that unsets it is the user explicitly
+ * stopping the task. A routine is a new thing every day, so left uncompared,
+ * one started on Monday was still "in progress" on Friday: the row never came
+ * back to For today and the day's own tick had nowhere to live.
+ *
+ * So it is derived from the local day, the same way `missed` and `pending` are
+ * derived rather than trusted (CLAUDE.md). Compared **in the user's timezone**,
+ * because 23:00 in São Paulo is tomorrow in UTC and this evening's start would
+ * read as yesterday's.
+ *
+ * A ONE-OFF is not day-shaped: there is one of it, and it stays started until
+ * it is finished or stopped. Only routines reset.
+ *
+ * Exported because the Start/Stop button has to agree with the list. Reading
+ * `startedAt` there while the list reads this would put a routine in For today
+ * and offer to *stop* it in the same breath.
+ */
+export function startedToday(
+  task: Pick<Task, "type" | "startedAt">,
+  today: LocalDate,
+  timeZone: string,
+): boolean {
+  if (!task.startedAt) return false;
+  if (task.type === "oneoff") return true;
+  return localDateIn(timeZone, new Date(task.startedAt)) === today;
+}
+
 export function buildHome(
   occurrences: Occurrence[],
   tasks: Task[],
@@ -123,7 +154,10 @@ export function buildHome(
     //
     //    A one-off has a single occurrence, so it comes here whatever date it
     //    carries.
-    if (task.startedAt && (task.type === "oneoff" || occurrence.scheduledOn === today)) {
+    if (
+      startedToday(task, today, timeZone) &&
+      (task.type === "oneoff" || occurrence.scheduledOn === today)
+    ) {
       inProgress.push(item);
       seen.add(task.id);
       continue;
