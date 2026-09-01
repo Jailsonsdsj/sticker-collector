@@ -85,6 +85,18 @@ async function seedAccount(stickerCount = 3) {
     .bind(taskId, userId, epicId, "Stretch", 45, 45, WEEKDAYS_MASK_ALL, "2026-07-01T00:00:00Z")
     .run();
 
+  // A routine's agenda times and its checklist. Both hang off the task, and
+  // both are the kind of child table this manifest names by hand — which is
+  // how `routine_slot` came to be missing from every backup taken before this.
+  await env.DB.prepare(
+    "INSERT INTO routine_slot (id,task_id,weekday,start_min,end_min) VALUES (?,?,?,?,?)",
+  )
+    .bind(crypto.randomUUID(), taskId, 0, 540, 600)
+    .run();
+  await env.DB.prepare("INSERT INTO subtask (id,task_id,title,position,done_on) VALUES (?,?,?,?,?)")
+    .bind(crypto.randomUUID(), taskId, "Roll the mat", 0, "2026-07-20")
+    .run();
+
   const occurrenceId = crypto.randomUUID();
   await env.DB.prepare(
     `INSERT INTO occurrence (id,task_id,scheduled_on,status,completed_at,reward_snapshot_coins)
@@ -578,5 +590,69 @@ describe("puzzles survive the round trip", () => {
 
     expect((await restore(old as typeof manifest)).status).toBe(201);
     expect((await exportManifest()).puzzles).toEqual([]);
+  });
+});
+
+describe("the child tables that hang off a task", () => {
+  it("carries a routine's agenda times through a restore", async () => {
+    // They were **missing from the manifest entirely**: a restored routine came
+    // back with its schedule and none of its times, silently, because the
+    // export names its tables by hand and nobody had named this one.
+    await seedAccount();
+    const manifest = await exportManifest();
+
+    const fresh = await makeUser();
+    switchTo(fresh);
+    expect((await restore(manifest)).status).toBe(201);
+
+    const slots = await env.DB.prepare(
+      "SELECT s.weekday, s.start_min, s.end_min FROM routine_slot s JOIN task t ON t.id = s.task_id WHERE t.user_id = ?",
+    )
+      .bind(fresh.id)
+      .all();
+    expect(slots.results).toEqual([{ weekday: 0, start_min: 540, end_min: 600 }]);
+  });
+
+  it("carries a task's steps, and the day each was ticked", async () => {
+    await seedAccount();
+    const manifest = await exportManifest();
+
+    const fresh = await makeUser();
+    switchTo(fresh);
+    await restore(manifest);
+
+    const steps = await env.DB.prepare(
+      "SELECT s.title, s.position, s.done_on FROM subtask s JOIN task t ON t.id = s.task_id WHERE t.user_id = ?",
+    )
+      .bind(fresh.id)
+      .all();
+    expect(steps.results).toEqual([{ title: "Roll the mat", position: 0, done_on: "2026-07-20" }]);
+  });
+
+  it("points them at the restored task, not the one they came from", async () => {
+    // Ids are minted fresh on restore, so a child whose parent reference was
+    // not remapped would hang off a task in the account it came from.
+    const seeded = await seedAccount();
+    const manifest = await exportManifest();
+
+    switchTo(await makeUser());
+    await restore(manifest);
+
+    const original = await env.DB.prepare("SELECT COUNT(*) AS n FROM subtask WHERE task_id = ?")
+      .bind(seeded.taskId)
+      .first<{ n: number }>();
+    expect(original?.n).toBe(1); // the original only — the copy points elsewhere
+  });
+
+  it("restores a backup taken before either existed", async () => {
+    // Both default to empty, so an old file — the one someone reaches for when
+    // they most need it — still restores.
+    await seedAccount();
+    const manifest = (await exportManifest()) as unknown as Record<string, unknown>;
+    delete manifest.routineSlots;
+    delete manifest.subtasks;
+
+    switchTo(await makeUser());
+    expect((await restore(manifest)).status).toBe(201);
   });
 });

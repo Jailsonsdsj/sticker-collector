@@ -2,6 +2,7 @@ import {
   type CreateTaskInput,
   clockToMinutes,
   DEFAULT_EFFORT_MINUTES,
+  MAX_SUBTASKS,
   maskHasDay,
   maskToggleDay,
   minutesToClock,
@@ -58,6 +59,14 @@ export interface TaskFormState {
   effortLocked: boolean;
   /** "Do this today" — lifts an undated capture into the For today section. */
   pinnedToday: boolean;
+  /**
+   * The steps, as typed.
+   *
+   * A plain array of strings, blanks included: a row the user has opened but
+   * not filled is a state they pass through, and dropping it as they type would
+   * take the field away mid-keystroke. Blanks are trimmed away on the way out.
+   */
+  subtasks: string[];
   priority: Priority;
   epicId: string | null;
 }
@@ -72,7 +81,10 @@ export type TaskFormAction =
   | { kind: "pinToday"; value: boolean }
   | { kind: "slot"; weekday: Weekday; field: "start" | "end"; value: string }
   | { kind: "priority"; value: Priority }
-  | { kind: "epic"; value: string | null };
+  | { kind: "epic"; value: string | null }
+  | { kind: "subtask"; index: number; value: string }
+  | { kind: "addSubtask" }
+  | { kind: "removeSubtask"; index: number };
 
 /**
  * Effort presets, shortest first. Seven of them no longer fit across a phone,
@@ -114,13 +126,41 @@ export function initialState(options: { epicId?: string | null } = {}): TaskForm
     effortLocked: false,
     rewardLocked: false,
     pinnedToday: false,
+    subtasks: [],
     priority: "medium",
     epicId: options.epicId ?? null,
   };
 }
 
+/**
+ * The steps worth sending: trimmed, and blanks dropped.
+ *
+ * An empty row is a row the user opened and left, not a step called "". They
+ * are kept in the form's own state so the field does not vanish mid-keystroke,
+ * and removed here, at the one place the state becomes a payload.
+ */
+export function cleanSubtasks(state: TaskFormState): string[] {
+  return state.subtasks.map((title) => title.trim()).filter((title) => title !== "");
+}
+
 export function reduce(state: TaskFormState, action: TaskFormAction): TaskFormState {
   switch (action.kind) {
+    case "subtask": {
+      const subtasks = [...state.subtasks];
+      subtasks[action.index] = action.value;
+      return { ...state, subtasks };
+    }
+
+    case "addSubtask":
+      // Capped so one task cannot outgrow the single batch its create is
+      // written in. The button goes away at the ceiling rather than failing.
+      return state.subtasks.length >= MAX_SUBTASKS
+        ? state
+        : { ...state, subtasks: [...state.subtasks, ""] };
+
+    case "removeSubtask":
+      return { ...state, subtasks: state.subtasks.filter((_, i) => i !== action.index) };
+
     case "title":
     case "description":
     case "url":
@@ -292,6 +332,7 @@ export function toPayload(state: TaskFormState): CreateTaskInput | null {
   const common = {
     title: state.title.trim(),
     description: state.description.trim() || null,
+    subtasks: cleanSubtasks(state),
     url: state.url.trim() || null,
     epicId: state.epicId,
     effortMinutes,
@@ -362,6 +403,9 @@ export function stateFromTask(task: Task): TaskFormState {
     // Editing: effort is whatever the task already says, and a slot must not
     // silently rewrite it.
     effortLocked: true,
+    // The titles only. Their ticks live on the server and are not the form's
+    // business — editing the list replaces it, which is what clears them.
+    subtasks: task.subtasks.map((step) => step.title),
     priority: task.priority,
     epicId: task.epicId,
   };
@@ -385,6 +429,14 @@ export function toPatch(state: TaskFormState, original: Task): UpdateTask | null
 
   set("title", state.title.trim(), original.title);
   set("description", state.description.trim() || null, original.description);
+  // Compared as a list, because order is part of what the author chose. Sending
+  // it unchanged would be harmless but not free: the server replaces the rows,
+  // which throws away every tick.
+  const steps = cleanSubtasks(state);
+  const before = original.subtasks.map((step) => step.title);
+  if (steps.length !== before.length || steps.some((title, i) => title !== before[i])) {
+    patch.subtasks = steps;
+  }
   set("url", state.url.trim() || null, original.url);
   set("epicId", state.epicId, original.epicId);
   set("effortMinutes", Number(state.effortMinutes), original.effortMinutes);

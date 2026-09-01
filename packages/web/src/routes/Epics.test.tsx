@@ -57,6 +57,7 @@ const TASKS: Task[] = [
     pinnedOn: null,
     startedAt: null,
     slots: [],
+    subtasks: [],
     createdAt: "2026-07-01T00:00:00Z",
     deletedAt: null,
     lastCompletedOn: null,

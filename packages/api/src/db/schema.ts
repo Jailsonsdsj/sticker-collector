@@ -187,6 +187,34 @@ export const routineSlot = sqliteTable(
 );
 
 /**
+ * One step of a task.
+ *
+ * A child table rather than JSON on the task, for the reason `routine_slot`
+ * already gives: a column that holds a list is a column no query can filter,
+ * and ticking one step would rewrite the whole array.
+ *
+ * `done_on` is a **DATE, not a boolean** — the same choice `task.pinned_on`
+ * makes. A routine is a new run every day, so a tick has to stop being true
+ * tomorrow without anything having to clear it; nothing in this app runs at
+ * midnight, and the one feature that assumed otherwise was a reported bug.
+ * A one-off has no next day, so for one of those any date means done.
+ */
+export const subtask = sqliteTable(
+  "subtask",
+  {
+    id: text("id").primaryKey(),
+    taskId: text("task_id")
+      .notNull()
+      .references(() => task.id),
+    title: text("title").notNull(),
+    /** Author order. Gaps are legal; only the relative order is read. */
+    position: integer("position").notNull(),
+    doneOn: text("done_on"),
+  },
+  (table) => [index("subtask_task_idx").on(table.taskId)],
+);
+
+/**
  * A jigsaw puzzle: one image, a grid, and pieces bought back one at a time.
  *
  * Sealed at creation like an album, and for the same reason — `puzzle_frozen`

@@ -6,15 +6,18 @@ import {
   quickAddTaskSchema,
   type RoutineSlot,
   type SlotConflict,
+  todayIn,
+  toggleSubtaskSchema,
   updateTaskSchema,
 } from "@sticker-collector/shared";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { Hono } from "hono";
 import { db } from "../db/client";
-import { routineSlot, task } from "../db/schema";
+import { routineSlot, subtask, task } from "../db/schema";
 import {
   buildTaskPatch,
   liveTasks,
+  newSubtaskRows,
   newTaskRow,
   otherRoutineSlots,
   ownsEpic,
@@ -24,9 +27,11 @@ import {
   selectTasksWithCompletion,
   slotRows,
   slotsFor,
+  subtasksFor,
   type TaskInsert,
   toTask,
 } from "../lib/tasks";
+import { timeZoneOf } from "../lib/user";
 import { idempotency } from "../middleware/idempotency";
 import { requireAuth } from "../middleware/require-auth";
 
@@ -86,14 +91,19 @@ taskRoutes.post("/", async (c) => {
   if (clash) return c.json({ error: clash.error, conflicts: clash.conflicts }, 409);
 
   const created = requireRow(await database.insert(task).values(row).returning(), "task");
+  const steps = newSubtaskRows(created.id, parsed.data.subtasks ?? []);
+
   // One batch, because D1 has no interactive transactions. A slot row that
   // failed on its own would leave a routine whose agenda silently disagrees
-  // with the form that created it.
-  if (slots.length > 0) {
-    await database.batch([database.insert(routineSlot).values(slotRows(created.id, slots))]);
-  }
+  // with the form that created it — and the same is true of a checklist that
+  // arrived half-written.
+  const writes = [];
+  if (slots.length > 0)
+    writes.push(database.insert(routineSlot).values(slotRows(created.id, slots)));
+  if (steps.length > 0) writes.push(database.insert(subtask).values(steps));
+  if (writes.length > 0) await database.batch(writes as [(typeof writes)[number]]);
 
-  return c.json(toTask(created, null, slots), 201);
+  return c.json(toTask(created, null, slots, steps), 201);
 });
 
 /** Capture must never cost a form: one field, an undated one-off, no epic. */
@@ -183,8 +193,66 @@ taskRoutes.patch("/:id", async (c) => {
     ]);
   }
 
+  // Same shape as `slots`, and the same reason: replacing the whole list is
+  // the only edit a checklist needs, and delete-then-insert in ONE batch keeps
+  // a failure from leaving a task with no steps at all.
+  //
+  // Ticks are NOT carried over. An edit rewrites the list, and matching an old
+  // tick onto a new title would be guessing which step the author meant.
+  if (parsed.data.subtasks) {
+    const rows = newSubtaskRows(id, parsed.data.subtasks);
+    await database.batch([
+      database.delete(subtask).where(eq(subtask.taskId, id)),
+      ...(rows.length > 0 ? [database.insert(subtask).values(rows)] : []),
+    ]);
+  }
+
   const slots = (await slotsFor(database, [id])).get(id) ?? [];
-  return c.json(toTask(updated, null, slots));
+  const steps = (await subtasksFor(database, [id])).get(id) ?? [];
+  return c.json(toTask(updated, null, slots, steps));
+});
+
+/**
+ * Ticking one step.
+ *
+ * Its own endpoint rather than a field on the task patch: the patch replaces
+ * the whole list, and a tick must not be able to rewrite the titles around it.
+ *
+ * **The day is the server's**, resolved from `user.timezone` — the same source
+ * every other local day comes from. A client sending its own date could tick a
+ * routine's step for a day that is not today, which is the one thing `done_on`
+ * being a date is supposed to prevent.
+ */
+taskRoutes.patch("/:taskId/subtasks/:subtaskId", async (c) => {
+  const parsed = toggleSubtaskSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json(bad(parsed.error.issues), 400);
+
+  const userId = c.get("userId");
+  const database = db(c.env);
+  const taskId = c.req.param("taskId");
+
+  // Joined to `task` so a step can only be ticked by whoever owns the task it
+  // belongs to — `subtask` carries no user id of its own.
+  const owned = await database
+    .select({ id: task.id })
+    .from(task)
+    .where(and(eq(task.id, taskId), eq(task.userId, userId), isNull(task.deletedAt)))
+    .limit(1);
+  if (owned.length === 0) return c.json({ error: "not found" }, 404);
+
+  const timeZone = await timeZoneOf(database, userId);
+  if (!timeZone) return c.json({ error: "not found" }, 404);
+
+  const doneOn = parsed.data.done ? todayIn(timeZone) : null;
+  const updated = await database
+    .update(subtask)
+    .set({ doneOn })
+    .where(and(eq(subtask.id, c.req.param("subtaskId")), eq(subtask.taskId, taskId)))
+    .returning();
+  if (updated.length === 0) return c.json({ error: "not found" }, 404);
+
+  const steps = (await subtasksFor(database, [taskId])).get(taskId) ?? [];
+  return c.json({ subtasks: [...steps].sort((a, b) => a.position - b.position) });
 });
 
 /**

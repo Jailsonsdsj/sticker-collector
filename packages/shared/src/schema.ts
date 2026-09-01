@@ -4,6 +4,7 @@ import { isImageKey } from "./image.js";
 import { isPiecePreset, MAX_PIECES, MAX_PIECES_PER_UNLOCK } from "./puzzle.js";
 import { WEEKDAYS_MASK_ALL } from "./recurrence.js";
 import { routineSlotSchema, routineSlotsSchema, slotsAgreeWithMask } from "./slots";
+import { MAX_SUBTASKS } from "./subtasks.js";
 
 /**
  * Every task, epic and occurrence payload. One schema, two consumers — the
@@ -94,6 +95,8 @@ export const rewardCoinsSchema = z.int().min(0);
 export const DEFAULT_EFFORT_MINUTES = 30;
 
 const titleSchema = z.string().trim().min(1).max(200);
+/** A step's title. Shorter than a task's: it is one line in a checklist. */
+const subtaskTitleSchema = z.string().trim().min(1).max(200);
 const idSchema = z.string().min(1);
 
 // ── Task ─────────────────────────────────────────────────────────────────────
@@ -114,6 +117,34 @@ const idSchema = z.string().min(1);
  */
 const taskDescriptionSchema = z.string().nullish();
 
+/**
+ * One step of a task, as the API returns it.
+ *
+ * `doneOn` is a **date**, like `task.pinnedOn` — see `shared/subtasks.ts` for
+ * why "done" has to be a statement about a day rather than a boolean.
+ */
+export const subtaskSchema = z.strictObject({
+  id: idSchema,
+  title: subtaskTitleSchema,
+  position: z.int().nonnegative(),
+  doneOn: localDateSchema.nullable(),
+});
+
+/**
+ * A step on the way in.
+ *
+ * Titles only. Position is the array index — the author orders them by typing
+ * them in that order, and a client sending its own numbering is a second
+ * opinion the server would have to reconcile. `doneOn` is never accepted here
+ * either: a step is ticked through its own endpoint, on the server's idea of
+ * today.
+ */
+export const subtaskInputSchema = z.array(subtaskTitleSchema).max(MAX_SUBTASKS);
+
+/** Ticking one. The day is the server's, from `user.timezone`, never the client's. */
+export const toggleSubtaskSchema = z.strictObject({ done: z.boolean() });
+export type ToggleSubtask = z.infer<typeof toggleSubtaskSchema>;
+
 const taskCommonFields = {
   title: titleSchema,
   description: taskDescriptionSchema,
@@ -123,6 +154,8 @@ const taskCommonFields = {
   /** Omit to inherit the effort, per prd/02-tasks.md. */
   rewardCoins: rewardCoinsSchema.optional(),
   priority: prioritySchema.default("medium"),
+  /** Absent means none. An empty array on an edit means "remove them all". */
+  subtasks: subtaskInputSchema.optional(),
 };
 
 const createRoutineSchema = z
@@ -184,6 +217,7 @@ export const updateTaskSchema = z
     effortMinutes: effortMinutesSchema,
     rewardCoins: rewardCoinsSchema,
     priority: prioritySchema,
+    subtasks: subtaskInputSchema,
     weekdays: weekdayMaskSchema,
     startsOn: localDateSchema.nullish(),
     endsOn: localDateSchema.nullish(),
@@ -239,20 +273,23 @@ export const taskSchema = z.object({
   /**
    * When work on this task started, or null.
    *
-   * **An instant, not a date, and it does not expire.** A pin is a claim about
-   * *today* — "I will do this today" — and is worthless tomorrow, which is why
-   * it is a date. Starting something is a claim about the task: it stays
-   * started across midnight, because putting a half-finished job back in the
-   * general pile every morning is exactly the thing a person is trying to
-   * avoid by marking it started at all.
+   * **An instant, not a date.** Kept as the instant rather than a boolean so
+   * "since when" is answerable without a second column.
    *
-   * Kept as the instant rather than a boolean so "since when" is answerable
-   * without a second column.
+   * Whether it still *counts* is derived, not stored — `startedToday` in the
+   * web read model. A one-off stays started across midnight, because putting a
+   * half-finished job back in the general pile every morning is the thing a
+   * person marks it started to avoid. A **routine** is a new run every day, so
+   * it comes back to For today; a stored flag that outlived its day was a
+   * reported bug (`W8-09`), because nothing in this app runs at midnight to
+   * clear one.
    */
   startedAt: instantSchema.nullable(),
   /** When this routine runs. Empty for a one-off, and for every routine that
    *  predates the agenda. */
   slots: z.array(routineSlotSchema),
+  /** The steps inside it, in the author's order. Empty is the normal case. */
+  subtasks: z.array(subtaskSchema),
   createdAt: instantSchema,
   deletedAt: instantSchema.nullable(),
   /**
@@ -736,6 +773,17 @@ export const backupManifestSchema = z.object({
    */
   puzzles: z.array(z.record(z.string(), z.unknown())).default([]),
   puzzlePieces: z.array(z.record(z.string(), z.unknown())).default([]),
+  /**
+   * A routine's agenda times, and a task's steps.
+   *
+   * `routineSlots` was **missing from every backup taken before this**: the
+   * manifest names its tables by hand, and a child table nobody adds is a child
+   * table silently dropped on restore. A routine came back with its schedule
+   * and no times. Optional and defaulting to empty for the same reason puzzles
+   * are — an old file has to keep restoring.
+   */
+  routineSlots: z.array(z.record(z.string(), z.unknown())).default([]),
+  subtasks: z.array(z.record(z.string(), z.unknown())).default([]),
   /** Every image the data references — the irreplaceable half of a backup. */
   imageKeys: z.array(z.string()),
 });
@@ -752,6 +800,8 @@ export const restoreResultSchema = z.object({
     holdings: z.int(),
     puzzles: z.int().default(0),
     puzzlePieces: z.int().default(0),
+    routineSlots: z.int().default(0),
+    subtasks: z.int().default(0),
   }),
 });
 export type RestoreResult = z.infer<typeof restoreResultSchema>;

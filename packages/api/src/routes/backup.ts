@@ -15,7 +15,9 @@ import {
   occurrence,
   puzzle,
   puzzlePiece,
+  routineSlot,
   sticker,
+  subtask,
   task,
   user,
 } from "../db/schema";
@@ -77,6 +79,14 @@ backupRoutes.get("/manifest", async (c) => {
   const occurrences = await selectIn(taskIds, (batch) =>
     database.select().from(occurrence).where(inArray(occurrence.taskId, batch)),
   );
+  // Both hang off a task, and both were the kind of child table this manifest
+  // silently drops if nobody names it — `routineSlots` was, until now.
+  const routineSlots = await selectIn(taskIds, (batch) =>
+    database.select().from(routineSlot).where(inArray(routineSlot.taskId, batch)),
+  );
+  const subtasks = await selectIn(taskIds, (batch) =>
+    database.select().from(subtask).where(inArray(subtask.taskId, batch)),
+  );
   const stickers = await selectIn(albumIds, (batch) =>
     database.select().from(sticker).where(inArray(sticker.albumId, batch)),
   );
@@ -120,6 +130,8 @@ backupRoutes.get("/manifest", async (c) => {
     holdings,
     puzzles,
     puzzlePieces,
+    routineSlots,
+    subtasks,
     imageKeys,
   };
   return c.json(body);
@@ -230,6 +242,16 @@ backupRoutes.post("/restore", idempotency, async (c) => {
     id: idFor(row.id),
     taskId: idFor(row.taskId),
   }));
+  const routineSlots = manifest.routineSlots.map((row) => ({
+    ...row,
+    id: idFor(row.id),
+    taskId: idFor(row.taskId),
+  }));
+  const subtasks = manifest.subtasks.map((row) => ({
+    ...row,
+    id: idFor(row.id),
+    taskId: idFor(row.taskId),
+  }));
   const holdings = manifest.holdings.map((row) => ({
     ...row,
     id: idFor(row.id),
@@ -254,6 +276,8 @@ backupRoutes.post("/restore", idempotency, async (c) => {
     ...chunkFor(epics).map((rows) => database.insert(epic).values(rows as never)),
     ...chunkFor(tasks).map((rows) => database.insert(task).values(rows as never)),
     ...chunkFor(occurrences).map((rows) => database.insert(occurrence).values(rows as never)),
+    ...chunkFor(routineSlots).map((rows) => database.insert(routineSlot).values(rows as never)),
+    ...chunkFor(subtasks).map((rows) => database.insert(subtask).values(rows as never)),
     ...chunkFor(albums).map((rows) => database.insert(album).values(rows as never)),
     ...chunkFor(stickers).map((rows) => database.insert(sticker).values(rows as never)),
     ...chunkFor(holdings).map((rows) => database.insert(holding).values(rows as never)),
@@ -278,6 +302,8 @@ backupRoutes.post("/restore", idempotency, async (c) => {
       albums: manifest.albums.length,
       stickers: manifest.stickers.length,
       holdings: manifest.holdings.length,
+      routineSlots: manifest.routineSlots.length,
+      subtasks: manifest.subtasks.length,
       puzzles: manifest.puzzles.length,
       puzzlePieces: manifest.puzzlePieces.length,
     },

@@ -10,3 +10,4 @@ export * from "./recurrence";
 export * from "./reports";
 export * from "./schema";
 export * from "./slots";
+export * from "./subtasks";

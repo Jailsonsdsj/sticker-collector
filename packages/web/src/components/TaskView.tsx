@@ -1,10 +1,15 @@
 import type { Epic, Task } from "@sticker-collector/shared";
 import { WEEKDAYS } from "@sticker-collector/shared";
 import { Markdown } from "./Markdown";
+import { SubtaskList } from "./SubtaskList";
 import { DeleteTaskAction } from "./taskForm/DeleteTaskAction";
 import { Button, Coin, Sheet } from "./ui";
 
 export interface TaskViewProps {
+  /** Absent when the steps cannot be ticked from here — see `Week` and `Epics`. */
+  onToggleSubtask?: (subtaskId: string, done: boolean) => void;
+  /** The local day a tick counts for. */
+  today?: string;
   task: Task | null;
   epic?: Epic | null;
   /** Already closed today. Decides whether the action reads Done or Reopen. */
@@ -46,6 +51,8 @@ export function TaskView({
   onToggleDone,
   started = false,
   onToggleStart,
+  onToggleSubtask,
+  today,
   onEdit,
   onDelete,
   onClose,
@@ -85,6 +92,18 @@ export function TaskView({
           <p className="mt-2 font-body text-sm text-ink-faint italic">No description.</p>
         )}
       </div>
+
+      {/* Under the title block and above the facts: the steps are what doing
+          this task consists of, and the reward and effort beneath them are
+          about the task as a whole. */}
+      {onToggleSubtask && today && (
+        <SubtaskList
+          subtasks={task.subtasks}
+          taskType={task.type}
+          today={today}
+          onToggle={onToggleSubtask}
+        />
+      )}
 
       <dl className="flex flex-wrap gap-2">
         <Fact label="Reward">
