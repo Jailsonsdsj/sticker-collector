@@ -14,6 +14,7 @@ import { DeleteTaskAction } from "./taskForm/DeleteTaskAction";
 import { EffortFields } from "./taskForm/EffortFields";
 import { MetaFields } from "./taskForm/MetaFields";
 import { ScheduleFields } from "./taskForm/ScheduleFields";
+import { SubtaskFields } from "./taskForm/SubtaskFields";
 import { Button, Input, Sheet, Textarea } from "./ui";
 
 /**
@@ -177,6 +178,11 @@ export function TaskForm({
         value={state.description}
         onChange={(e) => dispatch({ kind: "description", value: e.target.value })}
       />
+      {/* Directly under the description, which is where the request put it —
+          and where it belongs: the notes say what this is, the steps say what
+          doing it consists of. */}
+      <SubtaskFields state={state} dispatch={dispatch} />
+
       <Input
         id="task-url"
         tone="url"

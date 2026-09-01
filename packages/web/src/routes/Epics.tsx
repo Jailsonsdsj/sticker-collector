@@ -12,6 +12,7 @@ import { TaskView } from "../components/TaskView";
 import { Button, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { ApiError } from "../lib/api";
 import { usePendingCompletions } from "../lib/completionQueue";
+import { startedToday } from "../lib/home";
 import {
   useCreateEpic,
   useCreateTask,
@@ -22,7 +23,7 @@ import {
 } from "../lib/mutations";
 import { useEpics, useTasks } from "../lib/queries";
 import { useCollapsibleSections } from "../lib/sectionState";
-import { today } from "../lib/timezone";
+import { appTimeZone, today } from "../lib/timezone";
 
 /**
  * Epics — grouping, progress, and the second door into the task form.
@@ -256,7 +257,7 @@ export function Epics() {
                 }
               : undefined
           }
-          started={Boolean(viewing.startedAt)}
+          started={startedToday(viewing, localToday, appTimeZone())}
           // Same rule as the tasks tab, derived from the mask because this
           // screen has no occurrences to read: *In progress* takes a routine
           // through today's occurrence only. `startsOn`/`endsOn` are not

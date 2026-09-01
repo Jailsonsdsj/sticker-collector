@@ -260,6 +260,7 @@ const TASK: Task = {
   pinnedOn: null,
   startedAt: null,
   slots: [],
+  subtasks: [],
   createdAt: "2026-07-01T00:00:00Z",
   deletedAt: null,
   lastCompletedOn: null,
@@ -495,6 +496,10 @@ describe("saying when a routine runs", () => {
       ...({} as Task),
       id: "other",
       title: "Gym",
+      // `{} as Task` fills nothing in, so every field the form actually reads
+      // has to be named here — `subtasks` included, or `stateFromTask` maps
+      // over undefined.
+      subtasks: [],
       type: "routine" as const,
       weekdays: 0b0000001,
       effortMinutes: 60,
@@ -715,5 +720,103 @@ describe("writing the description", () => {
     await waitFor(() =>
       expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ description: long })),
     );
+  });
+});
+
+describe("the steps section", () => {
+  const addStep = async (user: ReturnType<typeof userEvent.setup>, text: string, nth = 1) => {
+    await user.click(
+      screen.getByRole("button", { name: nth === 1 ? "Add a step" : "Add another" }),
+    );
+    await user.type(screen.getByLabelText(`Step ${nth}`), text);
+  };
+
+  it("sits under the description, which is where it was asked for", () => {
+    setup();
+
+    const description = screen.getByLabelText(/description/i);
+    const steps = screen.getByRole("button", { name: "Add a step" });
+    // Node.DOCUMENT_POSITION_FOLLOWING is 4.
+    expect(description.compareDocumentPosition(steps) & 4).toBeTruthy();
+  });
+
+  it("starts with no rows at all, and adds one only when asked", async () => {
+    // A list that grows a blank row as you type the last one is a list you
+    // cannot finish: there is always one more empty box under the cursor.
+    const user = userEvent.setup();
+    setup();
+
+    expect(screen.queryByLabelText("Step 1")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Add a step" }));
+    expect(screen.getByLabelText("Step 1")).toBeInTheDocument();
+  });
+
+  it("sends the steps it was given, in the order they were typed", async () => {
+    const user = userEvent.setup();
+    const { onSubmit, save } = setup();
+
+    await fillValidRoutine(user);
+    await addStep(user, "Fill the can", 1);
+    await addStep(user, "Water the herbs", 2);
+    await user.click(save());
+
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({ subtasks: ["Fill the can", "Water the herbs"] }),
+      ),
+    );
+  });
+
+  it("drops a row left blank rather than sending an empty step", async () => {
+    // An empty row is a row the user opened and left, not a step called "".
+    const user = userEvent.setup();
+    const { onSubmit, save } = setup();
+
+    await fillValidRoutine(user);
+    await addStep(user, "Fill the can", 1);
+    await user.click(screen.getByRole("button", { name: "Add another" }));
+    await user.click(save());
+
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({ subtasks: ["Fill the can"] }),
+      ),
+    );
+  });
+
+  it("keeps a row while it is being cleared", async () => {
+    // Dropping it as the last character goes would take the field away from
+    // under the cursor.
+    const user = userEvent.setup();
+    setup();
+
+    await user.click(screen.getByRole("button", { name: "Add a step" }));
+    await user.type(screen.getByLabelText("Step 1"), "x");
+    await user.clear(screen.getByLabelText("Step 1"));
+
+    expect(screen.getByLabelText("Step 1")).toBeInTheDocument();
+  });
+
+  it("removes one on request", async () => {
+    const user = userEvent.setup();
+    setup();
+
+    await addStep(user, "First", 1);
+    await addStep(user, "Second", 2);
+    await user.click(screen.getByRole("button", { name: "Remove step 1" }));
+
+    expect(screen.getByLabelText("Step 1")).toHaveValue("Second");
+    expect(screen.queryByLabelText("Step 2")).not.toBeInTheDocument();
+  });
+
+  it("sends no subtasks key when none were added", async () => {
+    const user = userEvent.setup();
+    const { onSubmit, save } = setup();
+
+    await fillValidRoutine(user);
+    await user.click(save());
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({ subtasks: [] });
   });
 });

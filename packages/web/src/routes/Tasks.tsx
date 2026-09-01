@@ -21,12 +21,14 @@ import {
   HOME_WINDOW_FORWARD,
   type HomeItem,
   isEmpty,
+  startedToday,
 } from "../lib/home";
 import {
   useBulkDeleteTasks,
   useBulkDuplicateTasks,
   useCreateTask,
   useDeleteTask,
+  useToggleSubtask,
   useUncompleteOccurrence,
   useUpdateTask,
 } from "../lib/mutations";
@@ -73,6 +75,8 @@ export function Tasks() {
   /** Narrows every section as it is typed; never submitted. */
   const [query, setQuery] = useState("");
   const updateTask = useUpdateTask();
+  const toggleSubtask = useToggleSubtask();
+
   const deleteTask = useDeleteTask();
   const uncomplete = useUncompleteOccurrence();
   const queue = usePendingCompletions();
@@ -110,6 +114,17 @@ export function Tasks() {
    */
   const visible = useMemo(() => filterHome(sections, query), [sections, query]);
   const searching = query.trim() !== "";
+
+  /**
+   * The open sheet's task, as the cache has it now.
+   *
+   * `viewing` is React state holding the row as it was when the sheet opened,
+   * so nothing that changes afterwards — a ticked step, most of all — reaches
+   * it. Looked up fresh on every render instead.
+   */
+  const liveTask = viewing
+    ? (tasks.data?.find((row) => row.id === viewing.item.task.id) ?? viewing.item.task)
+    : null;
 
   const epicById = useMemo(
     () => new Map((epics.data ?? []).map((e: Epic) => [e.id, e])),
@@ -336,8 +351,12 @@ export function Tasks() {
 
       {viewing && (
         <TaskView
-          task={viewing.item.task}
-          epic={viewing.item.task.epicId ? (epicById.get(viewing.item.task.epicId) ?? null) : null}
+          // The LIVE row, not the snapshot `viewing` captured when the sheet
+          // opened. `viewing` is React state, so a cache update — ticking a
+          // step, say — never reaches it, and the checkbox sat unmoved until
+          // the sheet was closed and reopened.
+          task={liveTask ?? viewing.item.task}
+          epic={liveTask?.epicId ? (epicById.get(liveTask.epicId) ?? null) : null}
           done={viewing.item.done || queue.isPending(viewing.ref)}
           // A future occurrence is not completable and the API says so with a
           // 400; the button stays away rather than promising otherwise.
@@ -358,7 +377,11 @@ export function Tasks() {
                   setViewing(null);
                 }
           }
-          started={Boolean(viewing.item.task.startedAt)}
+          today={today}
+          onToggleSubtask={(subtaskId, done) =>
+            toggleSubtask.mutate({ taskId: viewing.item.task.id, subtaskId, done })
+          }
+          started={startedToday(liveTask ?? viewing.item.task, today, timeZone)}
           // Offered only where it would actually move the row. *In progress*
           // takes a routine through TODAY's occurrence alone, so starting one
           // on a day it does not run sets a flag and changes nothing on screen.

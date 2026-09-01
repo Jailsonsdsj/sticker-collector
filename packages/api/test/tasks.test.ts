@@ -660,3 +660,121 @@ describe("when a routine runs — its slots", () => {
     expect(listed[0]?.slots).toEqual([slot(4, 480, 540)]);
   });
 });
+
+describe("subtasks", () => {
+  type Step = { id: string; title: string; position: number; doneOn: string | null };
+  const stepsOf = (task: unknown) => (task as { subtasks: Step[] }).subtasks;
+
+  it("stores the steps a create carries, in the order they were typed", async () => {
+    const created = await createRoutine({ subtasks: ["Fill the can", "Water", "Prune"] });
+
+    expect(stepsOf(created).map((s) => s.title)).toEqual(["Fill the can", "Water", "Prune"]);
+    // Position is the array index, not something the client sends: the author
+    // orders steps by typing them in that order.
+    expect(stepsOf(created).map((s) => s.position)).toEqual([0, 1, 2]);
+    expect(stepsOf(created).every((s) => s.doneOn === null)).toBe(true);
+  });
+
+  it("gives a task with none an empty list rather than leaving the field out", async () => {
+    expect(stepsOf(await createRoutine())).toEqual([]);
+  });
+
+  it("returns them on the listing too, not only from the create", async () => {
+    await createRoutine({ subtasks: ["One", "Two"] });
+
+    const list = (await (await call("GET", "/api/tasks")).json()) as unknown[];
+    expect(stepsOf(list[0]).map((s) => s.title)).toEqual(["One", "Two"]);
+  });
+
+  it("refuses more than a single batch can hold", async () => {
+    const res = await call("POST", "/api/tasks", {
+      ...ROUTINE,
+      subtasks: Array.from({ length: 51 }, (_, i) => `Step ${i}`),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("refuses a blank step rather than storing one", async () => {
+    const res = await call("POST", "/api/tasks", { ...ROUTINE, subtasks: ["Fine", "   "] });
+    expect(res.status).toBe(400);
+  });
+});
+
+describe("ticking a subtask", () => {
+  type Step = { id: string; title: string; position: number; doneOn: string | null };
+  const stepsOf = (task: unknown) => (task as { subtasks: Step[] }).subtasks;
+
+  const withSteps = async (over: Record<string, unknown> = {}) => {
+    const created = await createRoutine({ subtasks: ["One", "Two"], ...over });
+    return { id: created.id as string, steps: stepsOf(created) };
+  };
+
+  it("stamps the user's own today, not a date the client chose", async () => {
+    // The user is America/Sao_Paulo; the server resolves the day from
+    // `user.timezone`, which is the only place any local day comes from.
+    const { id, steps } = await withSteps();
+
+    const res = await call("PATCH", `/api/tasks/${id}/subtasks/${steps[0]?.id}`, { done: true });
+    expect(res.status).toBe(200);
+
+    const body = (await res.json()) as { subtasks: Step[] };
+    expect(body.subtasks[0]?.doneOn).toBe(todayIn("America/Sao_Paulo"));
+    expect(body.subtasks[1]?.doneOn).toBeNull();
+  });
+
+  it("clears the date when it is unticked", async () => {
+    const { id, steps } = await withSteps();
+    await call("PATCH", `/api/tasks/${id}/subtasks/${steps[0]?.id}`, { done: true });
+
+    const res = await call("PATCH", `/api/tasks/${id}/subtasks/${steps[0]?.id}`, { done: false });
+    const body = (await res.json()) as { subtasks: Step[] };
+    expect(body.subtasks[0]?.doneOn).toBeNull();
+  });
+
+  it("refuses a step belonging to somebody else's task", async () => {
+    // `subtask` carries no user id, so ownership can only come from the task it
+    // hangs off. Without the join anyone could tick anyone's checklist.
+    const { id, steps } = await withSteps();
+    const other = await makeUser();
+    token = other.token;
+
+    const res = await call("PATCH", `/api/tasks/${id}/subtasks/${steps[0]?.id}`, { done: true });
+    expect(res.status).toBe(404);
+  });
+
+  it("404s on a step that is not on that task", async () => {
+    const { id } = await withSteps();
+    const res = await call("PATCH", `/api/tasks/${id}/subtasks/${crypto.randomUUID()}`, {
+      done: true,
+    });
+    expect(res.status).toBe(404);
+  });
+});
+
+describe("editing the steps", () => {
+  type Step = { id: string; title: string; position: number; doneOn: string | null };
+  const stepsOf = (task: unknown) => (task as { subtasks: Step[] }).subtasks;
+
+  it("replaces the whole list", async () => {
+    const created = await createRoutine({ subtasks: ["One", "Two"] });
+
+    const res = await call("PATCH", `/api/tasks/${created.id}`, { subtasks: ["Only this"] });
+    expect(res.status).toBe(200);
+    expect(stepsOf(await res.json()).map((s) => s.title)).toEqual(["Only this"]);
+  });
+
+  it("removes them all when the list is emptied", async () => {
+    const created = await createRoutine({ subtasks: ["One"] });
+
+    const res = await call("PATCH", `/api/tasks/${created.id}`, { subtasks: [] });
+    expect(stepsOf(await res.json())).toEqual([]);
+  });
+
+  it("leaves them alone when the patch does not mention them", async () => {
+    // A rename must not throw away a checklist — or the ticks on it.
+    const created = await createRoutine({ subtasks: ["One", "Two"] });
+
+    const res = await call("PATCH", `/api/tasks/${created.id}`, { title: "Stretch more" });
+    expect(stepsOf(await res.json()).map((s) => s.title)).toEqual(["One", "Two"]);
+  });
+});

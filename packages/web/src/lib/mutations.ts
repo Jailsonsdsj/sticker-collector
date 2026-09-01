@@ -12,6 +12,7 @@ import type {
   PuzzlePurchase,
   SaleResult,
   SealedAlbum,
+  Subtask,
   Task,
   UnlockPiecesInput,
   UpdateEpic,
@@ -20,6 +21,7 @@ import type {
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "./api";
 import { keys } from "./queries";
+import { today } from "./timezone";
 
 /**
  * Capture must never cost a form (prd/02-tasks.md §Enhancements).
@@ -98,6 +100,68 @@ function useOccurrenceMutation(path: string) {
 }
 
 /**
+ * Ticking one step.
+ *
+ * Optimistic, because a checkbox that waits for a round trip before it moves is
+ * a checkbox people tap twice. Nothing is paid for here — the task is what
+ * earns, and a step earns nothing — so there is no undo window to respect and
+ * nothing to protect but the tick itself.
+ *
+ * The **date is the server's**, from `user.timezone`. The optimistic value uses
+ * the client's idea of today and is replaced by the server's answer on settle;
+ * the two differ only for the hours a misconfigured profile is out, and the
+ * refetch is what resolves it.
+ */
+export function useToggleSubtask() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      taskId,
+      subtaskId,
+      done,
+    }: {
+      taskId: string;
+      subtaskId: string;
+      done: boolean;
+    }) =>
+      api<{ subtasks: Subtask[] }>(`/api/tasks/${taskId}/subtasks/${subtaskId}`, {
+        method: "PATCH",
+        body: { done },
+        idempotencyKey: crypto.randomUUID(),
+      }),
+
+    onMutate: async ({ taskId, subtaskId, done }) => {
+      await queryClient.cancelQueries({ queryKey: keys.tasks });
+      const previous = queryClient.getQueryData<Task[]>(keys.tasks);
+      const doneOn = done ? today() : null;
+
+      queryClient.setQueryData<Task[]>(keys.tasks, (old) =>
+        old?.map((task) =>
+          task.id === taskId
+            ? {
+                ...task,
+                subtasks: task.subtasks.map((step) =>
+                  step.id === subtaskId ? { ...step, doneOn } : step,
+                ),
+              }
+            : task,
+        ),
+      );
+      return { previous };
+    },
+
+    onError: (_error, _variables, context) => {
+      if (context?.previous) queryClient.setQueryData(keys.tasks, context.previous);
+    },
+
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: keys.tasks });
+    },
+  });
+}
+
+/**
  * Editing a task. Used by the weekly grid, where a cell has to feel instant.
  *
  * Optimistic with rollback — the right pattern here, unlike completion: this is
@@ -120,7 +184,15 @@ export function useUpdateTask() {
       await queryClient.cancelQueries({ queryKey: keys.tasks });
       const previous = queryClient.getQueryData<Task[]>(keys.tasks);
       queryClient.setQueryData<Task[]>(keys.tasks, (old) =>
-        old?.map((task) => (task.id === id ? { ...task, ...patch } : task)),
+        old?.map((task) => {
+          if (task.id !== id) return task;
+          // `subtasks` is deliberately NOT merged optimistically. The patch
+          // carries titles; the cache holds rows with their own ids and done
+          // dates, and guessing which typed title became which existing row is
+          // the server's job. `onSettled` refetches and brings the real ones.
+          const { subtasks: _replaced, ...rest } = patch;
+          return { ...task, ...rest };
+        }),
       );
       return { previous };
     },

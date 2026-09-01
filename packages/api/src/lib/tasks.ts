@@ -2,11 +2,12 @@ import {
   type CreateTask,
   DEFAULT_EFFORT_MINUTES,
   type RoutineSlot,
+  type Subtask,
   type Task,
 } from "@sticker-collector/shared";
 import { and, eq, inArray, isNull, type SQL, sql } from "drizzle-orm";
 import type { Db } from "../db/client";
-import { epic, occurrence, routineSlot, task } from "../db/schema";
+import { epic, occurrence, routineSlot, subtask, task } from "../db/schema";
 import { selectIn } from "./selectIn";
 
 export type TaskRow = typeof task.$inferSelect;
@@ -147,6 +148,7 @@ export function toTask(
   row: TaskRow,
   lastCompletedOn: string | null = null,
   slots: RoutineSlot[] = [],
+  subtasks: Subtask[] = [],
 ): Task {
   return {
     id: row.id,
@@ -167,6 +169,9 @@ export function toTask(
     // Ordered by weekday, so the agenda and the form both read Monday-first
     // without either of them sorting.
     slots: [...slots].sort((a, b) => a.weekday - b.weekday),
+    // Author order, so the client sorts only by doneness. Ordering here rather
+    // than in every reader is the same call `slots` already made.
+    subtasks: [...subtasks].sort((a, b) => a.position - b.position),
     createdAt: row.createdAt,
     deletedAt: row.deletedAt,
     lastCompletedOn,
@@ -199,12 +204,58 @@ export async function selectTasksWithCompletion(
   // A second query rather than a join: joining slots onto the completion
   // aggregate above would multiply the rows the MAX() runs over, and a routine
   // with five slots would need the GROUP BY rewritten to survive it.
-  const bySlotTask = await slotsFor(
-    database,
-    rows.map((r) => r.row.id),
+  const ids = rows.map((r) => r.row.id);
+  const bySlotTask = await slotsFor(database, ids);
+  const bySubtask = await subtasksFor(database, ids);
+
+  return rows.map((r) =>
+    toTask(r.row, r.lastCompletedOn, bySlotTask.get(r.row.id) ?? [], bySubtask.get(r.row.id) ?? []),
+  );
+}
+
+/** Every task's steps, keyed by task. Chunked for the same reason as `slotsFor`. */
+export async function subtasksFor(
+  database: Db,
+  taskIds: readonly string[],
+): Promise<Map<string, Subtask[]>> {
+  const rows = await selectIn(taskIds, (batch) =>
+    database
+      .select({
+        id: subtask.id,
+        taskId: subtask.taskId,
+        title: subtask.title,
+        position: subtask.position,
+        doneOn: subtask.doneOn,
+      })
+      .from(subtask)
+      .where(inArray(subtask.taskId, batch)),
   );
 
-  return rows.map((r) => toTask(r.row, r.lastCompletedOn, bySlotTask.get(r.row.id) ?? []));
+  const map = new Map<string, Subtask[]>();
+  for (const row of rows) {
+    const list = map.get(row.taskId) ?? [];
+    list.push({ id: row.id, title: row.title, position: row.position, doneOn: row.doneOn });
+    map.set(row.taskId, list);
+  }
+  return map;
+}
+
+/**
+ * The rows a create or an edit writes, from the titles the client sent.
+ *
+ * Position is the array index: the author orders steps by typing them in that
+ * order, and a client sending its own numbering is a second opinion the server
+ * would have to reconcile. Ticks are **not** carried over — an edit replaces
+ * the list, and a step whose text changed is a different step.
+ */
+export function newSubtaskRows(taskId: string, titles: readonly string[]) {
+  return titles.map((title, position) => ({
+    id: crypto.randomUUID(),
+    taskId,
+    title,
+    position,
+    doneOn: null,
+  }));
 }
 
 /** Every routine's slots, keyed by task. Chunked: `IN (?, …)` counts against

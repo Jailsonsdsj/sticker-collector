@@ -30,6 +30,8 @@ function manifest(over: Partial<BackupManifest> = {}): BackupManifest {
     holdings: [{ id: "h1", stickerId: "s1", quantity: 2 }],
     puzzles: [],
     puzzlePieces: [],
+    routineSlots: [],
+    subtasks: [],
     imageKeys: [key(1), key(999)],
     ...over,
   };
