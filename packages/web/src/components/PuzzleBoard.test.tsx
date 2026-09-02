@@ -99,8 +99,30 @@ describe("showing what is picked", () => {
     const [first, second] = pieces();
 
     expect(second?.style.filter).toBe("grayscale(1) brightness(1)");
-    expect(first?.style.filter).toBe("grayscale(1) brightness(0.3)");
+    // And in focus: what you are about to pay for is the thing you can see
+    // best, so picking drops the frosting as well as the dimming.
+    expect(second?.style.filter).not.toContain("blur");
+    expect(first?.style.filter).toBe("grayscale(1) brightness(0.3) blur(1.5px)");
     expect(second?.className).toContain("inset_0_0_0_3px");
+  });
+
+  it("frosts a piece that has not been bought, so its detail is unresolvable", () => {
+    // Grey and dim leave a piece's shape perfectly legible, and shape is most
+    // of what a picture is. Softening it is what makes an unbought piece a
+    // promise rather than a preview.
+    view();
+    const [first] = pieces();
+
+    expect(first?.style.filter).toContain("blur(");
+  });
+
+  it("leaves a bought piece completely alone", () => {
+    // No filter at all — not a filter that happens to be a no-op. The picture
+    // you paid for is the picture, and every filter here is a cost paid per
+    // tile on a board that can hold 144 of them.
+    view({ owned: new Set([0]) });
+
+    expect(pieces()[0]?.style.filter).toBe("");
   });
 
   it("says it is picked, not only shows it", () => {
