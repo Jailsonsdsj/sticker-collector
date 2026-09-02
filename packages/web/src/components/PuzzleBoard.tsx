@@ -41,6 +41,17 @@ export interface PuzzleBoardProps {
 }
 
 /**
+ * How far an unbought piece is out of focus.
+ *
+ * Small on purpose. This is a *frosting*, not a redaction: at 144 pieces a tile
+ * is about 29px wide at 1x, and anything heavier turns the board into fog and
+ * takes the picture away from the person deciding which piece to buy next. A
+ * picked piece drops the blur along with the dimming — what you are about to
+ * pay for has to be the thing you can see best.
+ */
+const LOCKED_BLUR_PX = 1.5;
+
+/**
  * The picture, cut into a grid of windows onto one image.
  *
  * **Every piece is the same image**, at the same scale, showing a different
@@ -300,7 +311,23 @@ function Piece({
         // A picked piece is lifted back to full brightness. A ring alone was
         // not enough to see at 1× on a dark tile, and not being able to tell
         // what you have picked is fatal on a screen whose whole job is picking.
-        ...(owned ? {} : { filter: `grayscale(1) brightness(${selected ? 1 : 0.3})` }),
+        //
+        // And **blurred**, so the detail is not merely dimmed but unresolvable.
+        // Grayscale and brightness take the colour out of a piece you have not
+        // bought; they leave its shape perfectly legible, which is most of what
+        // a picture is. Softening it is what makes an unbought piece a promise
+        // rather than a preview.
+        //
+        // In local coordinates, so the transform scales it: at 4x the blur
+        // grows with the tile and stays the same fraction of it, rather than
+        // dissolving into a rounding error the moment you zoom in.
+        ...(owned
+          ? {}
+          : {
+              filter: selected
+                ? "grayscale(1) brightness(1)"
+                : `grayscale(1) brightness(0.3) blur(${LOCKED_BLUR_PX}px)`,
+            }),
       }
     : {};
 
