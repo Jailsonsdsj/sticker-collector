@@ -149,6 +149,70 @@ export function dailyTally(input: ReportInput, from: LocalDate, to: LocalDate): 
   return tally;
 }
 
+/**
+ * A day as a score out of 100: how much of what it held got done.
+ *
+ * **`null`, never 0, when nothing was scheduled.** A day you had no work on is
+ * not a day you failed — the same rule `perfectDays` and `completionRate`
+ * already follow, and the reason both of them refuse to treat an empty day as
+ * an outcome. Scoring it zero would punish taking a weekend off and would drag
+ * every average towards the number of rest days a person keeps.
+ *
+ * Capped at 100. A day can be over-completed — a routine ticked on a day its
+ * mask does not cover still counts as done — and 120% is not a score.
+ */
+export function dayScore(day: DayTally): number | null {
+  if (day.scheduled === 0) return null;
+  return Math.min(100, Math.round((day.done / day.scheduled) * 100));
+}
+
+/**
+ * A week as a score out of 100: the **average of its days' scores**.
+ *
+ * Averaging the days rather than pooling their totals (`sum(done)/sum(scheduled)`)
+ * is a real choice and worth naming: it weights a day with one task exactly as
+ * heavily as a day with ten. A Monday of 1/1 and a Tuesday of 5/10 average to
+ * 75 here and pool to 55. The day is the unit a person experiences, so the day
+ * is the unit that counts.
+ *
+ * Days with nothing scheduled are **not** averaged in — they have no score, and
+ * a `null` folded in as a zero is the same mistake `dayScore` refuses to make.
+ *
+ * **Days from `today` onward are excluded.** A week containing today contains
+ * hours that have not happened; counting an open day as a shortfall would paint
+ * the current week red every Monday morning and green only in hindsight. Same
+ * reasoning as `perfectDays`, which skips an incomplete today rather than
+ * breaking the run on it.
+ *
+ * Returns `null` when the week holds no scored day at all — a week entirely in
+ * the future, or one with nothing scheduled in it.
+ */
+export function weekScore(days: readonly DayTally[], today: LocalDate): number | null {
+  const scores: number[] = [];
+  for (const day of days) {
+    if (day.date >= today) continue;
+    const score = dayScore(day);
+    if (score !== null) scores.push(score);
+  }
+  if (scores.length === 0) return null;
+  return Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length);
+}
+
+/** Where a score sits on the scale the reports colour by. */
+export type ScoreBand = "low" | "mid" | "high";
+
+/**
+ * 0–49 low, 50–69 mid, 70–100 high.
+ *
+ * A band rather than a colour: `shared` has no idea what red is, and the
+ * mapping to tokens belongs to the component that draws it.
+ */
+export function scoreBand(score: number): ScoreBand {
+  if (score < 50) return "low";
+  if (score < 70) return "mid";
+  return "high";
+}
+
 export interface PerfectDays {
   /** Days where every scheduled occurrence was completed. */
   count: number;

@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { addDays, type LocalDate, maskFromDays, WEEKDAYS, weekdayOf } from "./recurrence.js";
 import {
   completionRate,
+  type DayTally,
   dailyTally,
+  dayScore,
   effortByEpic,
   effortByMonth,
   effortByWeek,
@@ -12,9 +14,11 @@ import {
   perfectDays,
   type ReportInput,
   type ReportTask,
+  scoreBand,
   stickersOverTime,
   streakFor,
   weekdayShape,
+  weekScore,
   weekStart,
 } from "./reports.js";
 
@@ -517,5 +521,105 @@ describe("the heatmap's data", () => {
     const saturday = report.days.find((day) => day.date === SATURDAY);
     expect(friday).toMatchObject({ scheduled: 1, done: 0 });
     expect(saturday).toMatchObject({ scheduled: 0, done: 0 });
+  });
+});
+
+describe("a day as a score", () => {
+  const day = (scheduled: number, done: number, date = "2026-09-01"): DayTally => ({
+    date,
+    scheduled,
+    done,
+  });
+
+  it("is the share of the day that got done", () => {
+    expect(dayScore(day(4, 3))).toBe(75);
+    expect(dayScore(day(2, 1))).toBe(50);
+    expect(dayScore(day(3, 3))).toBe(100);
+  });
+
+  it("is null, never zero, when the day held nothing", () => {
+    // A day you had no work on is not a day you failed. Scoring it zero would
+    // punish taking a weekend off and drag every average towards the number of
+    // rest days a person keeps.
+    expect(dayScore(day(0, 0))).toBeNull();
+  });
+
+  it("is zero when the day held work and none of it was done", () => {
+    // The distinction the line above exists for: nothing scheduled and nothing
+    // done are different facts.
+    expect(dayScore(day(3, 0))).toBe(0);
+  });
+
+  it("caps at 100 rather than reporting 120", () => {
+    // A day can be over-completed — a routine ticked on a day its mask does not
+    // cover still counts as done — and 120% is not a score.
+    expect(dayScore(day(5, 6))).toBe(100);
+  });
+
+  it("rounds to a whole number, because a score is read not computed with", () => {
+    expect(dayScore(day(3, 1))).toBe(33);
+    expect(dayScore(day(3, 2))).toBe(67);
+  });
+});
+
+describe("a week as a score", () => {
+  const TODAY = "2026-09-07";
+  const day = (date: string, scheduled: number, done: number): DayTally => ({
+    date,
+    scheduled,
+    done,
+  });
+
+  it("averages the days rather than pooling their totals", () => {
+    // A real choice: 1/1 and 5/10 average to 75 and pool to 55. The day is the
+    // unit a person experiences, so the day is the unit that counts.
+    const week = [day("2026-09-01", 1, 1), day("2026-09-02", 10, 5)];
+    expect(weekScore(week, TODAY)).toBe(75);
+  });
+
+  it("leaves out days that held nothing", () => {
+    // A null folded in as a zero is the same mistake `dayScore` refuses.
+    const week = [day("2026-09-01", 2, 1), day("2026-09-02", 0, 0)];
+    expect(weekScore(week, TODAY)).toBe(50);
+  });
+
+  it("leaves out today, which is not over", () => {
+    // Counting an open day as a shortfall would paint the current week red
+    // every Monday morning and green only in hindsight.
+    const week = [day("2026-09-01", 2, 2), day(TODAY, 4, 0)];
+    expect(weekScore(week, TODAY)).toBe(100);
+  });
+
+  it("leaves out days that have not happened", () => {
+    const week = [day("2026-09-01", 2, 2), day("2026-09-09", 4, 0)];
+    expect(weekScore(week, TODAY)).toBe(100);
+  });
+
+  it("is null for a week entirely in the future", () => {
+    expect(weekScore([day("2026-09-08", 3, 0), day("2026-09-09", 3, 0)], TODAY)).toBeNull();
+  });
+
+  it("is null for a week that held no scheduled work", () => {
+    expect(weekScore([day("2026-09-01", 0, 0), day("2026-09-02", 0, 0)], TODAY)).toBeNull();
+  });
+
+  it("is null for no days at all", () => {
+    expect(weekScore([], TODAY)).toBeNull();
+  });
+
+  it("counts a wholly missed past day as the zero it is", () => {
+    const week = [day("2026-09-01", 2, 2), day("2026-09-02", 2, 0)];
+    expect(weekScore(week, TODAY)).toBe(50);
+  });
+});
+
+describe("which band a score falls in", () => {
+  it("splits at 50 and 70, inclusive at the bottom of each", () => {
+    expect(scoreBand(0)).toBe("low");
+    expect(scoreBand(49)).toBe("low");
+    expect(scoreBand(50)).toBe("mid");
+    expect(scoreBand(69)).toBe("mid");
+    expect(scoreBand(70)).toBe("high");
+    expect(scoreBand(100)).toBe("high");
   });
 });

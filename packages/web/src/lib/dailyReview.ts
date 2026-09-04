@@ -1,5 +1,5 @@
 import type { Epic, LocalDate, Occurrence, Task } from "@sticker-collector/shared";
-import { localDateIn } from "@sticker-collector/shared";
+import { dailyTally, dayScore, localDateIn, scheduleOf } from "@sticker-collector/shared";
 
 /**
  * What you finished on a given day, in the three things worth reading back:
@@ -28,6 +28,17 @@ export interface DailyReview {
   date: LocalDate;
   rows: ReviewRow[];
   coins: number;
+  /**
+   * How much of the day got done, 0–100, or `null` when it held nothing.
+   *
+   * `null` rather than 0, the rule every other measure in this app follows: a
+   * day with nothing scheduled is not a day you failed, and scoring it zero
+   * would punish taking a Sunday off.
+   */
+  score: number | null;
+  /** What the day held, for the "3 of 4" the score is short for. */
+  scheduled: number;
+  done: number;
 }
 
 export function buildReview(
@@ -65,7 +76,58 @@ export function buildReview(
 
   rows.sort((a, b) => b.coins - a.coins || a.title.localeCompare(b.title));
 
-  return { date, rows, coins: rows.reduce((sum, row) => sum + row.coins, 0) };
+  // What the day HELD, which is the denominator the score compares against.
+  // Derived from the schedule rather than counted from occurrence rows: a row
+  // exists only once something is completed or archived, so counting rows would
+  // make every day 100% by construction.
+  //
+  // `scheduleOf` is the server's own function, moved into `shared` for this —
+  // a second opinion here on when a routine starts counting would be a second
+  // opinion on a rule that already has a bug named after it.
+  const tally = dailyTally(
+    {
+      tasks: tasks
+        .filter((task) => !task.deletedAt)
+        .map((task) => ({ id: task.id, title: task.title, schedule: scheduleOf(task, timeZone) })),
+      completions: completionsByTask(occurrences, timeZone),
+      today: date,
+    },
+    date,
+    date,
+  );
+  const day = tally[0] ?? { date, scheduled: 0, done: 0 };
+
+  return {
+    date,
+    rows,
+    coins: rows.reduce((sum, row) => sum + row.coins, 0),
+    score: dayScore(day),
+    scheduled: day.scheduled,
+    done: day.done,
+  };
+}
+
+/**
+ * Which days each task was completed on, keyed by task.
+ *
+ * By the day it was **scheduled for**, not the day it was ticked — that is what
+ * `dailyTally` compares against the schedule, and a Monday routine ticked on
+ * Thursday still fills Monday's slot. The review's own list is dated the other
+ * way round (see above), and the two are answering different questions: what
+ * you did today, versus how much of a given day got done.
+ */
+function completionsByTask(
+  occurrences: readonly Occurrence[],
+  _timeZone: string,
+): Map<string, Set<LocalDate>> {
+  const byTask = new Map<string, Set<LocalDate>>();
+  for (const occurrence of occurrences) {
+    if (occurrence.status !== "done") continue;
+    const days = byTask.get(occurrence.taskId) ?? new Set<LocalDate>();
+    days.add(occurrence.scheduledOn);
+    byTask.set(occurrence.taskId, days);
+  }
+  return byTask;
 }
 
 /**

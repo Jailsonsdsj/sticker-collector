@@ -3,6 +3,7 @@ import {
   addDays,
   maskFromDays,
   occurrencesInWindow,
+  scheduleOf,
   todayIn,
   WEEKDAYS_MASK_ALL,
   WEEKDAYS_MASK_WEEKDAYS,
@@ -10,7 +11,6 @@ import {
 } from "@sticker-collector/shared";
 import { beforeEach, describe, expect, it } from "vitest";
 import app from "../src/index";
-import { scheduleOf } from "../src/lib/occurrences";
 
 // Real router, real D1, real session. The zero-writes claim is checked by
 // counting rows before and after — not by trusting the handler.

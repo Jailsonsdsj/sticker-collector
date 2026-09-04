@@ -1,11 +1,12 @@
 import type { DayTally, LocalDate } from "@sticker-collector/shared";
-import { addDays, daysBetween, WEEKDAYS, weekdayOf } from "@sticker-collector/shared";
+import { addDays, daysBetween, WEEKDAYS, weekdayOf, weekScore } from "@sticker-collector/shared";
 import gsap from "gsap";
 import { type PointerEvent as ReactPointerEvent, useLayoutEffect, useRef, useState } from "react";
 import { addMonth, clampMonth, monthLabel, monthOf } from "../lib/calendarMonth";
 import { prefersMotion } from "../lib/placement";
 import { swipeDirection } from "../lib/swipe";
 import { Button } from "./ui";
+import { WeekScoreColumn } from "./WeekScoreColumn";
 
 export interface HeatmapProps {
   days: readonly DayTally[];
@@ -70,6 +71,9 @@ const LEVEL_INK: Record<string, string> = {
   "4": "var(--color-ink-inverse)",
 };
 
+/** One square in the grid: a day, or a blank at either end of the month. */
+type Cell = { key: string; date: LocalDate | null; side?: "lead" | "tail" };
+
 export function Heatmap({ days, today, onSelectDay }: HeatmapProps) {
   // Opens on today's month, which is the one the user is living in — not on the
   // oldest month in a year of history.
@@ -104,6 +108,42 @@ export function Heatmap({ days, today, onSelectDay }: HeatmapProps) {
   const start = `${shown}-01` as LocalDate;
   const length = daysBetween(start, addMonth(shown, 1));
   const lead = weekdayOf(start);
+
+  /**
+   * The month as rows of eight: seven days and the row's own score.
+   *
+   * Built explicitly rather than left to flow, because the score has to land in
+   * the last column of the row it belongs to — which means the final week needs
+   * trailing blanks it never used to need.
+   *
+   * A row's score covers **the days it shows**, not the whole Mon–Sun week. The
+   * first and last rows of a month are partial, and scoring days from the
+   * neighbouring month would put a number beside cells that did not produce it
+   * — the same week would read differently depending on which month you were
+   * looking at.
+   */
+  const weeks: { key: string; cells: Cell[]; score: number | null }[] = [];
+  {
+    const cells: Cell[] = [];
+    for (let i = 0; i < lead; i++) {
+      cells.push({ key: `pad-${addDays(start, i - lead)}`, date: null, side: "lead" });
+    }
+    for (let i = 0; i < length; i++) {
+      const date = addDays(start, i);
+      cells.push({ key: date, date });
+    }
+    while (cells.length % 7 !== 0) {
+      cells.push({ key: `tail-${cells.length}`, date: null, side: "tail" });
+    }
+
+    for (let i = 0; i < cells.length; i += 7) {
+      const row = cells.slice(i, i + 7);
+      const days = row
+        .map((cell) => (cell.date ? tally.get(cell.date) : undefined))
+        .filter((day): day is DayTally => day !== undefined);
+      weeks.push({ key: row[0]?.key ?? String(i), cells: row, score: weekScore(days, today) });
+    }
+  }
 
   /** Steps a month, refusing to walk off either end of the history. */
   const step = (by: -1 | 1) => {
@@ -141,100 +181,61 @@ export function Heatmap({ days, today, onSelectDay }: HeatmapProps) {
         </Button>
       </figcaption>
 
-      <div
-        ref={grid}
-        className="grid grid-cols-7 gap-1 touch-pan-y"
-        onPointerDown={(event: ReactPointerEvent<HTMLDivElement>) => {
-          if (event.pointerType === "mouse") return;
-          touchFrom.current = { x: event.clientX, y: event.clientY };
-        }}
-        onPointerUp={(event: ReactPointerEvent<HTMLDivElement>) => {
-          const from = touchFrom.current;
-          touchFrom.current = null;
-          if (!from) return;
-          // Right means "back", the way pages turn.
-          const swiped = swipeDirection(event.clientX - from.x, event.clientY - from.y);
-          if (swiped !== 0) step(swiped > 0 ? -1 : 1);
-        }}
-        onPointerCancel={() => {
-          touchFrom.current = null;
-        }}
-      >
-        {WEEKDAYS.map((label) => (
-          <span
-            // Keyed on the full weekday name: the rendered initial is not
-            // unique (two T's, two S's), the name is.
-            key={label}
-            aria-hidden="true"
-            className="text-center font-body text-3xs text-ink-faint"
-          >
-            {label.slice(0, 1)}
-          </span>
-        ))}
-
-        {Array.from({ length: lead }, (_, i) => (
-          // The blanks before the 1st. Marked so the count is assertable: a
-          // calendar that pads by the wrong number puts every date in the
-          // wrong column while still looking like a calendar.
-          <span key={`pad-${addDays(start, i - lead)}`} data-pad aria-hidden="true" />
-        ))}
-
-        {Array.from({ length }, (_, i) => {
-          const date = addDays(start, i);
-          const day = tally.get(date);
-          // A day inside the month but outside the reported window — later this
-          // week, or before the account existed. It gets the empty shade but
-          // says something different, because "nothing scheduled" is a claim
-          // about a day nobody has data for.
-          const level = day ? String(heatLevel(day)) : "empty";
-
-          const label = labelFor(date, day);
-          const shape = `flex aspect-square items-center justify-center rounded-md font-numeric text-2xs${
-            date === today ? " ring-2 ring-ring-today" : ""
-          }`;
-          const paint = { background: LEVEL_COLOUR[level], color: LEVEL_INK[level] };
-
-          // A day with nothing finished opens nothing: a dialog reading "you
-          // finished nothing that day" is a punishment, not a review.
-          const reviewable = Boolean(onSelectDay) && (day?.done ?? 0) > 0;
-
-          return reviewable ? (
-            <button
-              key={date}
-              type="button"
-              data-date={date}
-              data-level={level}
-              data-col={weekdayOf(date)}
-              title={label}
-              // The name says what is in the day AND that it opens. A cell that
-              // reads only as a picture gives a screen reader no reason to
-              // press it.
-              aria-label={`${label}. Review this day`}
-              onClick={() => onSelectDay?.(date)}
-              className={`${shape} cursor-pointer outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan`}
-              style={paint}
-            >
-              {date.slice(8)}
-            </button>
-          ) : (
+      <div className="flex items-stretch gap-2">
+        <div
+          ref={grid}
+          className="grid flex-1 grid-cols-7 gap-1 touch-pan-y"
+          onPointerDown={(event: ReactPointerEvent<HTMLDivElement>) => {
+            if (event.pointerType === "mouse") return;
+            touchFrom.current = { x: event.clientX, y: event.clientY };
+          }}
+          onPointerUp={(event: ReactPointerEvent<HTMLDivElement>) => {
+            const from = touchFrom.current;
+            touchFrom.current = null;
+            if (!from) return;
+            // Right means "back", the way pages turn.
+            const swiped = swipeDirection(event.clientX - from.x, event.clientY - from.y);
+            if (swiped !== 0) step(swiped > 0 ? -1 : 1);
+          }}
+          onPointerCancel={() => {
+            touchFrom.current = null;
+          }}
+        >
+          {WEEKDAYS.map((label) => (
             <span
-              key={date}
-              // A cell is a small picture of one day. Without a role the label
-              // is not exposed at all — `getByLabelText` would still find it,
-              // which is exactly how that goes unnoticed.
-              role="img"
-              data-date={date}
-              data-level={day ? level : "none"}
-              data-col={weekdayOf(date)}
-              title={label}
-              aria-label={label}
-              className={shape}
-              style={paint}
+              // Keyed on the full weekday name: the rendered initial is not
+              // unique (two T's, two S's), the name is.
+              key={label}
+              aria-hidden="true"
+              className="text-center font-body text-3xs text-ink-faint"
             >
-              {date.slice(8)}
+              {label.slice(0, 1)}
             </span>
-          );
-        })}
+          ))}
+
+          {weeks.flatMap((week) =>
+            week.cells.map((cell) =>
+              cell.date === null ? (
+                // The blanks before the 1st and after the last. Marked so the
+                // count is assertable: a calendar that pads by the wrong number
+                // puts every date in the wrong column while still looking like
+                // a calendar. The TRAILING pads keep the last row full, so the
+                // score column beside it has a row to line up against.
+                <span key={cell.key} data-pad={cell.side} aria-hidden="true" />
+              ) : (
+                <DayCell
+                  key={cell.key}
+                  date={cell.date}
+                  day={tally.get(cell.date)}
+                  today={today}
+                  onSelectDay={onSelectDay}
+                />
+              ),
+            ),
+          )}
+        </div>
+
+        <WeekScoreColumn scores={weeks.map((week) => week.score)} />
       </div>
 
       <div className="flex items-center gap-2 font-body text-2xs text-ink-muted">
@@ -250,6 +251,68 @@ export function Heatmap({ days, today, onSelectDay }: HeatmapProps) {
         <span>More</span>
       </div>
     </figure>
+  );
+}
+
+/** One day of the month. */
+function DayCell({
+  date,
+  day,
+  today,
+  onSelectDay,
+}: {
+  date: LocalDate;
+  day?: DayTally;
+  today: LocalDate;
+  onSelectDay?: (date: LocalDate) => void;
+}) {
+  // A day inside the month but outside the reported window — later this week,
+  // or before the account existed. It gets the empty shade but says something
+  // different, because "nothing scheduled" is a claim about a day nobody has
+  // data for.
+  const level = day ? String(heatLevel(day)) : "empty";
+  const label = labelFor(date, day);
+  const shape = `flex aspect-square items-center justify-center rounded-md font-numeric text-2xs${
+    date === today ? " ring-2 ring-ring-today" : ""
+  }`;
+  const paint = { background: LEVEL_COLOUR[level], color: LEVEL_INK[level] };
+
+  // A day with nothing finished opens nothing: a dialog reading "you finished
+  // nothing that day" is a punishment, not a review.
+  const reviewable = Boolean(onSelectDay) && (day?.done ?? 0) > 0;
+
+  return reviewable ? (
+    <button
+      type="button"
+      data-date={date}
+      data-level={level}
+      data-col={weekdayOf(date)}
+      title={label}
+      // The name says what is in the day AND that it opens. A cell that reads
+      // only as a picture gives a screen reader no reason to press it.
+      aria-label={`${label}. Review this day`}
+      onClick={() => onSelectDay?.(date)}
+      className={`${shape} cursor-pointer outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan`}
+      style={paint}
+    >
+      {date.slice(8)}
+    </button>
+  ) : (
+    <span
+      // A cell is a small picture of one day. Without a role the label is not
+      // exposed at all — `getByLabelText` would still find it, which is exactly
+      // how that goes unnoticed.
+      role="img"
+      data-date={date}
+      data-level={day ? level : "none"}
+      data-col={weekdayOf(date)}
+      title={label}
+      aria-label={label}
+      className={shape}
+      style={paint}
+    >
+      {date.slice(8)}
+    </span>
   );
 }
 

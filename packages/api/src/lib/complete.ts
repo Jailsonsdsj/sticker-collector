@@ -5,12 +5,13 @@ import {
   deriveStatus,
   type LocalDate,
   occurrencesInWindow,
+  scheduleOf,
   todayIn,
 } from "@sticker-collector/shared";
 import { and, eq, isNull } from "drizzle-orm";
 import type { Db } from "../db/client";
 import { occurrence, task } from "../db/schema";
-import { scheduleOf } from "./occurrences";
+
 import type { TaskRow } from "./tasks";
 import { timeZoneOf } from "./user";
 

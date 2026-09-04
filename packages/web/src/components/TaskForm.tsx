@@ -1,6 +1,6 @@
 import type { CreateTaskInput, Epic, Task, UpdateTask } from "@sticker-collector/shared";
 import { describeConflicts, findSlotConflicts } from "@sticker-collector/shared";
-import { useMemo, useReducer, useState } from "react";
+import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import {
   initialState,
   reduce,
@@ -64,6 +64,7 @@ export function TaskForm({
     task ? stateFromTask(task) : initialState({ epicId: defaultEpicId }),
   );
   const [saving, setSaving] = useState(false);
+  const titleRef = useRef<HTMLInputElement>(null);
   const [failed, setFailed] = useState<string | null>(null);
 
   /**
@@ -97,6 +98,35 @@ export function TaskForm({
   const patch = task ? toPatch(state, task) : null;
   // Editing with nothing changed is not an error, but there is nothing to send.
   const nothingToSave = clash || (task ? patch === null : problem !== null);
+
+  /**
+   * A new task opens with the cursor already in the title.
+   *
+   * There is exactly one thing to do on a blank form, and making the user tap
+   * the field to start doing it is a tap the form could have taken itself. On
+   * a phone it also brings the keyboard up with the sheet, so the first thing
+   * that happens is typing.
+   *
+   * **Only when it is blank.** On an edit the title is already written, and
+   * dropping a cursor into it puts a full field one keystroke from being
+   * replaced — the opposite of helpful on a screen someone opened to change
+   * the priority.
+   *
+   * Imperative rather than `autoFocus`: two forms are mounted at once
+   * (TD-44), and the attribute fires on mount for both regardless of which
+   * one is showing. This runs when a sheet *opens*, which only one ever does.
+   *
+   * Synchronously, and deliberately not on a later frame. `Sheet` calls
+   * `showModal()` — which moves focus itself — from its own effect, and a
+   * child's effects run before its parent's, so by here it has already
+   * happened. A deferred focus would land some milliseconds after the sheet is
+   * usable and take the cursor out of whichever field the user had reached
+   * first, which is worse than not focusing at all.
+   */
+  useEffect(() => {
+    if (!open || task) return;
+    titleRef.current?.focus();
+  }, [open, task]);
 
   async function save() {
     if (saving || nothingToSave) return;
@@ -147,6 +177,7 @@ export function TaskForm({
       }
     >
       <Input
+        ref={titleRef}
         id="task-title"
         label="Title"
         required

@@ -11,6 +11,9 @@ const review = (over: Partial<DailyReview> = {}): DailyReview => ({
     { taskId: "t2", title: "Post the form", epic: null, epicAccent: null, coins: 12 },
   ],
   coins: 42,
+  score: 67,
+  scheduled: 3,
+  done: 2,
   ...over,
 });
 
@@ -100,5 +103,51 @@ describe("a long title", () => {
     );
 
     expect(screen.getByText(long).className).not.toContain("truncate");
+  });
+});
+
+describe("how the day scored", () => {
+  it("leads with the score, because it is the one number that says how it went", () => {
+    render(
+      <DailyReviewDialog review={review({ score: 67, done: 2, scheduled: 3 })} onClose={vi.fn()} />,
+    );
+
+    expect(screen.getByText("67")).toBeInTheDocument();
+  });
+
+  it("says the fraction it is short for", () => {
+    // A percentage alone hides whether the day held two things or twenty.
+    render(
+      <DailyReviewDialog review={review({ score: 67, done: 2, scheduled: 3 })} onClose={vi.fn()} />,
+    );
+
+    expect(screen.getByText("2 of 3 scheduled")).toBeInTheDocument();
+  });
+
+  it("shows no score for a day that held nothing scheduled", () => {
+    // A rest day is not a nought. The list still stands: finishing something
+    // unscheduled is still finishing something.
+    render(
+      <DailyReviewDialog
+        review={review({ score: null, done: 0, scheduled: 0 })}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText(/scheduled$/)).not.toBeInTheDocument();
+    expect(screen.getByText(/things finished/)).toBeInTheDocument();
+  });
+
+  it("colours it by band", () => {
+    const { rerender } = render(
+      <DailyReviewDialog review={review({ score: 20 })} onClose={vi.fn()} />,
+    );
+    expect(screen.getByText("20").style.color).toContain("--color-prio-high-fg");
+
+    rerender(<DailyReviewDialog review={review({ score: 60 })} onClose={vi.fn()} />);
+    expect(screen.getByText("60").style.color).toContain("--color-coin");
+
+    rerender(<DailyReviewDialog review={review({ score: 90 })} onClose={vi.fn()} />);
+    expect(screen.getByText("90").style.color).toContain("--color-lime");
   });
 });

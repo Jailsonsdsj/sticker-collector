@@ -280,3 +280,68 @@ export function canComplete(input: OccurrenceInput, today: LocalDate): boolean {
   const status = deriveStatus(input, today);
   return status === "pending" || status === "missed";
 }
+
+/**
+ * A task's schedule in the shape the recurrence engine wants.
+ *
+ * **Shared, not server-only.** It lived in the Worker until the daily score
+ * needed to know how much a day had held, and a second copy in the browser
+ * would have been a second opinion on the `startsOn`/`createdAt` rule below —
+ * a rule that already has a bug named after it. One definition, two consumers,
+ * the same way validation works.
+ *
+ * The conversion that matters is `due_at` → `dueOn`. The column is a UTC
+ * instant; an occurrence is keyed by a civil date in the user's timezone. A
+ * one-off due at 2026-08-05T02:00:00Z falls on **2026-08-04** in São Paulo.
+ * Skip this and one-offs land a day late for every user west of UTC — silently,
+ * and only for late-evening due times.
+ *
+ * One-offs are deliberately NOT clamped to their creation day: giving a task a
+ * due date in the past ("this was due yesterday") is a thing a person means to
+ * do, unlike a routine quietly minting a week of failures it was never around
+ * for.
+ */
+export interface Schedulable {
+  type: "routine" | "oneoff";
+  weekdays: number | null;
+  startsOn: LocalDate | null;
+  endsOn: LocalDate | null;
+  /** A UTC instant, or null. */
+  dueAt: string | null;
+  /** A UTC instant. */
+  createdAt: string;
+}
+
+export function scheduleOf(task: Schedulable, timeZone: string): Schedule {
+  if (task.type === "routine") {
+    /**
+     * A routine cannot have been missed before it existed.
+     *
+     * `startsOn` is optional and the task form never sends it, so without this
+     * every routine generated occurrences all the way back to the start of
+     * whatever window was asked for. Add a Mon–Sun routine on Thursday and
+     * Monday, Tuesday and Wednesday of that same week immediately appeared as
+     * **missed** — three failures, before the task had been created.
+     *
+     * So the schedule begins at the later of `startsOn` and the day the task
+     * was created. A `startsOn` in the future still wins, because starting a
+     * routine next month is a real intention; one in the past is clamped,
+     * because backdating a routine cannot retroactively create days you failed
+     * to do it on.
+     *
+     * This corrects reports too: completion rate counts scheduled days, and it
+     * was being diluted by days before the routine existed.
+     */
+    const createdOn = localDateIn(timeZone, new Date(task.createdAt));
+    return {
+      kind: "routine",
+      weekdays: task.weekdays ?? 0,
+      startsOn: task.startsOn && task.startsOn > createdOn ? task.startsOn : createdOn,
+      endsOn: task.endsOn,
+    };
+  }
+  return {
+    kind: "oneoff",
+    dueOn: task.dueAt ? localDateIn(timeZone, new Date(task.dueAt)) : null,
+  };
+}

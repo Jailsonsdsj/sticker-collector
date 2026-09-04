@@ -24,6 +24,21 @@ const SIZE: Record<DialogSize, string> = {
   lg: "max-w-[min(36rem,calc(100vw-2.75rem))]",
 };
 
+/**
+ * The floor under a content-sized panel.
+ *
+ * A dialog still takes the width of what is in it — that has not changed, and
+ * it is why a one-line confirmation is not a billboard. What it may no longer
+ * do is get *narrow*: a short title over a short sentence collapsed to a column
+ * barely wider than its own buttons, which reads as a rendering fault rather
+ * than as a small dialog.
+ *
+ * Clamped to the viewport by the same `100vw - 2.75rem` the maxima use, so the
+ * floor can never push a panel off the side of a phone — on a 390px screen the
+ * clamp wins and the dialog is simply as wide as the screen allows.
+ */
+const MIN_WIDTH = "min-w-[min(20rem,calc(100vw-2.75rem))]";
+
 /** Destructive dialogs wear the magenta border and the darker ground, so the
  *  weight of the decision is legible before the copy is read. */
 const TONE: Record<DialogTone, { panel: string; title: string }> = {
@@ -76,6 +91,7 @@ export function Dialog({
       }
       className={cx(
         "m-auto border p-5 text-ink",
+        MIN_WIDTH,
         SIZE[size],
         "rounded-4xl shadow-lg animate-dialog-in",
         "backdrop:animate-scrim-in backdrop:bg-scrim-modal",
