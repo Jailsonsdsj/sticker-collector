@@ -109,7 +109,16 @@ describe("the calendar is Monday-first", () => {
     // like a calendar.
     render(<Heatmap days={run(12)} today={MONDAY} />);
 
-    expect(document.querySelectorAll("[data-pad]")).toHaveLength(2);
+    expect(document.querySelectorAll("[data-pad='lead']")).toHaveLength(2);
+  });
+
+  it("pads the last row out too, so the score lands in the score column", () => {
+    // New with the R column. Without trailing blanks the final week is short
+    // and its score sits under a Wednesday, which is a table that lies.
+    render(<Heatmap days={run(12)} today={MONDAY} />);
+
+    const cells = document.querySelectorAll("[data-pad], [data-date]").length;
+    expect(cells % 7).toBe(0);
   });
 
   it("runs the month in date order", () => {
@@ -380,5 +389,90 @@ describe("opening a day's review", () => {
     render(<Heatmap days={run(3)} today={MONDAY} />);
 
     expect(screen.queryByRole("button", { name: /Review this day/ })).toBeNull();
+  });
+});
+
+describe("the week score column", () => {
+  const dayAt = (date: string, scheduled: number, done: number): DayTally => ({
+    date,
+    scheduled,
+    done,
+  });
+
+  it("heads the column with R", () => {
+    render(<Heatmap days={run(12)} today={MONDAY} />);
+    expect(screen.getByTitle("Week score")).toHaveTextContent("R");
+  });
+
+  it("stands beside the calendar rather than inside it", () => {
+    // It was the eighth column of the calendar's own grid, and that is what it
+    // looked like: an `R` in the row of `M T W T F S S` reads as an eighth
+    // weekday. A month has seven columns.
+    const { container } = render(<Heatmap days={run(12)} today={MONDAY} />);
+
+    expect(container.querySelector(".grid")?.className).toContain("grid-cols-7");
+    const column = screen.getByRole("list", { name: "Week scores" });
+    expect(column).toBeInTheDocument();
+    expect(column.closest(".grid")).toBeNull();
+  });
+
+  it("scores a week from the days it shows", () => {
+    // 2026-07-01 is a Wednesday. Wed/Thu/Fri of that first row: 100, 50, 0.
+    render(
+      <Heatmap
+        days={[
+          dayAt("2026-07-01", 2, 2),
+          dayAt("2026-07-02", 2, 1),
+          dayAt("2026-07-03", 2, 0),
+          dayAt("2026-07-04", 0, 0),
+          dayAt("2026-07-05", 0, 0),
+        ]}
+        today="2026-07-20"
+      />,
+    );
+
+    expect(screen.getByLabelText("Week score 50 out of 100")).toBeInTheDocument();
+  });
+
+  it("colours by band, not by the heat ramp", () => {
+    // A verdict is not a density: the day cells stay on their one-hue scale and
+    // the score gets the three colours everyone reads as bad / middling / fine.
+    render(
+      <Heatmap days={[dayAt("2026-07-01", 2, 0), dayAt("2026-07-02", 2, 0)]} today="2026-07-20" />,
+    );
+
+    const cell = document.querySelector("[data-band]");
+    expect(cell?.getAttribute("data-band")).toBe("low");
+    expect((cell as HTMLElement).style.background).toContain("--color-score-low");
+  });
+
+  it("shows nothing for a week that held nothing schedulable", () => {
+    render(
+      <Heatmap days={[dayAt("2026-07-01", 0, 0), dayAt("2026-07-02", 0, 0)]} today="2026-07-20" />,
+    );
+
+    // Empty, not a nought. A zero there says the user failed a week that never
+    // asked anything of them — the attribute alone would still pass with one
+    // printed in the cell, which is how that would ship.
+    const cell = document.querySelector("[data-score='none']");
+    expect(cell).not.toBeNull();
+    expect(cell?.textContent).toBe("");
+    expect(document.querySelector("[data-band]")).toBeNull();
+  });
+
+  it("does not let an open today drag the current week down", () => {
+    // The week containing today contains hours that have not happened.
+    render(
+      <Heatmap days={[dayAt("2026-07-01", 2, 2), dayAt("2026-07-02", 8, 0)]} today="2026-07-02" />,
+    );
+
+    expect(screen.getByLabelText("Week score 100 out of 100")).toBeInTheDocument();
+  });
+
+  it("gives every row of the month a cell, filled or blank", () => {
+    const { container } = render(<Heatmap days={run(31)} today="2026-08-20" />);
+    const rows = container.querySelectorAll("[data-score], [data-band]").length;
+    const cells = container.querySelectorAll("[data-pad], [data-date]").length;
+    expect(rows).toBe(cells / 7);
   });
 });

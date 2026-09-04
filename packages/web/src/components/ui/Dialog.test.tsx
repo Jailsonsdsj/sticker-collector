@@ -38,3 +38,56 @@ describe("how much room a dialog gets", () => {
     }
   });
 });
+
+describe("how wide a dialog gets", () => {
+  const panel = () => document.querySelector("dialog") as HTMLElement;
+
+  it("still takes the width of what is in it", () => {
+    // Unchanged, and the reason a one-line confirmation is not a billboard.
+    render(
+      <Dialog open title="Short">
+        <p>Brief.</p>
+      </Dialog>,
+    );
+
+    expect(panel().className).toContain("max-w-");
+  });
+
+  it("has a floor under it, so a short one is not a column", () => {
+    // A short title over a short sentence collapsed to barely wider than its
+    // own buttons, which reads as a rendering fault rather than a small dialog.
+    render(
+      <Dialog open title="Short">
+        <p>Brief.</p>
+      </Dialog>,
+    );
+
+    expect(panel().className).toContain("min-w-");
+  });
+
+  it("clamps the floor to the viewport, so it cannot push off a phone", () => {
+    // The same `100vw - 2.75rem` the maxima use. Without it the minimum wins
+    // on a narrow screen and the dialog hangs off the side.
+    render(
+      <Dialog open title="Short">
+        <p>Brief.</p>
+      </Dialog>,
+    );
+
+    const min = panel()
+      .className.split(" ")
+      .find((c) => c.startsWith("min-w-"));
+    expect(min).toContain("100vw");
+  });
+
+  it("keeps the floor under a large dialog too", () => {
+    render(
+      <Dialog open size="lg" title="Long">
+        <p>Brief.</p>
+      </Dialog>,
+    );
+
+    expect(panel().className).toContain("min-w-");
+    expect(panel().className).toContain("36rem");
+  });
+});

@@ -820,3 +820,115 @@ describe("the steps section", () => {
     expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({ subtasks: [] });
   });
 });
+
+describe("getting started without a tap", () => {
+  it("puts the cursor in the title of a new task", () => {
+    // There is exactly one thing to do on a blank form. Making the user tap the
+    // field first is a tap the form could have taken itself — and on a phone it
+    // is what brings the keyboard up with the sheet.
+    setup();
+
+    expect(screen.getByLabelText(/title/i)).toHaveFocus();
+  });
+
+  it("leaves an edit alone, where the title is already written", async () => {
+    // A cursor dropped into a full field is one keystroke from replacing it,
+    // which is the opposite of helpful on a form opened to change the priority.
+    setup({ task: TASK });
+
+    await waitFor(() => expect(screen.getByLabelText(/title/i)).not.toHaveFocus());
+  });
+});
+
+describe("Enter continues the list of steps", () => {
+  const addFirst = async (user: ReturnType<typeof userEvent.setup>, text: string) => {
+    await user.click(screen.getByRole("button", { name: "Add a step" }));
+    await user.type(screen.getByLabelText("Step 1"), text);
+  };
+
+  it("adds a row and puts the cursor in it", async () => {
+    const user = userEvent.setup();
+    setup();
+    await addFirst(user, "Fill the can");
+
+    await user.keyboard("{Enter}");
+
+    expect(screen.getByLabelText("Step 2")).toBeInTheDocument();
+    expect(screen.getByLabelText("Step 2")).toHaveFocus();
+  });
+
+  it("inserts after the row it was pressed in, not at the bottom", async () => {
+    // What Enter means in a checklist: the new row belongs where the cursor
+    // was, not at the end of a list that may be scrolled away.
+    const user = userEvent.setup();
+    setup();
+    await addFirst(user, "First");
+    await user.click(screen.getByRole("button", { name: "Add another" }));
+    await user.type(screen.getByLabelText("Step 2"), "Last");
+
+    await user.click(screen.getByLabelText("Step 1"));
+    await user.keyboard("{Enter}");
+    await user.keyboard("Middle");
+
+    expect(screen.getByLabelText("Step 1")).toHaveValue("First");
+    expect(screen.getByLabelText("Step 2")).toHaveValue("Middle");
+    expect(screen.getByLabelText("Step 3")).toHaveValue("Last");
+  });
+
+  it("does nothing on a row that is still blank", async () => {
+    // Pressing Enter twice would otherwise stack empty boxes — and an empty
+    // row is the natural way to say "that was the last one".
+    const user = userEvent.setup();
+    setup();
+    await user.click(screen.getByRole("button", { name: "Add a step" }));
+
+    await user.click(screen.getByLabelText("Step 1"));
+    await user.keyboard("{Enter}");
+
+    expect(screen.queryByLabelText("Step 2")).not.toBeInTheDocument();
+  });
+
+  it("does not submit the form", async () => {
+    // Enter in a field is the browser's submit gesture, and Save is not
+    // something to trip over halfway through a list.
+    const user = userEvent.setup();
+    const { onSubmit } = setup();
+    await fillValidRoutine(user);
+    await addFirst(user, "Fill the can");
+
+    await user.keyboard("{Enter}");
+
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("keeps the cursor moving down a list typed straight through", async () => {
+    // The gesture this exists for: type, Enter, type, Enter, without reaching
+    // for the button once.
+    const user = userEvent.setup();
+    setup();
+    await addFirst(user, "One");
+    await user.keyboard("{Enter}Two{Enter}Three");
+
+    expect(screen.getByLabelText("Step 1")).toHaveValue("One");
+    expect(screen.getByLabelText("Step 2")).toHaveValue("Two");
+    expect(screen.getByLabelText("Step 3")).toHaveValue("Three");
+  });
+
+  it("puts the cursor in the row the button adds, too", async () => {
+    const user = userEvent.setup();
+    setup();
+
+    await user.click(screen.getByRole("button", { name: "Add a step" }));
+
+    expect(screen.getByLabelText("Step 1")).toHaveFocus();
+  });
+
+  it("wears the colour of a control that does something", async () => {
+    // As `neutral` it read as disabled chrome under the fields rather than as
+    // the one control in the section, which is what it is.
+    setup();
+    const add = screen.getByRole("button", { name: "Add a step" });
+
+    expect(add.style.getPropertyValue("--ui-accent")).toBe("var(--color-cyan)");
+  });
+});

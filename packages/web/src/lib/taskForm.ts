@@ -83,7 +83,7 @@ export type TaskFormAction =
   | { kind: "priority"; value: Priority }
   | { kind: "epic"; value: string | null }
   | { kind: "subtask"; index: number; value: string }
-  | { kind: "addSubtask" }
+  | { kind: "addSubtask"; after?: number }
   | { kind: "removeSubtask"; index: number };
 
 /**
@@ -151,12 +151,18 @@ export function reduce(state: TaskFormState, action: TaskFormAction): TaskFormSt
       return { ...state, subtasks };
     }
 
-    case "addSubtask":
+    case "addSubtask": {
       // Capped so one task cannot outgrow the single batch its create is
       // written in. The button goes away at the ceiling rather than failing.
-      return state.subtasks.length >= MAX_SUBTASKS
-        ? state
-        : { ...state, subtasks: [...state.subtasks, ""] };
+      if (state.subtasks.length >= MAX_SUBTASKS) return state;
+
+      // `after` inserts, which is what Enter means in a checklist: the new row
+      // belongs where the cursor was, not at the bottom of a list the user may
+      // have scrolled away from. The button passes nothing and appends.
+      const subtasks = [...state.subtasks];
+      subtasks.splice(action.after === undefined ? subtasks.length : action.after + 1, 0, "");
+      return { ...state, subtasks };
+    }
 
     case "removeSubtask":
       return { ...state, subtasks: state.subtasks.filter((_, i) => i !== action.index) };

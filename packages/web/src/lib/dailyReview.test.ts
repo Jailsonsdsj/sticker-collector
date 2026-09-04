@@ -196,3 +196,55 @@ describe("showing it once a day", () => {
     expect(lastReviewedOn()).toBe("2026-08-03");
   });
 });
+
+describe("what the day scored", () => {
+  const routine = (over: Partial<Task> = {}): Task =>
+    task({ type: "routine", weekdays: 0b1111111, ...over });
+
+  it("compares what was done against what the day held", () => {
+    // The denominator is the SCHEDULE, not the occurrence rows: a row exists
+    // only once something is completed, so counting rows would make every day
+    // 100% by construction.
+    const tasks = [routine({ id: "a" }), routine({ id: "b" }), routine({ id: "c" })];
+    const review = buildReview(DAY, [done("a", DAY), done("b", DAY)], tasks, [], UTC);
+
+    expect(review.scheduled).toBe(3);
+    expect(review.done).toBe(2);
+    expect(review.score).toBe(67);
+  });
+
+  it("has no score on a day nothing was scheduled for", () => {
+    // A Sunday-only routine, reviewed on a Wednesday.
+    const review = buildReview(DAY, [], [routine({ id: "a", weekdays: 0 })], [], UTC);
+
+    expect(review.scheduled).toBe(0);
+    expect(review.score).toBeNull();
+  });
+
+  it("still lists unscheduled work on a day with no score", () => {
+    // Finishing something unscheduled is still finishing something — the score
+    // is absent, the list is not.
+    const capture = task({ id: "u", type: "oneoff", weekdays: null, dueAt: null });
+    const review = buildReview(DAY, [done("u", DAY)], [capture], [], UTC);
+
+    expect(review.score).toBeNull();
+    expect(review.rows).toHaveLength(1);
+  });
+
+  it("scores a day where nothing was done as zero, not as nothing", () => {
+    const review = buildReview(DAY, [], [routine({ id: "a" })], [], UTC);
+
+    expect(review.score).toBe(0);
+  });
+
+  it("ignores a deleted task, which schedules nothing", () => {
+    const tasks = [
+      routine({ id: "a" }),
+      routine({ id: "gone", deletedAt: "2026-08-01T00:00:00Z" }),
+    ];
+    const review = buildReview(DAY, [done("a", DAY)], tasks, [], UTC);
+
+    expect(review.scheduled).toBe(1);
+    expect(review.score).toBe(100);
+  });
+});

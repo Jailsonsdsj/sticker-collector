@@ -1,4 +1,4 @@
-import type { InputHTMLAttributes } from "react";
+import type { InputHTMLAttributes, Ref } from "react";
 import { cx } from "./cx";
 import { Field, type FieldProps } from "./Field";
 
@@ -38,6 +38,15 @@ export interface InputProps
   tone?: InputTone;
   size?: InputSize;
   invalid?: boolean;
+  /**
+   * A handle on the actual `<input>`.
+   *
+   * Declared rather than forwarded: in React 19 `ref` is an ordinary prop on a
+   * function component, so it rides through `...rest` onto the element with no
+   * `forwardRef` wrapper. It is only the *type* that has to say so —
+   * `InputHTMLAttributes` does not carry it.
+   */
+  ref?: Ref<HTMLInputElement>;
 }
 
 export function Input({

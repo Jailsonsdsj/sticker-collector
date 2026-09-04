@@ -1,6 +1,20 @@
+import { scoreBand } from "@sticker-collector/shared";
 import type { CSSProperties } from "react";
 import type { DailyReview } from "../lib/dailyReview";
 import { Badge, Button, Coin, Dialog } from "./ui";
+
+/**
+ * The score as ink rather than as a filled cell.
+ *
+ * The calendar's R column paints a background because it is one square among
+ * forty and has to be readable at a glance; here the number is the largest
+ * thing on the screen and a coloured panel behind it would be shouting twice.
+ */
+const BAND_INK: Record<string, string> = {
+  low: "var(--color-prio-high-fg)",
+  mid: "var(--color-coin)",
+  high: "var(--color-lime)",
+};
 
 export interface DailyReviewDialogProps {
   review: DailyReview | null;
@@ -42,6 +56,31 @@ export function DailyReviewDialog({ review, heading, onClose }: DailyReviewDialo
         </Button>
       }
     >
+      {/*
+        The score first, because it is the one number that says how the day
+        went. What follows says what it was made of.
+
+        Absent when the day held nothing scheduled — a day with no work on it
+        has no score, and printing 0 there would call a rest day a failure. The
+        list below still stands: finishing something unscheduled is still
+        finishing something.
+      */}
+      {review.score !== null && (
+        <div className="flex items-baseline gap-3">
+          <span
+            className="font-numeric text-5xl leading-none font-bold"
+            style={{ color: BAND_INK[scoreBand(review.score)] }}
+          >
+            {review.score}
+          </span>
+          <span className="font-body text-sm text-ink-muted">
+            {/* The fraction the score is short for. A percentage alone hides
+                whether the day held two things or twenty. */}
+            {review.done} of {review.scheduled} scheduled
+          </span>
+        </div>
+      )}
+
       <p className="font-body text-md text-ink-secondary">
         {review.rows.length === 1 ? "One thing finished" : `${review.rows.length} things finished`},
         worth{" "}
