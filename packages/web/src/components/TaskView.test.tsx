@@ -5,6 +5,8 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { schedule, TaskView } from "./TaskView";
 
+const TODAY = "2026-09-05";
+
 const task = (over: Partial<Task> = {}): Task =>
   ({
     id: "t1",
@@ -24,6 +26,7 @@ const task = (over: Partial<Task> = {}): Task =>
     startedAt: null,
     slots: [],
     subtasks: [],
+    blockUntilSteps: false,
     createdAt: "2026-07-01T00:00:00Z",
     deletedAt: null,
     lastCompletedOn: null,
@@ -240,5 +243,66 @@ describe("picking a task up", () => {
 
     expect(screen.queryByRole("button", { name: "Start" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Reopen" })).toBeInTheDocument();
+  });
+});
+
+describe("a task that waits for its steps", () => {
+  const gated = (over: Partial<Task> = {}) =>
+    task({
+      blockUntilSteps: true,
+      subtasks: [
+        { id: "a", title: "Write it", position: 0, doneOn: null },
+        { id: "b", title: "Send it", position: 1, doneOn: null },
+      ],
+      ...over,
+    });
+
+  it("says so before the button is pressed, not after it is refused", () => {
+    // Being told "no" by a button you already tapped is a worse way to learn a
+    // rule than seeing it stated beside the steps it is about.
+    open({ task: gated(), today: TODAY, onToggleSubtask: vi.fn() });
+
+    expect(screen.getByRole("status")).toHaveTextContent(/2 of 2 left/);
+  });
+
+  it("will not let Done be pressed while a step is open", () => {
+    open({ task: gated(), today: TODAY, onToggleSubtask: vi.fn() });
+
+    expect(screen.getByRole("button", { name: "Done" })).toBeDisabled();
+  });
+
+  it("lets go once every step is ticked", () => {
+    const finished = gated({
+      subtasks: [
+        { id: "a", title: "Write it", position: 0, doneOn: TODAY },
+        { id: "b", title: "Send it", position: 1, doneOn: TODAY },
+      ],
+    });
+    open({ task: finished, today: TODAY, onToggleSubtask: vi.fn() });
+
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Done" })).toBeEnabled();
+  });
+
+  it("still lets a finished one be reopened", () => {
+    // Someone who ticked by mistake has to be able to undo it: the gate is on
+    // closing, not on correcting.
+    open({ task: gated(), today: TODAY, done: true, onToggleSubtask: vi.fn() });
+
+    expect(screen.getByRole("button", { name: "Reopen" })).toBeEnabled();
+  });
+
+  it("says nothing on a task that never asked to be blocked", () => {
+    open({ task: gated({ blockUntilSteps: false }), today: TODAY, onToggleSubtask: vi.fn() });
+
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Done" })).toBeEnabled();
+  });
+
+  it("says nothing on a task with no steps, however the flag is set", () => {
+    open({ task: gated({ subtasks: [] }), today: TODAY, onToggleSubtask: vi.fn() });
+
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Done" })).toBeEnabled();
   });
 });

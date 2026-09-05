@@ -6,11 +6,12 @@ import {
   type LocalDate,
   occurrencesInWindow,
   scheduleOf,
+  stepsLeft,
   todayIn,
 } from "@sticker-collector/shared";
 import { and, eq, isNull } from "drizzle-orm";
 import type { Db } from "../db/client";
-import { occurrence, task } from "../db/schema";
+import { occurrence, subtask, task } from "../db/schema";
 
 import type { TaskRow } from "./tasks";
 import { timeZoneOf } from "./user";
@@ -115,6 +116,44 @@ export function completionGuard(
       : { error: "an occurrence cannot be completed before its scheduled date", status: 400 };
   }
   return null;
+}
+
+/**
+ * Refuses a completion whose steps are not finished.
+ *
+ * Its own query rather than part of `Loaded`: only a task carrying the flag
+ * pays for it, and the completion path is the hottest thing in the Worker.
+ *
+ * **A task with no steps is never blocked.** The flag can outlive the list — a
+ * task can carry the intention while the list is still being written, and
+ * clearing the list must not leave a task nobody can ever close.
+ *
+ * Steps are judged against the day being completed, not against today. A
+ * routine's checklist resets daily (`subtaskDone`), so ticking today's steps
+ * does not close last Tuesday: those steps were not done on Tuesday, and the
+ * board would say so too.
+ */
+export async function stepsGuard(
+  database: Db,
+  loaded: Loaded,
+  scheduledOn: LocalDate,
+): Promise<{ error: string; status: 409 } | null> {
+  if (!loaded.task.blockUntilSteps) return null;
+
+  const steps = await database
+    .select({ doneOn: subtask.doneOn })
+    .from(subtask)
+    .where(eq(subtask.taskId, loaded.task.id));
+
+  if (steps.length === 0) return null;
+
+  const left = stepsLeft(steps, loaded.task.type, scheduledOn);
+  if (left === 0) return null;
+
+  return {
+    error: `finish the steps first — ${left} of ${steps.length} left`,
+    status: 409,
+  };
 }
 
 /**

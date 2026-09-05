@@ -156,6 +156,7 @@ const taskCommonFields = {
   priority: prioritySchema.default("medium"),
   /** Absent means none. An empty array on an edit means "remove them all". */
   subtasks: subtaskInputSchema.optional(),
+  blockUntilSteps: z.boolean().optional(),
 };
 
 const createRoutineSchema = z
@@ -218,6 +219,7 @@ export const updateTaskSchema = z
     rewardCoins: rewardCoinsSchema,
     priority: prioritySchema,
     subtasks: subtaskInputSchema,
+    blockUntilSteps: z.boolean(),
     weekdays: weekdayMaskSchema,
     startsOn: localDateSchema.nullish(),
     endsOn: localDateSchema.nullish(),
@@ -290,6 +292,14 @@ export const taskSchema = z.object({
   slots: z.array(routineSlotSchema),
   /** The steps inside it, in the author's order. Empty is the normal case. */
   subtasks: z.array(subtaskSchema),
+  /**
+   * Whether closing this task waits for its steps.
+   *
+   * Meaningless without steps, and deliberately not enforced to be: a task can
+   * carry the intention while its list is still being written, and clearing the
+   * list should not silently clear the intention with it.
+   */
+  blockUntilSteps: z.boolean(),
   createdAt: instantSchema,
   deletedAt: instantSchema.nullable(),
   /**

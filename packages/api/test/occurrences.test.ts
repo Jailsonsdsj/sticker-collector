@@ -484,3 +484,138 @@ describe("a user with a lot of tasks", () => {
     expect((await call("GET", "/api/reports/momentum")).status).toBe(200);
   });
 });
+
+describe("blocking Done until the steps are finished", () => {
+  const today = () => todayIn("UTC");
+
+  const gated = async (steps: string[], blockUntilSteps = true) =>
+    createTask({
+      type: "oneoff",
+      title: "Ship it",
+      effortMinutes: 30,
+      subtasks: steps,
+      blockUntilSteps,
+    });
+
+  const complete = (taskId: string, scheduledOn = today()) =>
+    call("POST", "/api/occurrences/complete", { taskId, scheduledOn });
+
+  const tick = async (taskId: string, subtaskId: string) =>
+    call("PATCH", `/api/tasks/${taskId}/subtasks/${subtaskId}`, { done: true });
+
+  const stepsOf = async (taskId: string) => {
+    const list = (await (await call("GET", "/api/tasks")).json()) as {
+      id: string;
+      subtasks: { id: string }[];
+    }[];
+    return list.find((t) => t.id === taskId)?.subtasks ?? [];
+  };
+
+  it("refuses while a step is open, and says how many", async () => {
+    // Enforced HERE and not in the client: every way a task can be closed —
+    // the list, the sheet, the weekly grid, bulk select — arrives at this
+    // endpoint, and a rule the client alone keeps is a rule that holds until
+    // one screen forgets it.
+    const task = await gated(["Write it", "Send it"]);
+
+    const res = await complete(task.id);
+    expect(res.status).toBe(409);
+    expect((await res.json()) as { error: string }).toEqual({
+      error: "finish the steps first — 2 of 2 left",
+    });
+  });
+
+  it("counts down as steps are ticked", async () => {
+    const task = await gated(["Write it", "Send it"]);
+    const steps = await stepsOf(task.id);
+    await tick(task.id, steps[0]?.id as string);
+
+    const res = await complete(task.id);
+    expect((await res.json()) as { error: string }).toEqual({
+      error: "finish the steps first — 1 of 2 left",
+    });
+  });
+
+  it("lets it through once every step is done", async () => {
+    const task = await gated(["Write it", "Send it"]);
+    for (const step of await stepsOf(task.id)) await tick(task.id, step.id);
+
+    expect((await complete(task.id)).status).toBe(200);
+  });
+
+  it("pays nothing while it is refused", async () => {
+    // A 409 must leave the wallet exactly as it was — the refusal happens
+    // before the batch that writes the ledger.
+    const before = await countRows("ledger");
+    const task = await gated(["Write it"]);
+
+    await complete(task.id);
+
+    expect(await countRows("ledger")).toBe(before);
+  });
+
+  it("does not block a task that never asked to be blocked", async () => {
+    const task = await gated(["Write it"], false);
+    expect((await complete(task.id)).status).toBe(200);
+  });
+
+  it("does not block a task with no steps, however the flag is set", async () => {
+    // The flag can outlive the list. Blocking on an empty checklist would leave
+    // a task nobody can ever close.
+    const task = await gated([], true);
+    expect((await complete(task.id)).status).toBe(200);
+  });
+
+  it("still lets a blocked task be reopened", async () => {
+    // Someone who ticked by mistake has to be able to undo it — the gate is on
+    // closing, not on correcting.
+    const task = await gated(["Write it"]);
+    const steps = await stepsOf(task.id);
+    await tick(task.id, steps[0]?.id as string);
+    expect((await complete(task.id)).status).toBe(200);
+
+    const res = await call("POST", "/api/occurrences/uncomplete", {
+      taskId: task.id,
+      scheduledOn: today(),
+    });
+    expect(res.status).toBe(200);
+  });
+});
+
+describe("a routine's steps are judged against the day being closed", () => {
+  it("refuses yesterday when the steps were ticked today", async () => {
+    // The interesting half of the rule, and the half a second implementation
+    // would get wrong: a routine's checklist resets daily, so ticking today's
+    // steps does not close last night. The board says the same thing — those
+    // steps show as undone on yesterday's run.
+    const task = await createOldTask({
+      type: "routine",
+      title: "Stretch",
+      effortMinutes: 15,
+      weekdays: WEEKDAYS_MASK_ALL,
+      subtasks: ["Roll the mat"],
+      blockUntilSteps: true,
+    });
+
+    const list = (await (await call("GET", "/api/tasks")).json()) as {
+      id: string;
+      subtasks: { id: string }[];
+    }[];
+    const step = list.find((t) => t.id === task.id)?.subtasks[0];
+    // Ticked TODAY — the server stamps its own day.
+    await call("PATCH", `/api/tasks/${task.id}/subtasks/${step?.id}`, { done: true });
+
+    const yesterday = await call("POST", "/api/occurrences/complete", {
+      taskId: task.id,
+      scheduledOn: addDays(todayIn("UTC"), -1),
+    });
+    expect(yesterday.status).toBe(409);
+
+    // And today goes through, on the same steps.
+    const now = await call("POST", "/api/occurrences/complete", {
+      taskId: task.id,
+      scheduledOn: todayIn("UTC"),
+    });
+    expect(now.status).toBe(200);
+  });
+});

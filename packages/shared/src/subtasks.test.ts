@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  blockedBySteps,
   MAX_SUBTASKS,
   orderSubtasks,
   type Subtask,
+  stepsLeft,
   subtaskDone,
   subtasksDone,
 } from "./subtasks.js";
@@ -104,5 +106,58 @@ describe("how many a task may hold", () => {
     // One insert per step plus the task itself, and D1 takes 100 statements.
     expect(MAX_SUBTASKS).toBeLessThanOrEqual(99);
     expect(MAX_SUBTASKS).toBeGreaterThan(0);
+  });
+});
+
+describe("whether the steps block closing", () => {
+  const gated = (subtasks: Subtask[], over: Record<string, unknown> = {}) => ({
+    blockUntilSteps: true,
+    type: "routine" as const,
+    subtasks,
+    ...over,
+  });
+
+  it("blocks while a step is open", () => {
+    expect(blockedBySteps(gated([step({ id: "a" })]), TODAY)).toBe(true);
+  });
+
+  it("lets go once every step is ticked", () => {
+    expect(blockedBySteps(gated([step({ id: "a", doneOn: TODAY })]), TODAY)).toBe(false);
+  });
+
+  it("never blocks a task with no steps, however the flag is set", () => {
+    // The flag can outlive the list — a task can carry the intention while its
+    // checklist is still being written — and clearing the list must not leave
+    // behind a task nobody can ever close.
+    expect(blockedBySteps(gated([]), TODAY)).toBe(false);
+  });
+
+  it("never blocks a task that did not ask to be blocked", () => {
+    expect(blockedBySteps(gated([step({ id: "a" })], { blockUntilSteps: false }), TODAY)).toBe(
+      false,
+    );
+  });
+
+  it("judges a routine's steps against the day being closed", () => {
+    // Ticking today's steps does not close last Tuesday: those steps were not
+    // done on Tuesday, and the board says so too.
+    const yesterdays = [step({ id: "a", doneOn: YESTERDAY })];
+
+    expect(blockedBySteps(gated(yesterdays), YESTERDAY)).toBe(false);
+    expect(blockedBySteps(gated(yesterdays), TODAY)).toBe(true);
+  });
+
+  it("lets a one-off's older ticks count, because it has no next run", () => {
+    const older = [step({ id: "a", doneOn: YESTERDAY })];
+    expect(blockedBySteps(gated(older, { type: "oneoff" }), TODAY)).toBe(false);
+  });
+
+  it("counts what is left, for the message that says so", () => {
+    const steps = [step({ id: "a", doneOn: TODAY }), step({ id: "b" }), step({ id: "c" })];
+    expect(stepsLeft(steps, "routine", TODAY)).toBe(2);
+  });
+
+  it("counts none left when they are all done", () => {
+    expect(stepsLeft([step({ id: "a", doneOn: TODAY })], "routine", TODAY)).toBe(0);
   });
 });
