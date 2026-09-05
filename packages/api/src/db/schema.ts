@@ -136,6 +136,15 @@ export const task = sqliteTable(
     /** ISO instant when work started, or null. Does not expire; see the shared
      *  read model for why it is not a date. */
     startedAt: text("started_at"),
+    /**
+     * Refuse to close this task until every step is ticked.
+     *
+     * A discipline the author sets on themselves, not a validation rule — which
+     * is why it lives on the task rather than being inferred. Off by default:
+     * a checklist is a reminder for most tasks and a gate for a few, and making
+     * every list a gate would turn a helpful note into an obstruction.
+     */
+    blockUntilSteps: integer("block_until_steps", { mode: "boolean" }).notNull().default(false),
     createdAt: text("created_at").notNull(),
     deletedAt: text("deleted_at"),
   },

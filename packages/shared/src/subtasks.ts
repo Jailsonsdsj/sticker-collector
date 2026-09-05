@@ -77,3 +77,36 @@ export function orderSubtasks(
     return a.position - b.position;
   });
 }
+
+/**
+ * How many steps are still open on the day being closed.
+ *
+ * The one place both sides ask the question: the Worker refuses the completion
+ * with it, and the client explains the refusal before it happens. Two
+ * implementations would be two definitions of "finished", and the interesting
+ * half — that a routine's steps are judged against *that day* — is exactly the
+ * part a second copy would get wrong.
+ */
+export function stepsLeft(
+  subtasks: readonly Pick<Subtask, "doneOn">[],
+  taskType: "routine" | "oneoff",
+  on: LocalDate,
+): number {
+  return subtasks.filter((step) => !subtaskDone(step, taskType, on)).length;
+}
+
+/**
+ * Whether closing this task has to wait.
+ *
+ * **A task with no steps is never blocked**, however the flag is set. The flag
+ * can outlive the list — a task can carry the intention while its checklist is
+ * still being written — and clearing the list must not leave behind a task
+ * nobody can ever close.
+ */
+export function blockedBySteps(
+  task: { blockUntilSteps: boolean; type: "routine" | "oneoff"; subtasks: readonly Subtask[] },
+  on: LocalDate,
+): boolean {
+  if (!task.blockUntilSteps || task.subtasks.length === 0) return false;
+  return stepsLeft(task.subtasks, task.type, on) > 0;
+}

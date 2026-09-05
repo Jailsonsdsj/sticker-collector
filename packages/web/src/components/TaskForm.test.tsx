@@ -261,6 +261,7 @@ const TASK: Task = {
   startedAt: null,
   slots: [],
   subtasks: [],
+  blockUntilSteps: false,
   createdAt: "2026-07-01T00:00:00Z",
   deletedAt: null,
   lastCompletedOn: null,
@@ -500,6 +501,7 @@ describe("saying when a routine runs", () => {
       // has to be named here — `subtasks` included, or `stateFromTask` maps
       // over undefined.
       subtasks: [],
+      blockUntilSteps: false,
       type: "routine" as const,
       weekdays: 0b0000001,
       effortMinutes: 60,

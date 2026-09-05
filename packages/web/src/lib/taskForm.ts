@@ -67,6 +67,8 @@ export interface TaskFormState {
    * take the field away mid-keystroke. Blanks are trimmed away on the way out.
    */
   subtasks: string[];
+  /** Refuse to close the task until every step is ticked. */
+  blockUntilSteps: boolean;
   priority: Priority;
   epicId: string | null;
 }
@@ -84,7 +86,8 @@ export type TaskFormAction =
   | { kind: "epic"; value: string | null }
   | { kind: "subtask"; index: number; value: string }
   | { kind: "addSubtask"; after?: number }
-  | { kind: "removeSubtask"; index: number };
+  | { kind: "removeSubtask"; index: number }
+  | { kind: "blockUntilSteps"; value: boolean };
 
 /**
  * Effort presets, shortest first. Seven of them no longer fit across a phone,
@@ -127,6 +130,7 @@ export function initialState(options: { epicId?: string | null } = {}): TaskForm
     rewardLocked: false,
     pinnedToday: false,
     subtasks: [],
+    blockUntilSteps: false,
     priority: "medium",
     epicId: options.epicId ?? null,
   };
@@ -166,6 +170,9 @@ export function reduce(state: TaskFormState, action: TaskFormAction): TaskFormSt
 
     case "removeSubtask":
       return { ...state, subtasks: state.subtasks.filter((_, i) => i !== action.index) };
+
+    case "blockUntilSteps":
+      return { ...state, blockUntilSteps: action.value };
 
     case "title":
     case "description":
@@ -339,6 +346,7 @@ export function toPayload(state: TaskFormState): CreateTaskInput | null {
     title: state.title.trim(),
     description: state.description.trim() || null,
     subtasks: cleanSubtasks(state),
+    blockUntilSteps: state.blockUntilSteps,
     url: state.url.trim() || null,
     epicId: state.epicId,
     effortMinutes,
@@ -412,6 +420,7 @@ export function stateFromTask(task: Task): TaskFormState {
     // The titles only. Their ticks live on the server and are not the form's
     // business — editing the list replaces it, which is what clears them.
     subtasks: task.subtasks.map((step) => step.title),
+    blockUntilSteps: task.blockUntilSteps,
     priority: task.priority,
     epicId: task.epicId,
   };
@@ -443,6 +452,7 @@ export function toPatch(state: TaskFormState, original: Task): UpdateTask | null
   if (steps.length !== before.length || steps.some((title, i) => title !== before[i])) {
     patch.subtasks = steps;
   }
+  set("blockUntilSteps", state.blockUntilSteps, original.blockUntilSteps);
   set("url", state.url.trim() || null, original.url);
   set("epicId", state.epicId, original.epicId);
   set("effortMinutes", Number(state.effortMinutes), original.effortMinutes);

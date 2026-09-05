@@ -1,7 +1,7 @@
 import { MAX_SUBTASKS } from "@sticker-collector/shared";
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import type { TaskFormAction, TaskFormState } from "../../lib/taskForm";
-import { Button, Field, Input } from "../ui";
+import { Button, Checkbox, Field, Input } from "../ui";
 
 export interface SubtaskFieldsProps {
   state: TaskFormState;
@@ -96,6 +96,33 @@ export function SubtaskFields({ state, dispatch }: SubtaskFieldsProps) {
             </Button>
           </div>
         ))}
+
+        {/* Only once there is a step to wait for. A gate offered before the
+            list exists is a promise about nothing — and the checkbox appearing
+            as the first step is typed is itself the explanation of what it is
+            for. */}
+        {state.subtasks.length > 0 && (
+          // A `div` around a `label htmlFor`, not a label around the checkbox:
+          // `Checkbox` renders its own `<label>` and nesting one inside another
+          // is not valid HTML.
+          <div className="flex items-start gap-3 py-1">
+            <Checkbox
+              id="task-block-until-steps"
+              checked={state.blockUntilSteps}
+              onChange={(value) => dispatch({ kind: "blockUntilSteps", value })}
+              label="Block Done until finishing steps"
+            />
+            <label
+              htmlFor="task-block-until-steps"
+              className="flex-1 cursor-pointer font-body text-sm text-ink-secondary"
+            >
+              Block Done until finishing steps
+              <span className="block font-body text-2xs text-ink-dim">
+                The task refuses to close while a step is still open.
+              </span>
+            </label>
+          </div>
+        )}
 
         {/* Absent at the ceiling rather than disabled: a control that can never
             do anything is noise on the screen it sits on. */}

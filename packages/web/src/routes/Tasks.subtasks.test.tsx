@@ -45,6 +45,7 @@ const task = (over: Partial<Task>): Task => ({
   startedAt: null,
   slots: [],
   subtasks: [],
+  blockUntilSteps: false,
   createdAt: "2026-07-01T00:00:00Z",
   deletedAt: null,
   lastCompletedOn: null,
@@ -192,5 +193,67 @@ describe("ticking a step from the sheet", () => {
     const { sheet } = await openSheet();
 
     expect(sheet.queryByText(/^\d+\/\d+$/)).not.toBeInTheDocument();
+  });
+});
+
+describe("ticking a task that waits for its steps", () => {
+  const gated = () =>
+    task({
+      blockUntilSteps: true,
+      subtasks: [
+        step({ id: "a", title: "Write it", position: 0 }),
+        step({ id: "b", title: "Send it", position: 1 }),
+      ],
+    });
+
+  const tickTheRow = async () => {
+    const user = userEvent.setup();
+    render(<Tasks />, { wrapper });
+    await waitFor(() => expect(screen.getByText("Water the plants")).toBeInTheDocument());
+    // The row's own box, not the sheet's — this is the path that used to send
+    // a completion the server would refuse.
+    await user.click(screen.getAllByRole("checkbox")[0] as HTMLElement);
+    return user;
+  };
+
+  it("stops before sending, rather than being refused after the undo window", async () => {
+    // A checkbox that ticks, waits out its undo window and springs back is a
+    // much worse way to learn about a gate than being told it is there.
+    tasks = [gated()];
+    await tickTheRow();
+
+    expect(await screen.findByText("Steps first")).toBeInTheDocument();
+    expect(
+      fetchMock.mock.calls.filter(([url]) => String(url).includes("/occurrences/complete")),
+    ).toHaveLength(0);
+  });
+
+  it("says which steps are left, not only how many", async () => {
+    tasks = [gated()];
+    await tickTheRow();
+
+    await screen.findByText("Steps first");
+    const dialog = within(document.querySelector("dialog[open]") as HTMLElement);
+    expect(dialog.getByText("Write it")).toBeInTheDocument();
+    expect(dialog.getByText("Send it")).toBeInTheDocument();
+  });
+
+  it("lets the tick through once the steps are done", async () => {
+    tasks = [
+      task({
+        blockUntilSteps: true,
+        subtasks: [step({ id: "a", doneOn: TODAY })],
+      }),
+    ];
+    await tickTheRow();
+
+    expect(screen.queryByText("Steps first")).not.toBeInTheDocument();
+  });
+
+  it("lets a task that never asked to be blocked through", async () => {
+    tasks = [task({ blockUntilSteps: false, subtasks: [step({ id: "a" })] })];
+    await tickTheRow();
+
+    expect(screen.queryByText("Steps first")).not.toBeInTheDocument();
   });
 });

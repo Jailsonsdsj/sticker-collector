@@ -32,6 +32,10 @@ export const PATCHABLE = [
   // says nothing about which day it may be completed on, so none of the
   // scheduling rules apply to it.
   "startedAt",
+  // A discipline the author sets on themselves, so it is editable at any time
+  // and on any kind of task — a one-off with a checklist can be gated exactly
+  // as a routine can.
+  "blockUntilSteps",
 ] as const;
 
 export type PatchField = (typeof PATCHABLE)[number];
@@ -56,6 +60,7 @@ export function newTaskRow(userId: string, input: CreateTask): TaskInsert {
     dueAt: input.type === "oneoff" ? (input.dueAt ?? null) : null,
     // Only an undated one-off may carry a pin — see `buildTaskPatch`.
     pinnedOn: input.type === "oneoff" && !input.dueAt ? (input.pinnedOn ?? null) : null,
+    blockUntilSteps: input.blockUntilSteps ?? false,
     createdAt: new Date().toISOString(),
     deletedAt: null,
   };
@@ -172,6 +177,7 @@ export function toTask(
     // Author order, so the client sorts only by doneness. Ordering here rather
     // than in every reader is the same call `slots` already made.
     subtasks: [...subtasks].sort((a, b) => a.position - b.position),
+    blockUntilSteps: row.blockUntilSteps,
     createdAt: row.createdAt,
     deletedAt: row.deletedAt,
     lastCompletedOn,

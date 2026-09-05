@@ -3,7 +3,7 @@ import { and, between, eq, inArray } from "drizzle-orm";
 import { Hono } from "hono";
 import { db } from "../db/client";
 import { ledger, occurrence } from "../db/schema";
-import { completionGuard, resolveOccurrence, rewardFor } from "../lib/complete";
+import { completionGuard, resolveOccurrence, rewardFor, stepsGuard } from "../lib/complete";
 import {
   MAX_WINDOW_DAYS,
   materialiseWindow,
@@ -94,6 +94,13 @@ occurrenceRoutes.post("/complete", async (c) => {
 
   const refused = completionGuard(r.loaded, r.today, r.ref.scheduledOn);
   if (refused) return c.json({ error: refused.error }, refused.status);
+
+  // Enforced HERE, not in the client. Every way a task can be closed — the
+  // list, the sheet, the weekly grid, bulk select — arrives at this endpoint,
+  // and a rule the client alone keeps is a rule that holds until one screen
+  // forgets it. Which is the shape of the problem this exists to solve.
+  const unfinished = await stepsGuard(database, r.loaded, r.ref.scheduledOn);
+  if (unfinished) return c.json({ error: unfinished.error }, unfinished.status);
 
   // The real instant of completion. `scheduled_on` keeps the day the work was
   // FOR; this is the day it actually happened. Reports must never claim work

@@ -1,10 +1,11 @@
-import { addDays, type Epic, type Task, todayIn } from "@sticker-collector/shared";
+import { addDays, blockedBySteps, type Epic, type Task, todayIn } from "@sticker-collector/shared";
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate } from "react-router";
 import { DailyReviewDialog } from "../components/DailyReviewDialog";
 import { SearchField } from "../components/SearchField";
 import { SectionHeading, type SectionTone } from "../components/SectionHeading";
 import { SelectionBar } from "../components/SelectionBar";
+import { StepsBlockedDialog } from "../components/StepsBlockedDialog";
 import { SwipeRow } from "../components/SwipeRow";
 import { TaskForm } from "../components/TaskForm";
 import { TaskRow } from "../components/TaskRow";
@@ -71,6 +72,8 @@ export function Tasks() {
    * further in, and deliberate.
    */
   const [viewing, setViewing] = useState<{ item: HomeItem; ref: CompletionRef } | null>(null);
+  /** The task a tick was refused on, so the refusal can say why. */
+  const [blocked, setBlocked] = useState<Task | null>(null);
   const [review, setReview] = useState<DailyReview | null>(null);
   /** Narrows every section as it is typed; never submitted. */
   const [query, setQuery] = useState("");
@@ -245,6 +248,14 @@ export function Tasks() {
           onSelect={() => selection.toggle(item.task.id)}
           onEdit={() => setViewing({ item, ref })}
           onToggle={(next) => {
+            // Stopped here rather than sent and refused. The Worker would say
+            // no — that is where the rule actually lives — but a checkbox that
+            // ticks, waits out its undo window and then springs back is a much
+            // worse way to learn about it than being told.
+            if (next && blockedBySteps(item.task, item.scheduledOn ?? today)) {
+              setBlocked(item.task);
+              return;
+            }
             if (next) {
               queue.complete(ref, { title: item.task.title, coins });
             } else if (waiting) {
@@ -346,6 +357,8 @@ export function Tasks() {
         {selection.count} task{selection.count === 1 ? "" : "s"} will stop appearing. Coins they
         already earned are kept.
       </Dialog>
+
+      <StepsBlockedDialog task={blocked} today={today} onClose={() => setBlocked(null)} />
 
       <DailyReviewDialog review={review} heading="Yesterday" onClose={() => setReview(null)} />
 

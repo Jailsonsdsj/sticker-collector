@@ -1,5 +1,5 @@
 import type { Epic, Task } from "@sticker-collector/shared";
-import { WEEKDAYS } from "@sticker-collector/shared";
+import { blockedBySteps, stepsLeft, WEEKDAYS } from "@sticker-collector/shared";
 import { Markdown } from "./Markdown";
 import { SubtaskList } from "./SubtaskList";
 import { DeleteTaskAction } from "./taskForm/DeleteTaskAction";
@@ -58,6 +58,12 @@ export function TaskView({
   onClose,
 }: TaskViewProps) {
   if (!task) return null;
+
+  // The day this sheet would close. Steps reset daily for a routine, so which
+  // day is being closed is what decides whether they count.
+  const on = today ?? "";
+  const blocked = Boolean(today) && blockedBySteps(task, on);
+  const left = stepsLeft(task.subtasks, task.type, on);
 
   return (
     <Sheet
@@ -129,6 +135,19 @@ export function TaskView({
         </a>
       )}
 
+      {/* Said before the button is pressed, not after it is refused. The
+          Worker enforces this; the point of saying it here is that being told
+          "no" by a button you already tapped is a worse way to learn a rule
+          than seeing it stated beside the steps it is about. */}
+      {blocked && (
+        <p
+          role="status"
+          className="rounded-lg border border-prio-high-tag-border bg-prio-high-tag px-3 py-2 font-body text-sm text-prio-high-fg"
+        >
+          Finish the steps to close this — {left} of {task.subtasks.length} left.
+        </p>
+      )}
+
       <div className="mt-auto flex flex-col gap-2 pt-4">
         {/* One row: these are the things you came here to do, and stacking
             them pushed Delete up towards the thumb. `flex-1` on each rather
@@ -136,7 +155,15 @@ export function TaskView({
             Edit alone takes the whole width. */}
         <div className="flex gap-2">
           {onToggleDone && (
-            <Button className="flex-1" tone={done ? "neutral" : "lime"} onClick={onToggleDone}>
+            <Button
+              className="flex-1"
+              tone={done ? "neutral" : "lime"}
+              // Blocked only in the closing direction. Reopening a task whose
+              // steps are unfinished is exactly what someone who ticked it by
+              // mistake needs to be able to do.
+              disabled={!done && blocked}
+              onClick={onToggleDone}
+            >
               {done ? "Reopen" : "Done"}
             </Button>
           )}

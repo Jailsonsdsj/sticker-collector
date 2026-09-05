@@ -1,0 +1,1 @@
+ALTER TABLE `task` ADD `block_until_steps` integer DEFAULT false NOT NULL;
