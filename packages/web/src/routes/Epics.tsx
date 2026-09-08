@@ -18,6 +18,7 @@ import {
   useCreateTask,
   useDeleteEpic,
   useDeleteTask,
+  useToggleSubtask,
   useUpdateEpic,
   useUpdateTask,
 } from "../lib/mutations";
@@ -62,6 +63,7 @@ export function Epics() {
   // second path that wrote immediately would make the identical action
   // reversible in one place and not the other.
   const localToday = today();
+  const toggleSubtask = useToggleSubtask();
 
   const [expanded, setExpanded] = useState<string | null>(null);
   const [editing, setEditing] = useState<{
@@ -256,6 +258,11 @@ export function Epics() {
                   setViewing(null);
                 }
               : undefined
+          }
+          // An epic lists tasks, not days, so the sheet is about today.
+          today={localToday}
+          onToggleSubtask={(subtaskId, done) =>
+            toggleSubtask.mutate({ taskId: viewing.id, subtaskId, done })
           }
           started={startedToday(viewing, localToday, appTimeZone())}
           // Same rule as the tasks tab, derived from the mask because this

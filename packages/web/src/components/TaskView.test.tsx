@@ -306,3 +306,45 @@ describe("a task that waits for its steps", () => {
     expect(screen.getByRole("button", { name: "Done" })).toBeEnabled();
   });
 });
+
+describe("the steps, wherever the sheet is opened from", () => {
+  const withSteps = (over: Partial<Task> = {}) =>
+    task({
+      subtasks: [
+        { id: "a", title: "Write it", position: 0, doneOn: null },
+        { id: "b", title: "Send it", position: 1, doneOn: null },
+      ],
+      ...over,
+    });
+
+  it("shows them whenever the sheet knows which day it is about", () => {
+    // The bug: the Week and Epics tabs open this same sheet and rendered it
+    // without a `today`, so the steps were simply not there.
+    open({ task: withSteps(), today: TODAY });
+
+    expect(screen.getByText("Write it")).toBeInTheDocument();
+    expect(screen.getByText("Send it")).toBeInTheDocument();
+  });
+
+  it("shows them read-only when they cannot be ticked from here", () => {
+    // A past day on the Week tab: a tick is stamped with the server's today,
+    // so a box on Tuesday's sheet would record Thursday and appear to miss.
+    open({ task: withSteps(), today: TODAY });
+
+    for (const box of screen.getAllByRole("checkbox")) expect(box).toBeDisabled();
+  });
+
+  it("lets them be ticked when a handler is given", () => {
+    open({ task: withSteps(), today: TODAY, onToggleSubtask: vi.fn() });
+
+    for (const box of screen.getAllByRole("checkbox")) expect(box).toBeEnabled();
+  });
+
+  it("shows nothing when the sheet does not know its day", () => {
+    // Not a silent omission any more — this is the one case where absent is
+    // correct, and it is asserted rather than assumed.
+    open({ task: withSteps() });
+
+    expect(screen.queryByText("Write it")).not.toBeInTheDocument();
+  });
+});
