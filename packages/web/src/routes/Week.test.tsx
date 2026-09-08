@@ -344,3 +344,67 @@ describe("opening a block on the agenda", () => {
     expect(screen.getByDisplayValue("Stretch")).toBeInTheDocument();
   });
 });
+
+describe("the steps on the week's task sheet", () => {
+  // Reported from the device: the sheet on this tab showed no steps at all.
+  // It is the same `TaskView` the tasks tab uses, and this route was opening
+  // it without the day it is about — so the list never rendered, and neither
+  // did the Done gate that depends on it.
+  const withSteps = (over: Partial<Task> = {}): Task[] => [
+    {
+      ...(ROUTINES[0] as Task),
+      id: "t1",
+      title: "Stretch",
+      weekdays: WEEKDAYS_MASK_ALL,
+      slots: [{ weekday: weekdayOf(today()), startMin: 600, endMin: 660 }],
+      subtasks: [
+        { id: "a", title: "Roll the mat", position: 0, doneOn: null },
+        { id: "b", title: "Put it away", position: 1, doneOn: null },
+      ],
+      ...over,
+    },
+  ];
+
+  const openToday = async (tasks: Task[]) => {
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      const read = (init?.method ?? "GET") === "GET";
+      if (read && url.startsWith("/api/tasks")) return json(tasks);
+      if (read && url.startsWith("/api/occurrences")) return json([]);
+      if (read && url.startsWith("/api/epics")) return json([]);
+      return json({ ok: true });
+    });
+    const user = userEvent.setup();
+    render(<Week />, { wrapper });
+    await user.click(await screen.findByRole("button", { name: /^Stretch, 10:00–11:00/ }));
+    return user;
+  };
+
+  it("shows them", async () => {
+    await openToday(withSteps());
+
+    expect(screen.getByText("Roll the mat")).toBeInTheDocument();
+    expect(screen.getByText("Put it away")).toBeInTheDocument();
+  });
+
+  it("lets them be ticked on today's block", async () => {
+    const user = await openToday(withSteps());
+
+    await user.click(screen.getByText("Roll the mat"));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/tasks/t1/subtasks/a",
+        expect.objectContaining({ method: "PATCH" }),
+      ),
+    );
+  });
+
+  it("gates Done here too, not only on the tasks tab", async () => {
+    // The other half of the same bug: without a day the sheet could not tell
+    // it was blocked, so this tab offered a Done the server would refuse.
+    await openToday(withSteps({ blockUntilSteps: true }));
+
+    expect(screen.getByRole("status")).toHaveTextContent(/2 of 2 left/);
+    expect(screen.getByRole("button", { name: "Done" })).toBeDisabled();
+  });
+});

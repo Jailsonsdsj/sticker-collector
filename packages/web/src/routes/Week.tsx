@@ -15,6 +15,7 @@ import { startedToday } from "../lib/home";
 import {
   useCreateTask,
   useDeleteTask,
+  useToggleSubtask,
   useUncompleteOccurrence,
   useUpdateTask,
 } from "../lib/mutations";
@@ -59,6 +60,7 @@ const VIEWS = [
 
 export function Week() {
   const localToday = today();
+  const toggleSubtask = useToggleSubtask();
   const dates = useMemo(() => weekDates(localToday), [localToday]);
   const [view, setView] = useState<"agenda" | "schedule" | "complete">("agenda");
   // The block that is open, not just its task: a completion is keyed by
@@ -190,6 +192,17 @@ export function Week() {
                   }
                   setViewing(null);
                 }
+          }
+          // The block's own date, so a routine's checklist shows the run that
+          // was tapped rather than today's. Ticking is offered on today alone:
+          // the server stamps a tick with its own day, so a box on Tuesday's
+          // sheet would record Thursday and appear to do nothing.
+          today={viewing.date}
+          onToggleSubtask={
+            viewing.date === localToday
+              ? (subtaskId, done) =>
+                  toggleSubtask.mutate({ taskId: viewing.task.id, subtaskId, done })
+              : undefined
           }
           started={startedToday(viewing.task, localToday, appTimeZone())}
           // A routine reaches *In progress* through today's occurrence only, so

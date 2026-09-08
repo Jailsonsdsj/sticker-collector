@@ -39,6 +39,9 @@ const EPICS: Epic[] = [
   },
 ];
 
+/** Swapped by a test that needs a different shape; reset before each. */
+let tasksFixture: Task[];
+
 const TASKS: Task[] = [
   {
     id: "t1",
@@ -101,6 +104,7 @@ function wrapper({ children }: { children: ReactNode }) {
 }
 
 beforeEach(() => {
+  tasksFixture = TASKS;
   localStorage.clear();
   queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -111,7 +115,7 @@ beforeEach(() => {
     // expects a list.
     const read = (init?.method ?? "GET") === "GET";
     if (read && url.startsWith("/api/epics")) return json(EPICS);
-    if (read && url.startsWith("/api/tasks")) return json(TASKS);
+    if (read && url.startsWith("/api/tasks")) return json(tasksFixture);
     return json({ id: "new" }, 201);
   });
   vi.stubGlobal("fetch", fetchMock);
@@ -433,5 +437,60 @@ describe("the three sections", () => {
       );
       expect(JSON.parse(post?.[1].body as string)).toMatchObject({ status: "active" });
     });
+  });
+});
+
+describe("the steps on an epic's task sheet", () => {
+  // Same bug as the Week tab: this route opened `TaskView` without the day it
+  // is about, so the steps never rendered.
+  const withSteps = (over: Partial<Task> = {}): Task[] =>
+    TASKS.map((t, i) =>
+      i === 0
+        ? {
+            ...t,
+            subtasks: [
+              { id: "a", title: "Draft it", position: 0, doneOn: null },
+              { id: "b", title: "Post it", position: 1, doneOn: null },
+            ],
+            ...over,
+          }
+        : t,
+    );
+
+  const openSheet = async (tasks: Task[]) => {
+    tasksFixture = tasks;
+    const user = userEvent.setup();
+    renderScreen();
+    await waitFor(() => expect(epicHeader("Sticker App")).toBeInTheDocument());
+    await user.click(epicHeader("Sticker App"));
+    await user.click(screen.getByRole("button", { name: "Ship it" }));
+    return user;
+  };
+
+  it("shows them", async () => {
+    await openSheet(withSteps());
+
+    expect(sheet().getByText("Draft it")).toBeInTheDocument();
+    expect(sheet().getByText("Post it")).toBeInTheDocument();
+  });
+
+  it("lets them be ticked", async () => {
+    const user = await openSheet(withSteps());
+
+    await user.click(sheet().getByText("Draft it"));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining("/subtasks/a"),
+        expect.objectContaining({ method: "PATCH" }),
+      ),
+    );
+  });
+
+  it("gates Done here too", async () => {
+    await openSheet(withSteps({ blockUntilSteps: true }));
+
+    expect(sheet().getByRole("status")).toHaveTextContent(/2 of 2 left/);
+    expect(sheet().getByRole("button", { name: "Done" })).toBeDisabled();
   });
 });

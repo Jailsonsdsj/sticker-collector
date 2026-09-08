@@ -6,9 +6,17 @@ import { DeleteTaskAction } from "./taskForm/DeleteTaskAction";
 import { Button, Coin, Sheet } from "./ui";
 
 export interface TaskViewProps {
-  /** Absent when the steps cannot be ticked from here — see `Week` and `Epics`. */
+  /**
+   * Absent when the steps may be read but not ticked — a past day on the Week
+   * tab, where a tick would be stamped with today and land on the wrong day.
+   */
   onToggleSubtask?: (subtaskId: string, done: boolean) => void;
-  /** The local day a tick counts for. */
+  /**
+   * The local day this sheet is about.
+   *
+   * Without it the steps do not render at all and the Done gate does not
+   * apply — which is what made them invisible on the Week and Epics tabs.
+   */
   today?: string;
   task: Task | null;
   epic?: Epic | null;
@@ -102,12 +110,23 @@ export function TaskView({
       {/* Under the title block and above the facts: the steps are what doing
           this task consists of, and the reward and effort beneath them are
           about the task as a whole. */}
-      {onToggleSubtask && today && (
+      {/*
+        Shown wherever the sheet knows which day it is about — the Week tab and
+        the Epics tab open the same sheet, and both were rendering it without a
+        `today`, so the steps simply were not there.
+
+        `onToggleSubtask` decides whether they can be *ticked*, not whether they
+        are *seen*. Ticking stamps the server's own today, so on a day that is
+        not today the boxes would appear to do nothing; read-only is the honest
+        state for a past day rather than a control that silently misses.
+      */}
+      {today && (
         <SubtaskList
           subtasks={task.subtasks}
           taskType={task.type}
           today={today}
-          onToggle={onToggleSubtask}
+          onToggle={onToggleSubtask ?? (() => undefined)}
+          disabled={!onToggleSubtask}
         />
       )}
 
