@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CompletionQueueProvider } from "../lib/completionQueue";
+import { today } from "../lib/timezone";
 import { Epics } from "./Epics";
 
 /**
@@ -116,6 +117,25 @@ beforeEach(() => {
     const read = (init?.method ?? "GET") === "GET";
     if (read && url.startsWith("/api/epics")) return json(EPICS);
     if (read && url.startsWith("/api/tasks")) return json(tasksFixture);
+
+    // The step toggle WRITES, so the mock has to write: answering the refetch
+    // with the unchanged list would overwrite the tick a moment after it
+    // appeared, and would hide the very bug this covers.
+    const step = /\/api\/tasks\/([^/]+)\/subtasks\/([^/]+)$/.exec(url);
+    if (step) {
+      const { done } = JSON.parse(init?.body as string) as { done: boolean };
+      tasksFixture = tasksFixture.map((row) =>
+        row.id === step[1]
+          ? {
+              ...row,
+              subtasks: row.subtasks.map((sub) =>
+                sub.id === step[2] ? { ...sub, doneOn: done ? today() : null } : sub,
+              ),
+            }
+          : row,
+      );
+      return json({ subtasks: tasksFixture.find((r) => r.id === step[1])?.subtasks ?? [] });
+    }
     return json({ id: "new" }, 201);
   });
   vi.stubGlobal("fetch", fetchMock);
@@ -485,6 +505,17 @@ describe("the steps on an epic's task sheet", () => {
         expect.objectContaining({ method: "PATCH" }),
       ),
     );
+  });
+
+  it("ticks it ON SCREEN, not merely on the wire", async () => {
+    // The sheet held the task as it was when opened, so the request went and
+    // the count did not move. "It sent something" is not "it worked".
+    const user = await openSheet(withSteps());
+    expect(sheet().getByText("0/2")).toBeInTheDocument();
+
+    await user.click(sheet().getByText("Draft it"));
+
+    await waitFor(() => expect(sheet().getByText("1/2")).toBeInTheDocument());
   });
 
   it("gates Done here too", async () => {

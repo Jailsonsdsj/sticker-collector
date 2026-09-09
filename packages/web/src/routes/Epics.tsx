@@ -76,6 +76,8 @@ export function Epics() {
   const [openTask, setOpenTask] = useState<{ task: Task; nonce: number } | null>(null);
   /** Read first, edit second — the same order the Tasks screen uses. */
   const [viewing, setViewing] = useState<Task | null>(null);
+  /** The open sheet's task as the cache has it now — see `Week`. */
+  const liveTask = viewing ? (tasks.data?.find((row) => row.id === viewing.id) ?? viewing) : null;
   const [deleting, setDeleting] = useState<Epic | null>(null);
   // The nonce remounts TaskForm, whose state is seeded once on mount — without
   // it, opening from a second epic would keep the first one's answers.
@@ -240,7 +242,10 @@ export function Epics() {
 
       {viewing && (
         <TaskView
-          task={viewing}
+          // The live row, for the same reason the week tab needs one: `viewing`
+          // is a snapshot, and a ticked step would otherwise change the cache
+          // and nothing on screen.
+          task={liveTask ?? viewing}
           epic={epics.data?.find((candidate) => candidate.id === viewing.epicId) ?? null}
           done={
             Boolean(viewing.lastCompletedOn) ||
