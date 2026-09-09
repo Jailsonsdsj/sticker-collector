@@ -61,6 +61,7 @@ const VIEWS = [
 export function Week() {
   const localToday = today();
   const toggleSubtask = useToggleSubtask();
+
   const dates = useMemo(() => weekDates(localToday), [localToday]);
   const [view, setView] = useState<"agenda" | "schedule" | "complete">("agenda");
   // The block that is open, not just its task: a completion is keyed by
@@ -90,6 +91,17 @@ export function Week() {
     () => (tasks.data ?? []).filter((task) => task.type === "routine" && !task.deletedAt),
     [tasks.data],
   );
+
+  /**
+   * The open sheet's task, as the cache has it now.
+   *
+   * `viewing` holds the block as it was when it was tapped, so a step ticked
+   * inside the sheet never reached it: the request went, the cache updated, and
+   * the checklist sat at 0/2 until the sheet was closed and reopened.
+   */
+  const liveTask = viewing
+    ? (tasks.data?.find((row) => row.id === viewing.task.id) ?? viewing.task)
+    : null;
 
   if (tasks.error instanceof ApiError && tasks.error.status === 401) {
     return <Navigate to="/login" replace />;
@@ -164,7 +176,11 @@ export function Week() {
 
       {viewing && (
         <TaskView
-          task={viewing.task}
+          // The LIVE row, not the snapshot the block was opened with. `viewing`
+          // is React state, so nothing that changes afterwards reaches it — a
+          // ticked step updated the cache and the sheet sat unmoved, which is
+          // the same defect the tasks tab had and the same fix.
+          task={liveTask ?? viewing.task}
           epic={
             viewing.task.epicId
               ? ((epics.data ?? []).find((e) => e.id === viewing.task.epicId) ?? null)

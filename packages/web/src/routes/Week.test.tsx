@@ -366,11 +366,32 @@ describe("the steps on the week's task sheet", () => {
   ];
 
   const openToday = async (tasks: Task[]) => {
+    // The toggle WRITES, so the mock has to write. Answering the refetch with
+    // the unchanged list would overwrite the tick a moment after it appeared —
+    // and would have hidden the bug this suite exists for: the sheet held a
+    // snapshot, so the count never moved however the request went.
+    let current = tasks;
     fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
       const read = (init?.method ?? "GET") === "GET";
-      if (read && url.startsWith("/api/tasks")) return json(tasks);
+      if (read && url.startsWith("/api/tasks")) return json(current);
       if (read && url.startsWith("/api/occurrences")) return json([]);
       if (read && url.startsWith("/api/epics")) return json([]);
+
+      const step = /\/api\/tasks\/([^/]+)\/subtasks\/([^/]+)$/.exec(url);
+      if (step) {
+        const { done } = JSON.parse(init?.body as string) as { done: boolean };
+        current = current.map((row) =>
+          row.id === step[1]
+            ? {
+                ...row,
+                subtasks: row.subtasks.map((sub) =>
+                  sub.id === step[2] ? { ...sub, doneOn: done ? today() : null } : sub,
+                ),
+              }
+            : row,
+        );
+        return json({ subtasks: current.find((r) => r.id === step[1])?.subtasks ?? [] });
+      }
       return json({ ok: true });
     });
     const user = userEvent.setup();
@@ -396,6 +417,33 @@ describe("the steps on the week's task sheet", () => {
         "/api/tasks/t1/subtasks/a",
         expect.objectContaining({ method: "PATCH" }),
       ),
+    );
+  });
+
+  it("ticks it ON SCREEN, not merely on the wire", async () => {
+    /**
+     * The bug the request-only assertion above sailed past: the PATCH went, the
+     * cache updated, and the sheet — holding the block as it was when tapped —
+     * stayed at 0/2. "It sent something" is not "it worked".
+     */
+    const user = await openToday(withSteps());
+    expect(screen.getByText("0/2")).toBeInTheDocument();
+
+    await user.click(screen.getByText("Roll the mat"));
+
+    await waitFor(() => expect(screen.getByText("1/2")).toBeInTheDocument());
+  });
+
+  it("moves the ticked step to the bottom, as it does everywhere else", async () => {
+    const user = await openToday(withSteps());
+
+    await user.click(screen.getByText("Roll the mat"));
+
+    await waitFor(() =>
+      expect(screen.getAllByRole("checkbox").map((b) => b.getAttribute("aria-label"))).toEqual([
+        "Put it away",
+        "Roll the mat",
+      ]),
     );
   });
 
