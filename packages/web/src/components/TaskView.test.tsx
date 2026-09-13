@@ -132,20 +132,32 @@ describe("what can be done from here", () => {
     expect(onDelete).toHaveBeenCalled();
   });
 
-  it("puts Done and Edit side by side", () => {
-    // The two things you came here to do. Stacked, they pushed Delete up
-    // towards the thumb.
-    open();
+  it("keeps the secondary actions in one row, not a stack", () => {
+    // The original reason for the row: stacked, the actions pushed Delete up
+    // towards the thumb. Done has since moved to a full-width row of its own,
+    // and the count of rows is unchanged — so that concern still holds.
+    open({ onToggleToday: vi.fn() });
+
+    const editButton = screen.getByRole("button", { name: "Edit" });
+    const todayButton = screen.getByRole("button", { name: "For today" });
+    expect(todayButton.parentElement).toBe(editButton.parentElement);
+    // A row, not a column: "flex" alone is true of the stack this replaced.
+    expect(editButton.parentElement?.className).toContain("flex");
+    expect(editButton.parentElement?.className).not.toContain("flex-col");
+    expect(editButton.className).toContain("flex-1");
+    expect(todayButton.className).toContain("flex-1");
+  });
+
+  it("gives Done the full width, below the rest", () => {
+    // The thing this sheet is most often opened to press, and the widest
+    // target is the easiest to hit with a thumb.
+    open({ onToggleToday: vi.fn() });
 
     const doneButton = screen.getByRole("button", { name: "Done" });
-    const editButton = screen.getByRole("button", { name: "Edit" });
-    expect(doneButton.parentElement).toBe(editButton.parentElement);
-    // A row, not a column: "flex" alone is true of the stack this replaced.
-    expect(doneButton.parentElement?.className).toContain("flex");
-    expect(doneButton.parentElement?.className).not.toContain("flex-col");
-    // Each takes half; neither is a full-width block any more.
-    expect(doneButton.className).toContain("flex-1");
-    expect(editButton.className).toContain("flex-1");
+    expect(doneButton.className).toContain("w-full");
+    expect(doneButton.parentElement).not.toBe(
+      screen.getByRole("button", { name: "Edit" }).parentElement,
+    );
   });
 
   it("gives Edit the whole row when the task cannot be closed from here", () => {
@@ -201,16 +213,16 @@ describe("picking a task up", () => {
     return { ...rest, onToggleStart };
   };
 
-  it("offers Start between Done and Edit", () => {
-    // The order is the order the actions are wanted in, and the user asked for
-    // this one in the middle.
+  it("offers Start in the middle of the row, before Edit", () => {
+    // Start was asked for "between Done and Edit", and it stayed put — Done is
+    // what moved out from beside it, down to a row of its own.
     openWithStart();
 
     const labels = screen
       .getAllByRole("button")
       .map((button) => button.textContent)
-      .filter((text) => ["Done", "Start", "Edit"].includes(text ?? ""));
-    expect(labels).toEqual(["Done", "Start", "Edit"]);
+      .filter((text) => ["For today", "Start", "Edit", "Done"].includes(text ?? ""));
+    expect(labels).toEqual(["Start", "Edit", "Done"]);
   });
 
   it("hands the press back", async () => {
@@ -346,5 +358,82 @@ describe("the steps, wherever the sheet is opened from", () => {
     open({ task: withSteps() });
 
     expect(screen.queryByText("Write it")).not.toBeInTheDocument();
+  });
+});
+
+describe("bringing a task forward to today", () => {
+  it("offers the button the left swipe's gesture already offered", () => {
+    // The swipe was the only way to do this, and a gesture is not discoverable
+    // from a sheet that lists every other action as a button.
+    open({ task: task(), onToggleToday: vi.fn() });
+
+    expect(screen.getByRole("button", { name: "For today" })).toBeInTheDocument();
+  });
+
+  it("says the opposite once it is already waiting for today", () => {
+    open({ task: task(), onToggleToday: vi.fn(), pinnedToday: true });
+
+    expect(screen.getByRole("button", { name: "Not today" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "For today" })).not.toBeInTheDocument();
+  });
+
+  it("reports the tap", async () => {
+    const user = userEvent.setup();
+    const onToggleToday = vi.fn();
+    open({ task: task(), onToggleToday });
+
+    await user.click(screen.getByRole("button", { name: "For today" }));
+
+    expect(onToggleToday).toHaveBeenCalledOnce();
+  });
+
+  it("stays away where the gesture would do nothing", () => {
+    // A routine follows its own schedule and a dated one-off already has a
+    // day; the caller decides, the same way it decides for the swipe.
+    open({ task: task() });
+
+    expect(screen.queryByRole("button", { name: /today/i })).not.toBeInTheDocument();
+  });
+
+  it("stays away on a finished task", () => {
+    // Bringing back something you have just closed is not a state the list can
+    // place — the same reason Start is withheld there.
+    open({ task: task(), onToggleToday: vi.fn(), done: true });
+
+    expect(screen.queryByRole("button", { name: /today/i })).not.toBeInTheDocument();
+  });
+});
+
+describe("where the actions sit", () => {
+  it("puts For today first in the row and Done full width beneath", () => {
+    // The positions were swapped on request: Done had the row's first slot and
+    // For today the full-width line below it.
+    open({ onToggleToday: vi.fn(), onToggleStart: vi.fn() });
+
+    const order = screen
+      .getAllByRole("button")
+      .map((b) => b.textContent)
+      .filter((t) => ["For today", "Start", "Edit", "Done"].includes(t ?? ""));
+
+    expect(order).toEqual(["For today", "Start", "Edit", "Done"]);
+  });
+
+  it("still stacks into two rows and no more, so Delete does not climb", () => {
+    // The row exists because a stack pushed Delete up towards the thumb. Four
+    // actions across two rows is what it was before the swap, and after it.
+    open({ onToggleToday: vi.fn(), onToggleStart: vi.fn() });
+
+    const rows = new Set(
+      ["For today", "Start", "Edit", "Done"].map(
+        (name) => screen.getByRole("button", { name }).parentElement,
+      ),
+    );
+    expect(rows.size).toBe(2);
+  });
+
+  it("leaves Reopen full width on a finished task", () => {
+    open({ onToggleToday: vi.fn(), done: true });
+
+    expect(screen.getByRole("button", { name: "Reopen" }).className).toContain("w-full");
   });
 });

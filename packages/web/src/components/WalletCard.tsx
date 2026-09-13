@@ -1,12 +1,6 @@
 import type { ReactNode } from "react";
+import { asTime } from "../lib/duration";
 import { Coin, Skeleton } from "./ui";
-
-/** One minute of effort is one coin, so the balance doubles as hours invested. */
-function hoursOf(coins: number): string {
-  const hours = Math.floor(coins / 60);
-  const minutes = coins % 60;
-  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
-}
 
 export interface WalletCardProps {
   balance?: number;
@@ -71,7 +65,9 @@ export function WalletCard({ balance, loading, pendingCoins = 0, action }: Walle
           {action}
           {!loading && (
             <div className="text-right font-numeric text-base text-ink-secondary">
-              ≈ {hoursOf(shown)}
+              {/* One minute of effort is one coin, so the balance doubles as hours
+                  invested. */}
+              ≈ {asTime(shown)}
             </div>
           )}
         </div>

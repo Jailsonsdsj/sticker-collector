@@ -7,6 +7,16 @@ import { Button, Coin, Sheet } from "./ui";
 
 export interface TaskViewProps {
   /**
+   * Brings an undated capture into *For today*, or takes it back out.
+   *
+   * Absent where the gesture would do nothing — a routine follows its own
+   * schedule and a dated one-off already has a day — which is the same rule the
+   * left swipe uses to decide whether to explain itself.
+   */
+  onToggleToday?: () => void;
+  /** Whether it is already waiting for today, so the button can say so. */
+  pinnedToday?: boolean;
+  /**
    * Absent when the steps may be read but not ticked — a past day on the Week
    * tab, where a tick would be stamped with today and land on the wrong day.
    */
@@ -60,6 +70,8 @@ export function TaskView({
   started = false,
   onToggleStart,
   onToggleSubtask,
+  onToggleToday,
+  pinnedToday = false,
   today,
   onEdit,
   onDelete,
@@ -173,17 +185,17 @@ export function TaskView({
             than a grid, so the row closes up around whichever of them apply —
             Edit alone takes the whole width. */}
         <div className="flex gap-2">
-          {onToggleDone && (
+          {/* Absent on a finished task, like Start — bringing something you
+              have just closed back to today is not a state the list can
+              place. */}
+          {onToggleToday && !done && (
             <Button
               className="flex-1"
-              tone={done ? "neutral" : "lime"}
-              // Blocked only in the closing direction. Reopening a task whose
-              // steps are unfinished is exactly what someone who ticked it by
-              // mistake needs to be able to do.
-              disabled={!done && blocked}
-              onClick={onToggleDone}
+              variant={pinnedToday ? "solid" : "outline"}
+              tone="coin"
+              onClick={onToggleToday}
             >
-              {done ? "Reopen" : "Done"}
+              {pinnedToday ? "Not today" : "For today"}
             </Button>
           )}
           {/* Not offered on something already finished: starting what you have
@@ -203,6 +215,24 @@ export function TaskView({
             Edit
           </Button>
         </div>
+
+        {/* Full width, under the row. Done is the thing this sheet is most
+            often opened to press, and the widest target is the easiest one to
+            hit with a thumb — which is also why it is the bottom-most of the
+            actions rather than sharing a row with Edit. */}
+        {onToggleDone && (
+          <Button
+            block
+            tone={done ? "neutral" : "lime"}
+            // Blocked only in the closing direction. Reopening a task whose
+            // steps are unfinished is exactly what someone who ticked it by
+            // mistake needs to be able to do.
+            disabled={!done && blocked}
+            onClick={onToggleDone}
+          >
+            {done ? "Reopen" : "Done"}
+          </Button>
+        )}
         {/* The same two-step delete the edit form uses, rather than a second
             one worded differently: one affordance, one confirmation, one place
             to fix it. */}

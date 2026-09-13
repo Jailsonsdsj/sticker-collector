@@ -89,6 +89,9 @@ reportRoutes.get("/momentum", async (c) => {
     id: task.id,
     title: task.title,
     schedule: scheduleOf(task, timeZone),
+    // What the day is weighed by. A score is a proportion of time now, not of
+    // headcount.
+    effortMinutes: task.effortMinutes,
   }));
 
   const body: MomentumReport = momentumReport({ tasks: reportTasks, completions, today });

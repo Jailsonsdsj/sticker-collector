@@ -394,6 +394,30 @@ export function Tasks() {
           onToggleSubtask={(subtaskId, done) =>
             toggleSubtask.mutate({ taskId: viewing.item.task.id, subtaskId, done })
           }
+          // The left swipe's own rule, so the gesture and the button cannot
+          // disagree about which tasks can be brought forward: only an undated
+          // capture: a routine follows its schedule, a dated one-off has a day.
+          onToggleToday={
+            (liveTask ?? viewing.item.task).type === "oneoff" &&
+            !(liveTask ?? viewing.item.task).dueAt
+              ? () => {
+                  const task = liveTask ?? viewing.item.task;
+                  updateTask.mutate({
+                    id: task.id,
+                    // Pinning also stops it, exactly as the swipe does: a task
+                    // cannot be both "in progress" and "waiting for today".
+                    // Unpinning only unpins — it is not a way to start
+                    // something.
+                    patch:
+                      task.pinnedOn === today
+                        ? { pinnedOn: null }
+                        : { pinnedOn: today, startedAt: null },
+                  });
+                  setViewing(null);
+                }
+              : undefined
+          }
+          pinnedToday={(liveTask ?? viewing.item.task).pinnedOn === today}
           started={startedToday(liveTask ?? viewing.item.task, today, timeZone)}
           // Offered only where it would actually move the row. *In progress*
           // takes a routine through TODAY's occurrence alone, so starting one

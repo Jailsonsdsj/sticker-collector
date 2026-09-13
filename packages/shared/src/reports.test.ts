@@ -44,9 +44,11 @@ it("is anchored on a real Monday", () => {
   expect(WEEKDAYS[0]).toBe("Mon");
 });
 
+/** 30 minutes unless a test cares — the app's own default effort. */
 const routine = (id: string, days: number[], over: Partial<ReportTask> = {}): ReportTask => ({
   id,
   title: id,
+  effortMinutes: 30,
   schedule: {
     kind: "routine",
     weekdays: maskFromDays(days as never),
@@ -59,6 +61,7 @@ const routine = (id: string, days: number[], over: Partial<ReportTask> = {}): Re
 const oneoff = (id: string, dueOn: LocalDate | null): ReportTask => ({
   id,
   title: id,
+  effortMinutes: 30,
   schedule: { kind: "oneoff", dueOn },
 });
 
@@ -525,10 +528,15 @@ describe("the heatmap's data", () => {
 });
 
 describe("a day as a score", () => {
+  // One task is one 30-minute task, so a count-shaped fixture still reads as
+  // the same proportion — the tests below that care about *weighting* set the
+  // minutes themselves.
   const day = (scheduled: number, done: number, date = "2026-09-01"): DayTally => ({
     date,
     scheduled,
     done,
+    scheduledMinutes: scheduled * 30,
+    doneMinutes: done * 30,
   });
 
   it("is the share of the day that got done", () => {
@@ -568,6 +576,8 @@ describe("a week as a score", () => {
     date,
     scheduled,
     done,
+    scheduledMinutes: scheduled * 30,
+    doneMinutes: done * 30,
   });
 
   it("averages the days rather than pooling their totals", () => {
@@ -621,5 +631,110 @@ describe("which band a score falls in", () => {
     expect(scoreBand(69)).toBe("mid");
     expect(scoreBand(70)).toBe("high");
     expect(scoreBand(100)).toBe("high");
+  });
+});
+
+describe("a day weighed in minutes rather than in tasks", () => {
+  const minutes = (scheduledMinutes: number, doneMinutes: number): DayTally => ({
+    date: "2026-09-01",
+    // Deliberately inconsistent with the minutes: nothing should read these.
+    scheduled: 99,
+    done: 0,
+    scheduledMinutes,
+    doneMinutes,
+  });
+
+  it("scores the share of the day's TIME that got done", () => {
+    expect(dayScore(minutes(120, 30))).toBe(25);
+    expect(dayScore(minutes(90, 45))).toBe(50);
+  });
+
+  it("ignores the headcount entirely", () => {
+    // The fixture says 0 of 99 tasks; the minutes say the day is finished. If
+    // the score still read counts this would be 0.
+    expect(dayScore(minutes(60, 60))).toBe(100);
+  });
+
+  it("does not flatter a day of easy wins", () => {
+    // Three five-minute chores done, a two-hour job untouched. By headcount
+    // that is 75%; by time it is 11%, which is what the afternoon looked like.
+    expect(dayScore(minutes(135, 15))).toBe(11);
+  });
+
+  it("does not punish a day of one long finished job", () => {
+    // The mirror: one two-hour job done, three chores left. 25% by headcount,
+    // 89% by time.
+    expect(dayScore(minutes(135, 120))).toBe(89);
+  });
+
+  it("has no score when the day asked for no time", () => {
+    expect(dayScore(minutes(0, 0))).toBeNull();
+  });
+
+  it("carries the weighting into the week", () => {
+    // A week of one heavy day half-done and one light day fully done averages
+    // the two DAYS, each of which was weighed by its own minutes.
+    const week = [
+      { date: "2026-09-01", scheduled: 1, done: 0, scheduledMinutes: 120, doneMinutes: 60 },
+      { date: "2026-09-02", scheduled: 4, done: 4, scheduledMinutes: 20, doneMinutes: 20 },
+    ];
+    expect(weekScore(week, "2026-09-07")).toBe(75);
+  });
+});
+
+describe("the tally counts both units", () => {
+  it("sums the minutes a day asked for and the minutes that were done", () => {
+    const tasks = [
+      routine("short", [0], { effortMinutes: 10 }),
+      routine("long", [0], { effortMinutes: 90 }),
+    ];
+    const completions = new Map([["short", new Set([MONDAY])]]);
+
+    const [day] = dailyTally({ tasks, completions, today: MONDAY }, MONDAY, MONDAY);
+
+    expect(day).toEqual({
+      date: MONDAY,
+      scheduled: 2,
+      done: 1,
+      scheduledMinutes: 100,
+      doneMinutes: 10,
+    });
+  });
+
+  it("keeps the counts as well, for the measures that still use them", () => {
+    // `perfectDays` and the trailing rates ask "how many", not "how long", and
+    // are unchanged — a day is perfect when everything on it is done, whatever
+    // it weighed.
+    const tasks = [routine("a", [0], { effortMinutes: 45 })];
+    const [day] = dailyTally({ tasks, completions: new Map(), today: MONDAY }, MONDAY, MONDAY);
+
+    expect(day?.scheduled).toBe(1);
+    expect(day?.scheduledMinutes).toBe(45);
+  });
+});
+
+describe("a tally that arrived without minutes", () => {
+  // A client deployed ahead of the Worker, or a cached response replayed. It
+  // was observed rendering the word "NaN" in the calendar, coloured green,
+  // because NaN passes `=== 0` and fails every comparison in `scoreBand`.
+  const legacy = { date: "2026-09-01", scheduled: 4, done: 1 } as unknown as DayTally;
+
+  it("scores it as nothing rather than as NaN", () => {
+    expect(dayScore(legacy)).toBeNull();
+  });
+
+  it("leaves the week unscored rather than poisoning its average", () => {
+    expect(weekScore([legacy], "2026-09-07")).toBeNull();
+  });
+
+  it("does not drag down a week that also holds real days", () => {
+    const real = {
+      date: "2026-09-02",
+      scheduled: 1,
+      done: 1,
+      scheduledMinutes: 30,
+      doneMinutes: 30,
+    };
+    expect(weekScore([legacy, real], "2026-09-07")).toBe(100);
   });
 });

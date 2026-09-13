@@ -1,6 +1,7 @@
 import { scoreBand } from "@sticker-collector/shared";
 import type { CSSProperties } from "react";
 import type { DailyReview } from "../lib/dailyReview";
+import { asTime } from "../lib/duration";
 import { Badge, Button, Coin, Dialog } from "./ui";
 
 /**
@@ -74,9 +75,12 @@ export function DailyReviewDialog({ review, heading, onClose }: DailyReviewDialo
             {review.score}
           </span>
           <span className="font-body text-sm text-ink-muted">
-            {/* The fraction the score is short for. A percentage alone hides
-                whether the day held two things or twenty. */}
-            {review.done} of {review.scheduled} scheduled
+            {/* The fraction the score is short for — in MINUTES, because that
+                is what the score is a proportion of. Printing tasks here beside
+                a time-weighted number would have the caption disagree with the
+                figure above it on any day whose tasks are not all the same
+                length, which is most of them. */}
+            {asTime(review.done)} of {asTime(review.scheduled)}
           </span>
         </div>
       )}
