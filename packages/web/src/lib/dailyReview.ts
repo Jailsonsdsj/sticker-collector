@@ -36,7 +36,12 @@ export interface DailyReview {
    * would punish taking a Sunday off.
    */
   score: number | null;
-  /** What the day held, for the "3 of 4" the score is short for. */
+  /**
+   * What the day held and what got done, **in minutes** — the two numbers the
+   * score is a proportion of. Named for the fraction they print, not for the
+   * tasks behind them: the score weighs time, so the caption has to as well or
+   * it contradicts the number above it.
+   */
   scheduled: number;
   done: number;
 }
@@ -88,22 +93,27 @@ export function buildReview(
     {
       tasks: tasks
         .filter((task) => !task.deletedAt)
-        .map((task) => ({ id: task.id, title: task.title, schedule: scheduleOf(task, timeZone) })),
+        .map((task) => ({
+          id: task.id,
+          title: task.title,
+          schedule: scheduleOf(task, timeZone),
+          effortMinutes: task.effortMinutes,
+        })),
       completions: completionsByTask(occurrences, timeZone),
       today: date,
     },
     date,
     date,
   );
-  const day = tally[0] ?? { date, scheduled: 0, done: 0 };
+  const day = tally[0] ?? { date, scheduled: 0, done: 0, scheduledMinutes: 0, doneMinutes: 0 };
 
   return {
     date,
     rows,
     coins: rows.reduce((sum, row) => sum + row.coins, 0),
     score: dayScore(day),
-    scheduled: day.scheduled,
-    done: day.done,
+    scheduled: day.scheduledMinutes,
+    done: day.doneMinutes,
   };
 }
 

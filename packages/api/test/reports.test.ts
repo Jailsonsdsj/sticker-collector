@@ -36,13 +36,17 @@ function switchTo(user: { id: string; token: string }) {
 }
 
 /** A daily routine, straight into the table. */
-async function routine(title: string, weekdays = WEEKDAYS_MASK_ALL): Promise<string> {
+async function routine(
+  title: string,
+  weekdays = WEEKDAYS_MASK_ALL,
+  effortMinutes = 30,
+): Promise<string> {
   const id = crypto.randomUUID();
   await env.DB.prepare(
     `INSERT INTO task (id,user_id,title,effort_minutes,reward_coins,priority,type,weekdays,created_at)
      VALUES (?,?,?,?,?,'medium','routine',?,?)`,
   )
-    .bind(id, userId, title, 30, 30, weekdays, "2026-07-01T00:00:00Z")
+    .bind(id, userId, title, effortMinutes, effortMinutes, weekdays, "2026-07-01T00:00:00Z")
     .run();
   return id;
 }
@@ -126,6 +130,10 @@ describe("what the endpoint reports", () => {
       date: yesterday,
       scheduled: 1,
       done: 1,
+      // Minutes travel with the counts: the score is a proportion of time, and
+      // the client cannot weigh a day it was only sent headcounts for.
+      scheduledMinutes: 30,
+      doneMinutes: 30,
     });
 
     // And it agrees with the trailing rate over the same window.
@@ -437,3 +445,26 @@ async function sealedAlbum(): Promise<string> {
   }
   return albumId;
 }
+
+describe("the minutes a day is weighed by", () => {
+  it("reports the day's real minutes, from each task's own effort", async () => {
+    // NON-default efforts on purpose: with everything at 30 minutes, a server
+    // that ignored the column and hardcoded 30 would be indistinguishable from
+    // one that read it.
+    const yesterday = addDays(today(), -1);
+    await routine("Quick", WEEKDAYS_MASK_ALL, 5);
+    const long = await routine("Long", WEEKDAYS_MASK_ALL, 115);
+    await complete(long, yesterday);
+
+    const report = await momentum();
+    const day = report.days.find((d) => d.date === yesterday);
+
+    expect(day).toEqual({
+      date: yesterday,
+      scheduled: 2,
+      done: 1,
+      scheduledMinutes: 120,
+      doneMinutes: 115,
+    });
+  });
+});

@@ -12,8 +12,8 @@ const review = (over: Partial<DailyReview> = {}): DailyReview => ({
   ],
   coins: 42,
   score: 67,
-  scheduled: 3,
-  done: 2,
+  scheduled: 45,
+  done: 30,
   ...over,
 });
 
@@ -115,13 +115,30 @@ describe("how the day scored", () => {
     expect(screen.getByText("67")).toBeInTheDocument();
   });
 
-  it("says the fraction it is short for", () => {
-    // A percentage alone hides whether the day held two things or twenty.
+  it("says the fraction it is short for, in minutes", () => {
+    // A percentage alone hides whether the day held ten minutes or ten hours.
+    // Minutes rather than tasks, because minutes are what the score divides:
+    // printing "2 of 3" beside a time-weighted number would have the caption
+    // disagree with the figure above it on any day of uneven tasks.
     render(
-      <DailyReviewDialog review={review({ score: 67, done: 2, scheduled: 3 })} onClose={vi.fn()} />,
+      <DailyReviewDialog
+        review={review({ score: 67, done: 30, scheduled: 45 })}
+        onClose={vi.fn()}
+      />,
     );
 
-    expect(screen.getByText("2 of 3 scheduled")).toBeInTheDocument();
+    expect(screen.getByText("30m of 45m")).toBeInTheDocument();
+  });
+
+  it("reads a long day in hours", () => {
+    render(
+      <DailyReviewDialog
+        review={review({ score: 50, done: 90, scheduled: 180 })}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("1h 30m of 3h 0m")).toBeInTheDocument();
   });
 
   it("shows no score for a day that held nothing scheduled", () => {

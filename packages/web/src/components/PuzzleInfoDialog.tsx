@@ -1,4 +1,5 @@
-import { coinsToHours, type PuzzleSpend } from "@sticker-collector/shared";
+import type { PuzzleSpend } from "@sticker-collector/shared";
+import { asTime } from "../lib/duration";
 import { Markdown } from "./Markdown";
 import { Coin, Dialog } from "./ui";
 
@@ -8,17 +9,6 @@ export interface PuzzleInfoDialogProps {
   description: string | null;
   spend: PuzzleSpend;
   onClose: () => void;
-}
-
-/**
- * One coin is one minute, so a price is a length of time.
- *
- * `2h 30m`, and `30m` under the hour — an hours field reading `0h` is a field
- * asking to be read twice.
- */
-function asTime(coins: number): string {
-  const { hours, minutes } = coinsToHours(coins);
-  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
 }
 
 function Line({ label, coins, tone }: { label: string; coins: number; tone: string }) {

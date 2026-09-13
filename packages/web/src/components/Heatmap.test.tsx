@@ -10,10 +10,13 @@ import { Heatmap, heatLevel } from "./Heatmap";
 const MONDAY = "2026-07-27";
 const SUNDAY = "2026-08-02";
 
+/** One task is one 30-minute task, so a count-shaped fixture keeps its share. */
 const day = (date: string, scheduled: number, done: number): DayTally => ({
   date,
   scheduled,
   done,
+  scheduledMinutes: scheduled * 30,
+  doneMinutes: done * 30,
 });
 
 /** A run of days starting Monday, all identical. */
@@ -397,6 +400,8 @@ describe("the week score column", () => {
     date,
     scheduled,
     done,
+    scheduledMinutes: scheduled * 30,
+    doneMinutes: done * 30,
   });
 
   it("heads the column with R", () => {

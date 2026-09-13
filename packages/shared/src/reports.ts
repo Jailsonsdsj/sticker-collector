@@ -26,11 +26,20 @@ import {
  * silently rotated by one day and looks entirely plausible.
  */
 
-/** A routine or one-off, with just enough of it to schedule. */
+/** A routine or one-off, with just enough of it to schedule and to weigh. */
 export interface ReportTask {
   id: string;
   title: string;
   schedule: Schedule;
+  /**
+   * What it is worth, in minutes.
+   *
+   * Carried so a day can be scored by **time** rather than by headcount: three
+   * five-minute chores and one two-hour job are four tasks and very different
+   * days, and a score that cannot tell them apart says 75% for finishing the
+   * three easy ones.
+   */
+  effortMinutes: number;
 }
 
 /** The days a task was completed. Order does not matter. */
@@ -115,6 +124,9 @@ export interface DayTally {
   date: LocalDate;
   scheduled: number;
   done: number;
+  /** The same two, weighed in minutes — what the score is computed from. */
+  scheduledMinutes: number;
+  doneMinutes: number;
 }
 
 /**
@@ -126,6 +138,8 @@ export interface DayTally {
 export function dailyTally(input: ReportInput, from: LocalDate, to: LocalDate): DayTally[] {
   const scheduledOn = new Map<LocalDate, number>();
   const doneOn = new Map<LocalDate, number>();
+  const scheduledMins = new Map<LocalDate, number>();
+  const doneMins = new Map<LocalDate, number>();
 
   for (const task of input.tasks) {
     const days = occurrencesInWindow(task.schedule, from, to);
@@ -133,7 +147,14 @@ export function dailyTally(input: ReportInput, from: LocalDate, to: LocalDate): 
 
     for (const day of days) {
       scheduledOn.set(day, (scheduledOn.get(day) ?? 0) + 1);
-      if (done?.has(day)) doneOn.set(day, (doneOn.get(day) ?? 0) + 1);
+      scheduledMins.set(day, (scheduledMins.get(day) ?? 0) + task.effortMinutes);
+      if (done?.has(day)) {
+        doneOn.set(day, (doneOn.get(day) ?? 0) + 1);
+        // The task's effort as it stands, not a snapshot: it weighs both sides
+        // of the same fraction, so editing an estimate cannot move a day that
+        // was finished or a day that was missed — only one part-way through.
+        doneMins.set(day, (doneMins.get(day) ?? 0) + task.effortMinutes);
+      }
     }
   }
 
@@ -144,13 +165,21 @@ export function dailyTally(input: ReportInput, from: LocalDate, to: LocalDate): 
       date,
       scheduled: scheduledOn.get(date) ?? 0,
       done: doneOn.get(date) ?? 0,
+      scheduledMinutes: scheduledMins.get(date) ?? 0,
+      doneMinutes: doneMins.get(date) ?? 0,
     });
   }
   return tally;
 }
 
 /**
- * A day as a score out of 100: how much of what it held got done.
+ * A day as a score out of 100: how much of the day's **time** got done.
+ *
+ * **Minutes, not headcount.** Three five-minute chores and one two-hour job are
+ * four tasks and two very different days; counting them equally scored 75% for
+ * finishing the three easy ones and leaving the afternoon's work untouched. The
+ * app already treats a minute as its unit — a coin is a minute — so weighing a
+ * day by the time it asked for is the measure the rest of the economy uses.
  *
  * **`null`, never 0, when nothing was scheduled.** A day you had no work on is
  * not a day you failed — the same rule `perfectDays` and `completionRate`
@@ -162,8 +191,14 @@ export function dailyTally(input: ReportInput, from: LocalDate, to: LocalDate): 
  * mask does not cover still counts as done — and 120% is not a score.
  */
 export function dayScore(day: DayTally): number | null {
-  if (day.scheduled === 0) return null;
-  return Math.min(100, Math.round((day.done / day.scheduled) * 100));
+  const score = Math.round((day.doneMinutes / day.scheduledMinutes) * 100);
+
+  // `isFinite`, not `scheduledMinutes === 0`. A payload from a Worker that
+  // predates the minutes — a client deployed ahead of the API, a cached
+  // response replayed — makes this `undefined / undefined`, which is NaN; and
+  // NaN passes an `=== 0` check, fails every `<` in `scoreBand`, and lands in
+  // the calendar as the word "NaN" coloured green. Seen exactly that way.
+  return Number.isFinite(score) ? Math.min(100, score) : null;
 }
 
 /**

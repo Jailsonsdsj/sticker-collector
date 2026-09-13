@@ -257,3 +257,64 @@ describe("ticking a task that waits for its steps", () => {
     expect(screen.queryByText("Steps first")).not.toBeInTheDocument();
   });
 });
+
+describe("For today, from the task sheet", () => {
+  const capture = (over: Partial<Task> = {}) =>
+    task({ id: "t1", type: "oneoff", weekdays: null, dueAt: null, subtasks: [], ...over });
+
+  const openSheet = async (rows: Task[]) => {
+    tasks = rows;
+    const user = userEvent.setup();
+    render(<Tasks />, { wrapper });
+    await waitFor(() => expect(screen.getByText("Water the plants")).toBeInTheDocument());
+    await user.click(screen.getByText("Water the plants"));
+    return { user, sheet: within(document.querySelector("dialog[open]") as HTMLElement) };
+  };
+
+  const patchBody = () => {
+    const call = fetchMock.mock.calls.find(
+      ([url, init]) => String(url) === "/api/tasks/t1" && (init as RequestInit)?.method === "PATCH",
+    );
+    return call ? JSON.parse((call[1] as RequestInit).body as string) : null;
+  };
+
+  it("pins an undated capture to today", async () => {
+    const { user, sheet } = await openSheet([capture()]);
+
+    await user.click(sheet.getByRole("button", { name: "For today" }));
+
+    await waitFor(() => expect(patchBody()).toMatchObject({ pinnedOn: expect.any(String) }));
+  });
+
+  it("stops it at the same time, exactly as the swipe does", async () => {
+    // A task cannot be both "in progress" and "waiting for today", and the
+    // gesture and the button must not disagree about that.
+    const { user, sheet } = await openSheet([capture({ startedAt: "2026-09-01T09:00:00Z" })]);
+
+    await user.click(sheet.getByRole("button", { name: "For today" }));
+
+    await waitFor(() => expect(patchBody()).toMatchObject({ startedAt: null }));
+  });
+
+  it("takes it back out again, and only that", async () => {
+    // Unpinning is not a way to start something, so it touches `pinnedOn`
+    // alone.
+    const { user, sheet } = await openSheet([capture({ pinnedOn: TODAY })]);
+
+    await user.click(sheet.getByRole("button", { name: "Not today" }));
+
+    await waitFor(() => expect(patchBody()).toEqual({ pinnedOn: null }));
+  });
+
+  it("is not offered on a routine, which follows its own schedule", async () => {
+    const { sheet } = await openSheet([task({ id: "t1", type: "routine", subtasks: [] })]);
+
+    expect(sheet.queryByRole("button", { name: /today/i })).not.toBeInTheDocument();
+  });
+
+  it("is not offered on a one-off that already has a due date", async () => {
+    const { sheet } = await openSheet([capture({ dueAt: "2026-09-20T09:00:00Z" })]);
+
+    expect(sheet.queryByRole("button", { name: /today/i })).not.toBeInTheDocument();
+  });
+});

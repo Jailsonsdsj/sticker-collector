@@ -209,9 +209,35 @@ describe("what the day scored", () => {
     const tasks = [routine({ id: "a" }), routine({ id: "b" }), routine({ id: "c" })];
     const review = buildReview(DAY, [done("a", DAY), done("b", DAY)], tasks, [], UTC);
 
-    expect(review.scheduled).toBe(3);
-    expect(review.done).toBe(2);
+    // MINUTES, not tasks: three 15-minute routines is 45 minutes, of which 30
+    // got done. The proportion happens to match the headcount here because the
+    // three weigh the same — the test below is the one that separates them.
+    expect(review.scheduled).toBe(45);
+    expect(review.done).toBe(30);
     expect(review.score).toBe(67);
+  });
+
+  it("weighs a long task above a short one", () => {
+    // The whole point of the change: three five-minute chores and one two-hour
+    // job are four tasks and two very different days. Counting them equally
+    // scored 75% for finishing the easy three and leaving the afternoon.
+    const tasks = [
+      routine({ id: "a", effortMinutes: 5 }),
+      routine({ id: "b", effortMinutes: 5 }),
+      routine({ id: "c", effortMinutes: 5 }),
+      routine({ id: "big", effortMinutes: 120 }),
+    ];
+    const review = buildReview(
+      DAY,
+      [done("a", DAY), done("b", DAY), done("c", DAY)],
+      tasks,
+      [],
+      UTC,
+    );
+
+    expect(review.scheduled).toBe(135);
+    expect(review.done).toBe(15);
+    expect(review.score).toBe(11); // not 75
   });
 
   it("has no score on a day nothing was scheduled for", () => {
@@ -245,7 +271,7 @@ describe("what the day scored", () => {
     ];
     const review = buildReview(DAY, [done("a", DAY)], tasks, [], UTC);
 
-    expect(review.scheduled).toBe(1);
+    expect(review.scheduled).toBe(15);
     expect(review.score).toBe(100);
   });
 });

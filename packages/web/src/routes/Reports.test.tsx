@@ -36,6 +36,8 @@ function momentum(over: Partial<MomentumReport> = {}): MomentumReport {
       date: addDays(TODAY, i - 29),
       scheduled: 1,
       done: i % 2 === 0 ? 1 : 0,
+      scheduledMinutes: 30,
+      doneMinutes: i % 2 === 0 ? 30 : 0,
     })),
     ...over,
   };
@@ -230,6 +232,8 @@ describe("a user with no history", () => {
         date: addDays(TODAY, i - 29),
         scheduled: 0,
         done: 0,
+        scheduledMinutes: 0,
+        doneMinutes: 0,
       })),
     });
     effortBody = effort({
