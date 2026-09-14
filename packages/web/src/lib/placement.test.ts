@@ -388,9 +388,32 @@ describe("the colour a landing glows in", () => {
       const tile = document.querySelector("[data-piece-index='0']") as HTMLElement;
 
       playPieceLanding(0);
+      /**
+       * Forced, because the glow is a **keyframed** tween and keyframes build
+       * their own timeline, whose first render GSAP defers. The scale tween
+       * beside it is plain and writes synchronously, so the tile can sit there
+       * with `scale(2.4, 2.4)` and `z-index: 30` and no box-shadow at all —
+       * which is precisely how this failed on CI, captured from a reproduction
+       * with the surrounding style logged, and why the failure read as
+       * `expected null not to be null` rather than as a wrong colour.
+       *
+       * Rendering the global timeline at the time it already holds flushes
+       * that without advancing it. Advancing would be worse: GSAP then
+       * interpolates the colour, and jsdom cannot resolve a custom property,
+       * so it reparses the raw string, finds `lime` — a CSS colour keyword, as
+       * are cyan, magenta and violet — and splices the resolved colour into
+       * the token's own name, leaving a custom property that names nothing.
+       * Checked in Chromium first: all five tones keep their token and compute
+       * to the right colour, so that mangling is jsdom's and there is no
+       * product bug behind it.
+       */
+      gsap.globalTimeline.render(gsap.globalTimeline.time(), false, true);
 
-      const named = /var\(--color-([a-z]+)\)/.exec(tile.style.boxShadow);
-      expect(named).not.toBeNull();
+      const shadow = tile.style.boxShadow;
+      const named = /var\(--color-([a-z]+)\)/.exec(shadow);
+      // The raw value in the message: `expected null not to be null` says
+      // nothing about what was painted, which is the only useful fact here.
+      expect(named, `no token in box-shadow ${JSON.stringify(shadow)}`).not.toBeNull();
       shades.add(named?.[1] as string);
     }
 

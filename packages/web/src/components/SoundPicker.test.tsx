@@ -70,15 +70,26 @@ describe("choosing what the app says", () => {
     expect(replay).toBeInTheDocument(); // it is reachable and does not throw
   });
 
-  it("does not fall over where there is no Web Audio", () => {
+  it("does not fall over where there is no Web Audio", async () => {
     // jsdom, and any browser old enough to lack it. Choosing a sound must not
     // be able to break the settings screen.
+    //
+    // Awaited, and asserted on the settled promise. This was written as
+    // `expect(async () => { … }).not.toThrow()`, which is two faults in one
+    // line. An async function returns a promise rather than throwing, so the
+    // assertion held whatever the component did — it passed with a `throw`
+    // planted in the change handler. And the interaction it dropped went on
+    // dispatching after the test had ended, into a jsdom already torn down:
+    // CI reported that as an unhandled rejection and failed a run in which all
+    // 2476 tests passed. A promise handed to `expect` must be awaited.
     const user = userEvent.setup();
     render(<SoundPicker />);
 
-    expect(async () => {
-      await user.selectOptions(screen.getByLabelText("Task done"), "rise");
-    }).not.toThrow();
+    await expect(
+      user.selectOptions(screen.getByLabelText("Task done"), "rise"),
+    ).resolves.toBeUndefined();
+
+    expect(loadSounds().taskDone).toBe("rise");
   });
 
   it("names itself, so the section is findable", () => {
