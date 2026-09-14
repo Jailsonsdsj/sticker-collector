@@ -277,8 +277,7 @@ export function saveSound(event: SoundEvent, id: SoundId): void {
  *
  * Constructing one at import time gets it created `suspended` by every browser
  * with an autoplay policy, and on Safari counts against the page whether or not
- * a sound is ever played. Every caller here is downstream of a tap, which is
- * the gesture the policy is waiting for.
+ * a sound is ever played.
  */
 let context: AudioContext | null = null;
 
@@ -289,10 +288,99 @@ function audio(): AudioContext | null {
     (window as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   if (!Ctor) return null;
   if (!context) context = new Ctor();
-  // Resumed on every play: a context started before the first gesture stays
-  // suspended, and one the OS suspended in the background never wakes itself.
-  if (context.state === "suspended") void context.resume();
   return context;
+}
+
+let armed = false;
+
+/**
+ * Opens the audio device on the first gesture, whatever that gesture is.
+ *
+ * **This is what makes sound work on iOS at all.** Safari will not let a page
+ * make a noise it was not asked for: an `AudioContext` created outside a user
+ * gesture is born `suspended`, and `resume()` called outside one is refused.
+ *
+ * Four of this app's six sound triggers fire from a mutation's `onSuccess` — a
+ * sticker bought, a piece unlocked — which is after a network round trip and so
+ * long past the tap that started it. Whichever of those happened first in a
+ * session was therefore creating the context in precisely the place iOS refuses
+ * to open it, and the app then stayed silent for the rest of the session no
+ * matter what was tapped afterwards. On desktop Chrome none of this shows,
+ * because the context is allowed to start on its own.
+ *
+ * So the device is opened somewhere else entirely: the first touch anywhere in
+ * the app, which is a gesture by definition and costs the user nothing. After
+ * that the context is running and every later sound is only scheduling.
+ *
+ * The silent one-sample buffer is not superstition. Safari keeps a context
+ * closed until something has actually been played through it, and a `resume()`
+ * with no source ever started does not reliably take.
+ */
+export function armSounds(): void {
+  if (typeof window === "undefined" || armed) return;
+  armed = true;
+
+  const events = ["pointerdown", "touchend", "keydown"] as const;
+
+  const open = () => {
+    // All three removed, not just the one that fired: `once` would leave the
+    // other two armed to re-run this on the next tap of a different kind.
+    for (const type of events) window.removeEventListener(type, open, true);
+    try {
+      const ctx = audio();
+      if (!ctx) return;
+      void ctx.resume();
+
+      const source = ctx.createBufferSource();
+      source.buffer = ctx.createBuffer(1, 1, 22050);
+      source.connect(ctx.destination);
+      source.start(0);
+    } catch {
+      // A device that will not open is a quiet app, not a broken one.
+    }
+  };
+
+  // Capture, so a handler that stops propagation cannot also stop the audio
+  // device from ever opening.
+  for (const type of events) window.addEventListener(type, open, true);
+}
+
+/** Builds and starts the oscillators. Assumes a context that is awake. */
+function schedule(ctx: AudioContext, def: SoundDef): void {
+  const now = ctx.currentTime;
+  for (const n of def.notes) {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = n.wave ?? "sine";
+    osc.frequency.value = n.hz;
+
+    // An envelope, not a switch. A gain that jumps to full and back leaves a
+    // click at each end — the discontinuity is audible and sounds like a
+    // fault rather than a note.
+    const peak = n.gain ?? 0.2;
+    const start = now + n.at;
+
+    // The glide, when the note is a movement rather than a pitch. Exponential
+    // because pitch is heard logarithmically — a linear sweep spends most of
+    // its time in the top octave and arrives with a lurch.
+    if (n.toHz !== undefined) {
+      // `setValueAtTime` first, to anchor where the ramp BEGINS. A ramp with
+      // no preceding event runs from the last scheduled value — which is
+      // context time zero — so a glide on a delayed note would already be
+      // part-way down by the time it sounded. Every glide here starts at 0
+      // today and would survive without this; the note that does not is the
+      // one nobody would think to check.
+      osc.frequency.setValueAtTime(n.hz, start);
+      osc.frequency.exponentialRampToValueAtTime(n.toHz, start + n.seconds);
+    }
+    gain.gain.setValueAtTime(0, start);
+    gain.gain.linearRampToValueAtTime(peak, start + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + n.seconds);
+
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(start);
+    osc.stop(start + n.seconds + 0.02);
+  }
 }
 
 export function soundById(id: SoundId): SoundDef | undefined {
@@ -315,40 +403,27 @@ export function playSoundId(id: SoundId): void {
     const ctx = audio();
     if (!ctx) return;
 
-    const now = ctx.currentTime;
-    for (const n of def.notes) {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = n.wave ?? "sine";
-      osc.frequency.value = n.hz;
-
-      // An envelope, not a switch. A gain that jumps to full and back leaves a
-      // click at each end — the discontinuity is audible and sounds like a
-      // fault rather than a note.
-      const peak = n.gain ?? 0.2;
-      const start = now + n.at;
-
-      // The glide, when the note is a movement rather than a pitch. Exponential
-      // because pitch is heard logarithmically — a linear sweep spends most of
-      // its time in the top octave and arrives with a lurch.
-      if (n.toHz !== undefined) {
-        // `setValueAtTime` first, to anchor where the ramp BEGINS. A ramp with
-        // no preceding event runs from the last scheduled value — which is
-        // context time zero — so a glide on a delayed note would already be
-        // part-way down by the time it sounded. Every glide here starts at 0
-        // today and would survive without this; the note that does not is the
-        // one nobody would think to check.
-        osc.frequency.setValueAtTime(n.hz, start);
-        osc.frequency.exponentialRampToValueAtTime(n.toHz, start + n.seconds);
-      }
-      gain.gain.setValueAtTime(0, start);
-      gain.gain.linearRampToValueAtTime(peak, start + 0.01);
-      gain.gain.exponentialRampToValueAtTime(0.0001, start + n.seconds);
-
-      osc.connect(gain).connect(ctx.destination);
-      osc.start(start);
-      osc.stop(start + n.seconds + 0.02);
+    if (ctx.state === "running") {
+      schedule(ctx, def);
+      return;
     }
+
+    /**
+     * Asleep: wake it FIRST, and schedule only once it has actually started.
+     *
+     * Scheduling now would pin every note to a `currentTime` that is frozen
+     * while the context sleeps, so by the moment it wakes the whole sound is
+     * already in the past and not one note is heard. No error, no warning —
+     * exactly the shape of "the sound feature does not work".
+     *
+     * `Promise.resolve` because Safari's `webkitAudioContext.resume()` returns
+     * undefined rather than a promise, and `.then` on undefined throws.
+     */
+    Promise.resolve(ctx.resume())
+      .then(() => schedule(ctx, def))
+      .catch(() => {
+        // Refused: the device is locked and this sound is simply not heard.
+      });
   } catch {
     // Quiet is an acceptable outcome; a thrown error on the tick path is not.
   }
