@@ -2,6 +2,7 @@ import { AppIconPicker } from "../components/AppIconPicker";
 import { BackupPanel } from "../components/BackupPanel";
 import { ErrorLogPanel } from "../components/ErrorLogPanel";
 import { AppHeader } from "../components/layout";
+import { SoundPicker } from "../components/SoundPicker";
 import { TimeZonePanel } from "../components/TimeZonePanel";
 
 /**
@@ -20,6 +21,7 @@ export function Settings() {
       <AppHeader title="Settings" />
       <TimeZonePanel />
       <AppIconPicker />
+      <SoundPicker />
       <BackupPanel />
       <ErrorLogPanel />
     </>
