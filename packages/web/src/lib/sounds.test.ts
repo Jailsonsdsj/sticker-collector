@@ -173,6 +173,7 @@ describe("playing one", () => {
     const envelope: string[] = [];
     const ramps: { from: number; to: number }[] = [];
     const anchors: { hz: number; at: number }[] = [];
+    const silent: string[] = [];
     const ctx = {
       state,
       currentTime: 0,
@@ -204,13 +205,23 @@ describe("playing one", () => {
         },
         connect: () => ({ connect: () => undefined }),
       }),
+      createBuffer: (channels: number, frames: number, rate: number) => ({
+        channels,
+        frames,
+        rate,
+      }),
+      createBufferSource: () => ({
+        buffer: null as unknown,
+        connect: () => undefined,
+        start: () => silent.push("started"),
+      }),
     };
     function FakeAudioContext() {
       return ctx;
     }
     vi.stubGlobal("AudioContext", FakeAudioContext);
     vi.resetModules();
-    return { started, envelope, ramps, anchors, ctx, sounds: await import("./sounds") };
+    return { started, envelope, ramps, anchors, silent, ctx, sounds: await import("./sounds") };
   };
 
   it("plays a note per note in the sound", async () => {
@@ -321,5 +332,168 @@ describe("playing one", () => {
     const sounds = await import("./sounds");
 
     expect(() => sounds.playSoundId("chime")).not.toThrow();
+  });
+});
+
+describe("opening the audio device on iOS", () => {
+  /**
+   * Safari will not let a page make a noise it was not asked for. A context
+   * created outside a gesture is born suspended and `resume()` outside one is
+   * refused — and four of this app's six triggers fire from a mutation's
+   * `onSuccess`, which is after a network round trip and so has no gesture left
+   * to open the device with. Whichever fired first was creating the context in
+   * the one place iOS refuses to open it, and the app stayed silent for the
+   * rest of the session. None of this shows on desktop Chrome, where a context
+   * may start by itself.
+   */
+  const withAudio = async (state: "running" | "suspended" = "suspended") => {
+    const started: number[] = [];
+    const silent: string[] = [];
+    let constructed = 0;
+    const ctx = {
+      state,
+      currentTime: 0,
+      resume: vi.fn(() => Promise.resolve()),
+      destination: {},
+      createOscillator: () => ({
+        type: "sine",
+        frequency: { value: 0, setValueAtTime: () => {}, exponentialRampToValueAtTime: () => {} },
+        connect: () => ({ connect: () => undefined }),
+        start: (at: number) => started.push(at),
+        stop: () => undefined,
+      }),
+      createGain: () => ({
+        gain: {
+          setValueAtTime: () => {},
+          linearRampToValueAtTime: () => {},
+          exponentialRampToValueAtTime: () => {},
+        },
+        connect: () => ({ connect: () => undefined }),
+      }),
+      createBuffer: () => ({}),
+      createBufferSource: () => ({
+        buffer: null as unknown,
+        connect: () => undefined,
+        start: () => silent.push("started"),
+      }),
+    };
+    function FakeAudioContext() {
+      constructed += 1;
+      return ctx;
+    }
+    vi.stubGlobal("AudioContext", FakeAudioContext);
+    vi.resetModules();
+    return {
+      started,
+      silent,
+      ctx,
+      count: () => constructed,
+      sounds: await import("./sounds"),
+    };
+  };
+
+  const tap = () => window.dispatchEvent(new Event("pointerdown"));
+
+  // A test that arms and never taps leaves its listeners on the window, where
+  // the next test's gesture would find them and open a second device. They
+  // remove themselves on the first gesture, so one here drains them while this
+  // test's stub is still the one they will reach.
+  afterEach(() => tap());
+
+  it("builds nothing until the user has touched the screen", async () => {
+    // Arming is listeners and nothing else. A context constructed at startup is
+    // one iOS has already decided about, and it decided no.
+    const { count, sounds } = await withAudio();
+
+    sounds.armSounds();
+
+    expect(count()).toBe(0);
+  });
+
+  it("opens the device on the first gesture, whatever that gesture was", async () => {
+    const { count, ctx, sounds } = await withAudio();
+    sounds.armSounds();
+
+    tap();
+
+    expect(count()).toBe(1);
+    expect(ctx.resume).toHaveBeenCalled();
+  });
+
+  it("plays a silent sample through it, which is what actually unlocks Safari", async () => {
+    // Not superstition: Safari keeps the context closed until something has
+    // been played through it, and a resume with no source started does not
+    // reliably take.
+    const { silent, sounds } = await withAudio();
+    sounds.armSounds();
+
+    tap();
+
+    expect(silent).toEqual(["started"]);
+  });
+
+  it("opens it once, however much the screen is touched", async () => {
+    // Counting constructions is not enough on its own: the context is cached,
+    // so a handler left armed would go on running — and firing a fresh source
+    // node into the device on every tap for the rest of the session — while
+    // the count sat at one. The silent sample is what shows that.
+    const { count, silent, sounds } = await withAudio();
+    sounds.armSounds();
+
+    tap();
+    tap();
+    window.dispatchEvent(new Event("touchend"));
+
+    expect(count()).toBe(1);
+    expect(silent).toEqual(["started"]);
+  });
+
+  it("does not stack listeners when arming runs twice", async () => {
+    const { silent, sounds } = await withAudio();
+
+    sounds.armSounds();
+    sounds.armSounds();
+    tap();
+
+    expect(silent).toEqual(["started"]);
+  });
+
+  it("waits for a sleeping device to wake before scheduling a note", async () => {
+    /**
+     * The second half of the same bug. `currentTime` is frozen while a context
+     * sleeps, so notes scheduled against it all land in the past the moment it
+     * wakes — every one of them silent, with no error raised. Resume first,
+     * schedule after.
+     */
+    const { started, ctx, sounds } = await withAudio("suspended");
+
+    sounds.playSoundId("chime");
+
+    expect(started).toEqual([]); // nothing pinned to a clock that is not moving
+    expect(ctx.resume).toHaveBeenCalled();
+
+    await vi.waitFor(() => expect(started.length).toBeGreaterThan(0));
+  });
+
+  it("schedules straight away when the device is already awake", async () => {
+    // The common path, and it must not pay for the one above.
+    const { started, sounds } = await withAudio("running");
+
+    sounds.playSoundId("chime");
+
+    expect(started.length).toBeGreaterThan(0);
+  });
+
+  it("stays quiet, and does not throw, when the device refuses to open", async () => {
+    function Exploding() {
+      throw new Error("no device");
+    }
+    vi.stubGlobal("AudioContext", Exploding);
+    vi.resetModules();
+    const sounds = await import("./sounds");
+
+    sounds.armSounds();
+
+    expect(() => tap()).not.toThrow();
   });
 });
