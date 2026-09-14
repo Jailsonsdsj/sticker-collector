@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { playSound } from "./sounds";
 
 /**
  * The undo window.
@@ -103,6 +104,17 @@ export function CompletionQueueProvider({
   const complete = useCallback<QueueValue["complete"]>((ref, { title, coins }) => {
     const key = keyOf(ref);
     if (timers.current.has(key)) return; // already scheduled; do not double-book
+
+    // At the tick, not at the commit five seconds later. The reward has to be
+    // felt when the box is pressed — the coins already appear then — and a
+    // sound that arrives once the undo window closes belongs to nothing the
+    // user did. Undoing does not un-play it, which is the right trade: a sound
+    // is a response to a gesture, not a record of a fact.
+    //
+    // Here rather than at the call sites: the list, the sheet, the weekly grid,
+    // the agenda and bulk select all arrive at this function, and a sound wired
+    // per screen is a sound one screen forgets.
+    playSound("taskDone");
 
     setPending((prev) => ({ ...prev, [key]: { ref, title, coins } }));
     timers.current.set(

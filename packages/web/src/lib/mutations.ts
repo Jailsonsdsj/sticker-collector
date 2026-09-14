@@ -21,6 +21,7 @@ import type {
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "./api";
 import { keys } from "./queries";
+import { playSound } from "./sounds";
 import { today } from "./timezone";
 
 /**
@@ -350,6 +351,8 @@ export function useBuySticker(albumId: string) {
         idempotencyKey: crypto.randomUUID(),
       }),
     onSuccess: () => {
+      // Buying names the sticker you do not own, so this is always a new one.
+      playSound("sticker");
       void client.invalidateQueries({ queryKey: keys.album(albumId) });
       void client.invalidateQueries({ queryKey: keys.albumsAll });
       void client.invalidateQueries({ queryKey: keys.wallet });
@@ -369,7 +372,11 @@ export function usePullSticker(albumId: string) {
         method: "POST",
         idempotencyKey: crypto.randomUUID(),
       }),
-    onSuccess: () => {
+    onSuccess: (result) => {
+      // A duplicate is not a new sticker. The sound marks the shelf growing,
+      // and playing it for a copy you already had would be the app celebrating
+      // the outcome the user was hoping to avoid.
+      if (!result.duplicate) playSound("sticker");
       void client.invalidateQueries({ queryKey: keys.album(albumId) });
       void client.invalidateQueries({ queryKey: keys.albumsAll });
       void client.invalidateQueries({ queryKey: keys.wallet });
@@ -445,6 +452,9 @@ export function usePullPiece(id: string) {
         idempotencyKey: crypto.randomUUID(),
       }),
     onSuccess: () => {
+      // A random pull draws from the locked pieces only, so it is always a
+      // piece you did not have — no duplicate case to exclude, unlike stickers.
+      playSound("piece");
       void client.invalidateQueries({ queryKey: keys.puzzle(id) });
       void client.invalidateQueries({ queryKey: keys.puzzlesAll });
       void client.invalidateQueries({ queryKey: keys.wallet });
@@ -500,7 +510,10 @@ export function useUnlockPieces(id: string) {
         body,
         idempotencyKey: crypto.randomUUID(),
       }),
-    onSuccess: () => {
+    onSuccess: (result) => {
+      // Once for the purchase, however many pieces it bought — sixty tones
+      // fired together is not sixty rewards, it is a noise.
+      if (result.pieces.length > 0) playSound("piece");
       void client.invalidateQueries({ queryKey: keys.puzzle(id) });
       void client.invalidateQueries({ queryKey: keys.puzzlesAll });
       void client.invalidateQueries({ queryKey: keys.wallet });
