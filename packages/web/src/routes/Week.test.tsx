@@ -456,3 +456,115 @@ describe("the steps on the week's task sheet", () => {
     expect(screen.getByRole("button", { name: "Done" })).toBeDisabled();
   });
 });
+
+describe("a missed day's steps, on that day's block", () => {
+  /**
+   * Reported from the device: a routine missed on an earlier day of the week
+   * showed its steps read-only, and with "Block Done until finishing steps" on,
+   * its Done could never unlock. The day was still completable and paid in full,
+   * and nothing could close it — the Worker judges a run against its own day's
+   * steps, and the sheet could only ever tick today's.
+   *
+   * The clock is pinned to a Wednesday so there is always a day behind and a day
+   * ahead inside the visible week; on a real Monday there is no past block on
+   * screen to open. `Date` alone, so the queries and the clicks keep real timers.
+   */
+  const WEDNESDAY_NOON = new Date("2026-09-16T12:00:00Z");
+  const TUESDAY = "2026-09-15";
+  const THURSDAY = "2026-09-17";
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(WEDNESDAY_NOON);
+  });
+
+  const blockOn = (day: string, over: Partial<Task> = {}): Task[] => [
+    {
+      ...(ROUTINES[0] as Task),
+      id: "t1",
+      title: "Stretch",
+      weekdays: WEEKDAYS_MASK_ALL,
+      slots: [{ weekday: weekdayOf(day), startMin: 600, endMin: 660 }],
+      subtasks: [
+        { id: "a", title: "Roll the mat", position: 0, doneOn: null },
+        { id: "b", title: "Put it away", position: 1, doneOn: null },
+      ],
+      ...over,
+    },
+  ];
+
+  let sent: { done: boolean; on?: string }[];
+
+  // jsdom has no layout, so the agenda renders its phone layout: one day at a
+  // time, opening on today. The day is picked first, as it is on a phone.
+  const open = async (tasks: Task[], day: "TU" | "TH") => {
+    sent = [];
+    let current = tasks;
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      const read = (init?.method ?? "GET") === "GET";
+      if (read && url.startsWith("/api/tasks")) return json(current);
+      if (read && url.startsWith("/api/occurrences")) return json([]);
+      if (read && url.startsWith("/api/epics")) return json([]);
+
+      const step = /\/api\/tasks\/([^/]+)\/subtasks\/([^/]+)$/.exec(url);
+      if (step) {
+        const body = JSON.parse(init?.body as string) as { done: boolean; on?: string };
+        sent.push(body);
+        // Stamped the way the Worker stamps it — the day named, else today — so
+        // a sheet that forgot to name its day stays at 0/2 here, exactly as it
+        // did on the device.
+        current = current.map((row) =>
+          row.id === step[1]
+            ? {
+                ...row,
+                subtasks: row.subtasks.map((sub) =>
+                  sub.id === step[2]
+                    ? { ...sub, doneOn: body.done ? (body.on ?? today()) : null }
+                    : sub,
+                ),
+              }
+            : row,
+        );
+        return json({ subtasks: current.find((r) => r.id === step[1])?.subtasks ?? [] });
+      }
+      return json({ ok: true });
+    });
+    const user = userEvent.setup();
+    render(<Week />, { wrapper });
+    await user.click(await screen.findByRole("button", { name: day }));
+    await user.click(await screen.findByRole("button", { name: /^Stretch, 10:00–11:00/ }));
+    return user;
+  };
+
+  it("lets them be ticked, for that day and not for today", async () => {
+    const user = await open(blockOn(TUESDAY), "TU");
+    expect(screen.getByText("0/2")).toBeInTheDocument();
+
+    await user.click(screen.getByText("Roll the mat"));
+
+    await waitFor(() => expect(screen.getByText("1/2")).toBeInTheDocument());
+    expect(sent).toEqual([{ done: true, on: TUESDAY }]);
+  });
+
+  it("unlocks Done once they are done for that day", async () => {
+    // The whole report in one test: tick the missed run's steps, close the run.
+    const user = await open(blockOn(TUESDAY, { blockUntilSteps: true }), "TU");
+    expect(screen.getByRole("button", { name: "Done" })).toBeDisabled();
+
+    await user.click(screen.getByText("Roll the mat"));
+    await waitFor(() => expect(screen.getByText("1/2")).toBeInTheDocument());
+    await user.click(screen.getByText("Put it away"));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Done" })).toBeEnabled());
+  });
+
+  it("does not offer ticking on a day still to come", async () => {
+    // Its Done is withheld for the same reason: that run has not happened.
+    const user = await open(blockOn(THURSDAY), "TH");
+
+    for (const box of screen.getAllByRole("checkbox")) expect(box).toBeDisabled();
+    await user.click(screen.getByText("Roll the mat"));
+
+    expect(sent).toEqual([]);
+  });
+});

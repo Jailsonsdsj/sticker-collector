@@ -141,8 +141,18 @@ export const subtaskSchema = z.strictObject({
  */
 export const subtaskInputSchema = z.array(subtaskTitleSchema).max(MAX_SUBTASKS);
 
-/** Ticking one. The day is the server's, from `user.timezone`, never the client's. */
-export const toggleSubtaskSchema = z.strictObject({ done: z.boolean() });
+/**
+ * Ticking one.
+ *
+ * `on` is the day being ticked **for**, and only a routine's past day uses it:
+ * a missed run is closed against that day's steps. Omitted, it is the server's
+ * today from `user.timezone` — and a date given is checked against the same
+ * rules as closing that day, never simply believed.
+ */
+export const toggleSubtaskSchema = z.strictObject({
+  done: z.boolean(),
+  on: localDateSchema.optional(),
+});
 export type ToggleSubtask = z.infer<typeof toggleSubtaskSchema>;
 
 const taskCommonFields = {

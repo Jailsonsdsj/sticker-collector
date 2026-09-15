@@ -17,8 +17,8 @@ export interface TaskViewProps {
   /** Whether it is already waiting for today, so the button can say so. */
   pinnedToday?: boolean;
   /**
-   * Absent when the steps may be read but not ticked — a past day on the Week
-   * tab, where a tick would be stamped with today and land on the wrong day.
+   * Absent when the steps may be read but not ticked — a day that has not
+   * arrived, which cannot be closed either.
    */
   onToggleSubtask?: (subtaskId: string, done: boolean) => void;
   /**
@@ -128,9 +128,8 @@ export function TaskView({
         `today`, so the steps simply were not there.
 
         `onToggleSubtask` decides whether they can be *ticked*, not whether they
-        are *seen*. Ticking stamps the server's own today, so on a day that is
-        not today the boxes would appear to do nothing; read-only is the honest
-        state for a past day rather than a control that silently misses.
+        are *seen*. A tick is for the sheet's own day, so a missed run's steps
+        can be done for that run — without which its Done could never unlock.
       */}
       {today && (
         <SubtaskList
