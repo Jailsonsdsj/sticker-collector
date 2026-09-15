@@ -6,7 +6,6 @@ import {
   quickAddTaskSchema,
   type RoutineSlot,
   type SlotConflict,
-  todayIn,
   toggleSubtaskSchema,
   updateTaskSchema,
 } from "@sticker-collector/shared";
@@ -31,6 +30,7 @@ import {
   type TaskInsert,
   toTask,
 } from "../lib/tasks";
+import { tickDay } from "../lib/tickDay";
 import { timeZoneOf } from "../lib/user";
 import { idempotency } from "../middleware/idempotency";
 import { requireAuth } from "../middleware/require-auth";
@@ -218,10 +218,10 @@ taskRoutes.patch("/:id", async (c) => {
  * Its own endpoint rather than a field on the task patch: the patch replaces
  * the whole list, and a tick must not be able to rewrite the titles around it.
  *
- * **The day is the server's**, resolved from `user.timezone` — the same source
- * every other local day comes from. A client sending its own date could tick a
- * routine's step for a day that is not today, which is the one thing `done_on`
- * being a date is supposed to prevent.
+ * **The day defaults to the server's**, from `user.timezone`. A routine may name
+ * a past day instead — a missed run is closed against its own day's steps, so
+ * they have to be tickable for that day — and `tickDay` holds that date to the
+ * same rules as closing it.
  */
 taskRoutes.patch("/:taskId/subtasks/:subtaskId", async (c) => {
   const parsed = toggleSubtaskSchema.safeParse(await c.req.json().catch(() => null));
@@ -231,19 +231,13 @@ taskRoutes.patch("/:taskId/subtasks/:subtaskId", async (c) => {
   const database = db(c.env);
   const taskId = c.req.param("taskId");
 
-  // Joined to `task` so a step can only be ticked by whoever owns the task it
-  // belongs to — `subtask` carries no user id of its own.
-  const owned = await database
-    .select({ id: task.id })
-    .from(task)
-    .where(and(eq(task.id, taskId), eq(task.userId, userId), isNull(task.deletedAt)))
-    .limit(1);
-  if (owned.length === 0) return c.json({ error: "not found" }, 404);
-
   const timeZone = await timeZoneOf(database, userId);
   if (!timeZone) return c.json({ error: "not found" }, 404);
 
-  const doneOn = parsed.data.done ? todayIn(timeZone) : null;
+  const day = await tickDay(database, userId, taskId, parsed.data.on, timeZone);
+  if ("error" in day) return c.json({ error: day.error }, day.status);
+
+  const doneOn = parsed.data.done ? day.on : null;
   const updated = await database
     .update(subtask)
     .set({ doneOn })

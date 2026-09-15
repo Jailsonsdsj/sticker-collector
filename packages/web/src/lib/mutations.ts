@@ -108,10 +108,11 @@ function useOccurrenceMutation(path: string) {
  * earns, and a step earns nothing — so there is no undo window to respect and
  * nothing to protect but the tick itself.
  *
- * The **date is the server's**, from `user.timezone`. The optimistic value uses
- * the client's idea of today and is replaced by the server's answer on settle;
- * the two differ only for the hours a misconfigured profile is out, and the
- * refetch is what resolves it.
+ * `on` is **the day the sheet is about** — a missed routine's own day, since
+ * that run is closed against its own steps and a tick stamped today could never
+ * unblock it. Omitted, the server stamps its own today from `user.timezone`,
+ * and either way the server decides: it holds a named day to the same rules as
+ * closing that day. The optimistic value is replaced by its answer on settle.
  */
 export function useToggleSubtask() {
   const queryClient = useQueryClient();
@@ -121,21 +122,23 @@ export function useToggleSubtask() {
       taskId,
       subtaskId,
       done,
+      on,
     }: {
       taskId: string;
       subtaskId: string;
       done: boolean;
+      on?: string;
     }) =>
       api<{ subtasks: Subtask[] }>(`/api/tasks/${taskId}/subtasks/${subtaskId}`, {
         method: "PATCH",
-        body: { done },
+        body: { done, on },
         idempotencyKey: crypto.randomUUID(),
       }),
 
-    onMutate: async ({ taskId, subtaskId, done }) => {
+    onMutate: async ({ taskId, subtaskId, done, on }) => {
       await queryClient.cancelQueries({ queryKey: keys.tasks });
       const previous = queryClient.getQueryData<Task[]>(keys.tasks);
-      const doneOn = done ? today() : null;
+      const doneOn = done ? (on ?? today()) : null;
 
       queryClient.setQueryData<Task[]>(keys.tasks, (old) =>
         old?.map((task) =>

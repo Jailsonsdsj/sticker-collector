@@ -8,6 +8,7 @@ import {
   WEEKDAYS_MASK_ALL,
   WEEKDAYS_MASK_WEEKDAYS,
   type Weekday,
+  weekdayOf,
 } from "@sticker-collector/shared";
 import { beforeEach, describe, expect, it } from "vitest";
 import app from "../src/index";
@@ -617,5 +618,136 @@ describe("a routine's steps are judged against the day being closed", () => {
       scheduledOn: todayIn("UTC"),
     });
     expect(now.status).toBe(200);
+  });
+});
+
+describe("ticking a missed day's steps for that day", () => {
+  /**
+   * The other half of the rule above, and the half that was missing. A missed
+   * routine stays completable for a week and pays in full — but its steps are
+   * judged against its own day, and a tick could only ever be stamped today. So
+   * with "block Done until the steps are finished" on, a missed day could never
+   * be closed by anyone: its steps could not be done on a day that was over.
+   */
+  type Step = { id: string; doneOn: string | null };
+
+  const blocked = (over: Record<string, unknown> = {}, daysAgo?: number) =>
+    createOldTask(
+      {
+        type: "routine",
+        title: "Stretch",
+        effortMinutes: 15,
+        weekdays: WEEKDAYS_MASK_ALL,
+        subtasks: ["Roll the mat"],
+        blockUntilSteps: true,
+        ...over,
+      },
+      daysAgo,
+    );
+
+  const stepOf = async (taskId: string) => {
+    const list = (await (await call("GET", "/api/tasks")).json()) as {
+      id: string;
+      subtasks: Step[];
+    }[];
+    return list.find((t) => t.id === taskId)?.subtasks[0] as Step;
+  };
+
+  const tick = (taskId: string, stepId: string, on?: string) =>
+    call("PATCH", `/api/tasks/${taskId}/subtasks/${stepId}`, { done: true, on });
+
+  const complete = (taskId: string, scheduledOn: string) =>
+    call("POST", "/api/occurrences/complete", { taskId, scheduledOn });
+
+  it("closes a missed day once its steps are ticked for that day", async () => {
+    const task = await blocked();
+    const step = await stepOf(task.id);
+    const yesterday = addDays(today, -1);
+
+    const ticked = await tick(task.id, step.id, yesterday);
+    expect(ticked.status).toBe(200);
+    expect(((await ticked.json()) as { subtasks: Step[] }).subtasks[0]?.doneOn).toBe(yesterday);
+
+    expect((await complete(task.id, yesterday)).status).toBe(200);
+  });
+
+  it("does not close today with a tick that was for yesterday", async () => {
+    // The same rule in the other direction: each run is its own checklist.
+    const task = await blocked();
+    const step = await stepOf(task.id);
+    await tick(task.id, step.id, addDays(today, -1));
+
+    expect((await complete(task.id, today)).status).toBe(409);
+  });
+
+  it("refuses a day that has not arrived", async () => {
+    // Ticking tomorrow's steps today is doing tomorrow's run early, which is
+    // the thing completion itself refuses.
+    const task = await blocked();
+    const step = await stepOf(task.id);
+
+    expect((await tick(task.id, step.id, addDays(today, 1))).status).toBe(400);
+    expect((await stepOf(task.id)).doneOn).toBeNull();
+  });
+
+  it("refuses a day the routine does not run on", async () => {
+    // A date the client chose is held to the schedule, exactly as a completion
+    // is — otherwise a tick could be stamped on a day no run exists for.
+    const yesterday = addDays(today, -1);
+    const task = await blocked({ weekdays: WEEKDAYS_MASK_ALL & ~(1 << weekdayOf(yesterday)) });
+    const step = await stepOf(task.id);
+
+    expect((await tick(task.id, step.id, yesterday)).status).toBe(400);
+    expect((await stepOf(task.id)).doneOn).toBeNull();
+  });
+
+  it("refuses a day before the routine existed", async () => {
+    // You cannot have missed something that did not exist yet.
+    const task = await blocked({}, 0);
+    const step = await stepOf(task.id);
+
+    expect((await tick(task.id, step.id, addDays(today, -1))).status).toBe(400);
+  });
+
+  it("refuses a day past correcting", async () => {
+    const task = await blocked();
+    const step = await stepOf(task.id);
+
+    expect((await tick(task.id, step.id, addDays(today, -8))).status).toBe(400);
+    expect((await stepOf(task.id)).doneOn).toBeNull();
+  });
+
+  it("refuses a day that was archived by hand, however recent", async () => {
+    // A stored `archived` is one of the two statuses a human decides, and it
+    // outvotes the calendar: yesterday is otherwise still open.
+    const task = await blocked();
+    const step = await stepOf(task.id);
+    const yesterday = addDays(today, -1);
+    await storeOccurrence(task.id, yesterday, "archived", null);
+
+    expect((await tick(task.id, step.id, yesterday)).status).toBe(400);
+  });
+
+  it("ignores the day for a one-off, whose steps count on any date", async () => {
+    const task = await createTask({
+      type: "oneoff",
+      title: "Ship it",
+      effortMinutes: 30,
+      subtasks: ["Write it"],
+      blockUntilSteps: true,
+    });
+    const step = await stepOf(task.id);
+
+    const res = await tick(task.id, step.id, addDays(today, -3));
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { subtasks: Step[] }).subtasks[0]?.doneOn).toBe(today);
+  });
+
+  it("still refuses somebody else's task when a day is named", async () => {
+    const task = await blocked();
+    const step = await stepOf(task.id);
+    token = (await makeUser()).token;
+
+    expect((await tick(task.id, step.id, addDays(today, -1))).status).toBe(404);
   });
 });

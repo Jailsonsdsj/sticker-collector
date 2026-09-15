@@ -210,15 +210,21 @@ export function Week() {
                 }
           }
           // The block's own date, so a routine's checklist shows the run that
-          // was tapped rather than today's. Ticking is offered on today alone:
-          // the server stamps a tick with its own day, so a box on Tuesday's
-          // sheet would record Thursday and appear to do nothing.
+          // was tapped rather than today's — and ticks are stamped with it.
+          // Tuesday's run is closed against Tuesday's steps, so a missed
+          // Tuesday has to be tickable for Tuesday or its Done can never
+          // unlock. Offered wherever Done is: not on a day still to come.
           today={viewing.date}
           onToggleSubtask={
-            viewing.date === localToday
-              ? (subtaskId, done) =>
-                  toggleSubtask.mutate({ taskId: viewing.task.id, subtaskId, done })
-              : undefined
+            viewing.date > localToday
+              ? undefined
+              : (subtaskId, done) =>
+                  toggleSubtask.mutate({
+                    taskId: viewing.task.id,
+                    subtaskId,
+                    done,
+                    on: viewing.date,
+                  })
           }
           started={startedToday(viewing.task, localToday, appTimeZone())}
           // A routine reaches *In progress* through today's occurrence only, so
