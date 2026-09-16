@@ -79,7 +79,7 @@ export function EpicCard({
   const percent = epic.oneOffTotal === 0 ? 0 : (epic.oneOffDone / epic.oneOffTotal) * 100;
 
   /**
-   * One-offs first, routines after.
+   * One-offs first and newest first; routines after, untouched.
    *
    * A one-off is a thing this epic finishes, and it is the only thing the
    * progress bar above counts. A routine never finishes — it is the background
@@ -87,10 +87,26 @@ export function EpicCard({
    * measured by. The `↻` beside each routine says which is which; the order
    * says which to read first.
    *
-   * A stable sort on nothing but the type, so the order within each group is
-   * the one the list already had rather than a new one invented here.
+   * Within the one-offs, **newest first**. The list arrives in whatever order
+   * the database returned — `/api/tasks` has no `ORDER BY` — so a task added to
+   * an epic landed somewhere arbitrary in the list and had to be hunted for.
+   * The one you just wrote down is the one you are thinking about, so it goes
+   * at the top.
+   *
+   * Routines keep the order they came in: they are a set of standing habits
+   * rather than a queue, and nothing about this asked for them to be reshuffled.
+   * The comparator returns 0 for them, and the sort is stable, so they cannot be.
+   *
+   * `Date.parse` rather than comparing the strings: these are ISO instants, and
+   * the seconds-precision ones some rows carry sort wrongly against the
+   * millisecond ones `toISOString` writes whenever they fall in the same second.
    */
-  const ordered = [...tasks].sort((a, b) => TYPE_RANK[a.type] - TYPE_RANK[b.type]);
+  const ordered = [...tasks].sort((a, b) => {
+    const byType = TYPE_RANK[a.type] - TYPE_RANK[b.type];
+    if (byType !== 0) return byType;
+    if (a.type === "routine") return 0;
+    return Date.parse(b.createdAt) - Date.parse(a.createdAt);
+  });
 
   /**
    * Finished means finished — `lastCompletedOn`, not a pending tick.

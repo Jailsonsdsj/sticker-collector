@@ -257,17 +257,65 @@ describe("the order tasks read in", () => {
     expect(titles()).toEqual(["Ship it", "Write the README", "Daily standup", "Weekly review"]);
   });
 
-  it("keeps the order it was given within each kind", () => {
-    // A stable sort on the type alone: the list should not acquire a new
-    // ordering nobody asked for.
+  it("puts the newest one-off at the top", () => {
+    // Reported: a task added to an epic landed somewhere arbitrary in the list.
+    // `/api/tasks` has no ORDER BY, so the order was the database's. The one
+    // just written down is the one being thought about.
     withTasks([
-      task({ id: "b", title: "Second" }),
-      task({ id: "a", title: "First" }),
-      task({ id: "r", title: "Routine", type: "routine", weekdays: 0b1111111 }),
+      task({ id: "a", title: "Oldest", createdAt: "2026-07-01T09:00:00.000Z" }),
+      task({ id: "c", title: "Newest", createdAt: "2026-07-03T09:00:00.000Z" }),
+      task({ id: "b", title: "Middle", createdAt: "2026-07-02T09:00:00.000Z" }),
     ]);
 
-    expect(titles()[0]).toContain("Second");
-    expect(titles()[1]).toContain("First");
+    expect(titles()).toEqual(["Newest", "Middle", "Oldest"]);
+  });
+
+  it("leaves the routines in the order they came", () => {
+    // They are standing habits, not a queue, and nothing asked for them to be
+    // reshuffled — so the comparator returns 0 for them and the sort is stable.
+    withTasks([
+      // Oldest first, deliberately: given newest-first these would come out the
+      // same way whether the routines were sorted or left alone, and the test
+      // would pass while proving nothing.
+      task({
+        id: "r1",
+        title: "Earlier",
+        type: "routine",
+        weekdays: 1,
+        createdAt: "2026-07-02T00:00:00.000Z",
+      }),
+      task({
+        id: "r2",
+        title: "Later",
+        type: "routine",
+        weekdays: 1,
+        createdAt: "2026-07-09T00:00:00.000Z",
+      }),
+    ]);
+
+    expect(titles()).toEqual(["Earlier", "Later"]);
+  });
+
+  it("keeps the given order between one-offs written at the same moment", () => {
+    // A tie is not a licence to invent an ordering.
+    withTasks([
+      task({ id: "b", title: "Second", createdAt: "2026-07-01T00:00:00.000Z" }),
+      task({ id: "a", title: "First", createdAt: "2026-07-01T00:00:00.000Z" }),
+    ]);
+
+    expect(titles()).toEqual(["Second", "First"]);
+  });
+
+  it("sorts one-offs by date and not by the text of the timestamp", () => {
+    // `toISOString` writes milliseconds; older rows and seeds carry
+    // seconds-precision instants. Compared as strings, ".500Z" sorts before
+    // "Z" and the later task would come last inside a shared second.
+    withTasks([
+      task({ id: "a", title: "Half past", createdAt: "2026-07-01T00:00:00.500Z" }),
+      task({ id: "b", title: "On the second", createdAt: "2026-07-01T00:00:00Z" }),
+    ]);
+
+    expect(titles()).toEqual(["Half past", "On the second"]);
   });
 
   it("orders the Done list the same way", () => {
