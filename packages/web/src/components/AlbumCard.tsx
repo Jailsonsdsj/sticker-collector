@@ -1,12 +1,17 @@
 import type { AlbumSummary } from "@sticker-collector/shared";
 import { Link } from "react-router";
 import { imageSrc } from "../lib/imageUpload";
-import { Badge, Button, ImageTile, ProgressBar } from "./ui";
+import { Badge, Button, ImageTile, OptionsMenu, ProgressBar } from "./ui";
 import { cx } from "./ui/cx";
 
 export interface AlbumCardProps {
   album: AlbumSummary;
   onUnlock: () => void;
+  /**
+   * Opens the delete confirmation. Absent leaves the card with no ⋯ at all,
+   * rather than an options button whose only option is missing.
+   */
+  onDelete?: () => void;
 }
 
 /**
@@ -21,11 +26,14 @@ export interface AlbumCardProps {
  * (`prd/04-albums.md` §6): **Unlock ‹price›** while locked, the progress bar
  * once it is open.
  */
-export function AlbumCard({ album, onUnlock }: AlbumCardProps) {
+export function AlbumCard({ album, onUnlock, onDelete }: AlbumCardProps) {
   const locked = album.status === "locked";
 
   return (
-    <div className="flex flex-col gap-2">
+    // `relative` so the ⋯ can be positioned over the cover. It has to be a
+    // SIBLING of the link and not a child: a button inside an anchor is invalid
+    // markup, and the press would open the album on its way to the menu.
+    <div className="relative flex flex-col gap-2">
       <Link
         data-album-id={album.id}
         to={`/albums/${album.id}`}
@@ -65,8 +73,12 @@ export function AlbumCard({ album, onUnlock }: AlbumCardProps) {
             badge already sits. */}
         {/* The last slot is the hardest and the most motivating, so the app
             points at it rather than leaving the user to count. */}
+        {/* Shifted clear of the ⋯ when there is one: 44px of trigger plus a
+            gap. Two things cannot share the same corner, and the status is the
+            one that can move — the control has to stay under the thumb that
+            reaches for it. */}
         {album.almostThere && (
-          <span className="absolute top-2 right-2">
+          <span className={cx("absolute top-2", onDelete ? "right-12" : "right-2")}>
             <Badge tone="coin" variant="overlay" size="sm">
               {album.remaining === 1 ? "1 to go" : `${album.remaining} to go`}
             </Badge>
@@ -74,13 +86,21 @@ export function AlbumCard({ album, onUnlock }: AlbumCardProps) {
         )}
 
         {album.status === "completed" && (
-          <span className="absolute top-2 right-2">
+          <span className={cx("absolute top-2", onDelete ? "right-12" : "right-2")}>
             <Badge tone="lime" variant="overlay" size="sm">
               Complete
             </Badge>
           </span>
         )}
       </Link>
+
+      {onDelete && (
+        <OptionsMenu
+          className="absolute top-0 right-0"
+          label={album.title}
+          items={[{ label: "Delete album", onSelect: onDelete, tone: "danger" }]}
+        />
+      )}
 
       {/* Wraps rather than truncates — see `PuzzleCard`. Changed here too so
           the two cards in one grid keep the same title treatment; a puzzle

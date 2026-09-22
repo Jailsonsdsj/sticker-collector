@@ -120,6 +120,13 @@
       "when": 1788628687337,
       "tag": "0017_exotic_spectrum",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1790084049094,
+      "tag": "0018_puzzle_prices_editable",
+      "breakpoints": true
     }
   ]
 }

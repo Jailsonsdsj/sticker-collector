@@ -561,10 +561,42 @@ export const createPuzzleSchema = z
     /** Locked pieces show nothing at all rather than grayscale art. */
     hideLocked: z.boolean().default(false),
   })
-  .describe("A puzzle is sealed on create; there is no edit, only delete.");
+  .describe("A puzzle is sealed on create; the grid and the image are fixed from then on.");
 
 export type CreatePuzzleInput = z.input<typeof createPuzzleSchema>;
 export type CreatePuzzle = z.output<typeof createPuzzleSchema>;
+
+/**
+ * What a puzzle lets you change afterwards.
+ *
+ * **The words and the prices, never the picture.** `rows`, `cols`, the image
+ * and `hideLocked` are absent on purpose and the `puzzle_frozen` trigger still
+ * refuses them: every owned `puzzle_piece` is an index into that grid, so
+ * re-cutting a board that already has pieces would move the ones already
+ * bought. A price is a number on a button; the grid is where the pieces are.
+ *
+ * Every field optional — a partial patch, so renaming a puzzle does not have to
+ * restate its economics. `strictObject`, so a client sending `rows` is told no
+ * rather than having it quietly dropped.
+ *
+ * The prices left the frozen set deliberately (migration 0018). Worth knowing
+ * what that costs: `puzzleSpend` derives what a puzzle has cost from the
+ * CURRENT prices rather than from the ledger, so re-pricing one that is part
+ * built changes what it says was already spent. The ledger keeps the truth.
+ */
+export const updatePuzzleSchema = z
+  .strictObject({
+    title: titleSchema.optional(),
+    description: z.string().max(2000).nullish(),
+    unlockPrice: z.int().min(0).max(1_000_000).optional(),
+    piecePrice: z.int().min(0).max(1_000_000).optional(),
+    /** 0 withdraws the offer; the route will not sell what has no price. */
+    randomPrice: z.int().min(0).max(1_000_000).optional(),
+  })
+  .describe("Title, description and the three prices. The grid and image are not editable.");
+
+export type UpdatePuzzleInput = z.input<typeof updatePuzzleSchema>;
+export type UpdatePuzzle = z.output<typeof updatePuzzleSchema>;
 
 export const puzzleSchema = z.object({
   id: idSchema,

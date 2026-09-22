@@ -1,4 +1,4 @@
-import { ALBUM_SORTS } from "@sticker-collector/shared";
+import { ALBUM_SORTS, type Puzzle } from "@sticker-collector/shared";
 import { useState } from "react";
 import { Navigate, useSearchParams } from "react-router";
 import { AlbumCard } from "../components/AlbumCard";
@@ -6,11 +6,13 @@ import { BackupNudge } from "../components/BackupNudge";
 import { CreateChoiceDialog } from "../components/CreateChoiceDialog";
 import { AlbumGrid, AppHeader } from "../components/layout";
 import { PuzzleCard } from "../components/PuzzleCard";
+import { PuzzleEditForm } from "../components/PuzzleEditForm";
 import { SearchField } from "../components/SearchField";
+import { ShelfDeleteDialog, type ShelfDeleteTarget } from "../components/ShelfDeleteDialog";
 import { UnlockDialog } from "../components/UnlockDialog";
 import { Button, Chip, EmptyState, ErrorState, Skeleton, Tabs } from "../components/ui";
 import { ApiError } from "../lib/api";
-import { useUnlockAlbum, useUnlockPuzzle } from "../lib/mutations";
+import { useUnlockAlbum, useUnlockPuzzle, useUpdatePuzzle } from "../lib/mutations";
 import { playUnlock } from "../lib/placement";
 import { useAlbums, usePuzzles, useWallet } from "../lib/queries";
 import {
@@ -111,6 +113,11 @@ export function paginate<T>(rows: T[], page: number, perPage = ALBUMS_PER_PAGE) 
 export function Albums() {
   const [creating, setCreating] = useState(false);
   const [unlocking, setUnlocking] = useState<UnlockTarget | null>(null);
+  /** What the ⋯ on a card is about to delete, and nothing until one is chosen. */
+  const [deleting, setDeleting] = useState<ShelfDeleteTarget | null>(null);
+  /** The puzzle whose edit form is open. Albums have none — theirs is sealed. */
+  const [editing, setEditing] = useState<Puzzle | null>(null);
+  const updatePuzzle = useUpdatePuzzle();
 
   /**
    * The filters live in the URL, not in this component.
@@ -279,6 +286,14 @@ export function Albums() {
                   key={item.id}
                   album={item.album}
                   onUnlock={() => setUnlocking(unlockTarget(item))}
+                  onDelete={() =>
+                    setDeleting({
+                      kind: "album",
+                      id: item.id,
+                      title: item.album.title,
+                      owned: item.album.owned,
+                    })
+                  }
                 />
               ) : (
                 <PuzzleCard
@@ -290,6 +305,15 @@ export function Albums() {
                   // holds — one number, two ways of reaching it.
                   affordable={item.puzzle.unlockPrice <= balance}
                   onUnlock={() => setUnlocking(unlockTarget(item))}
+                  onDelete={() =>
+                    setDeleting({
+                      kind: "puzzle",
+                      id: item.id,
+                      title: item.puzzle.title,
+                      owned: item.puzzle.ownedCount,
+                    })
+                  }
+                  onEdit={() => setEditing(item.puzzle)}
                 />
               ),
             )}
@@ -327,6 +351,19 @@ export function Albums() {
 
       {/* One dialog for both kinds. The question is identical — what does
           this cost, and what is left — and only the mutation differs. */}
+      <ShelfDeleteDialog target={deleting} onClose={() => setDeleting(null)} />
+
+      <PuzzleEditForm
+        puzzle={editing}
+        pending={updatePuzzle.isPending}
+        onClose={() => setEditing(null)}
+        onSave={async (patch) => {
+          if (!editing) return;
+          await updatePuzzle.mutateAsync({ id: editing.id, patch });
+          setEditing(null);
+        }}
+      />
+
       <UnlockDialog
         item={unlocking}
         balance={balance}

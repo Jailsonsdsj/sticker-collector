@@ -16,6 +16,7 @@ import type {
   Task,
   UnlockPiecesInput,
   UpdateEpic,
+  UpdatePuzzleInput,
   UpdateTask,
 } from "@sticker-collector/shared";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -461,6 +462,32 @@ export function usePullPiece(id: string) {
       void client.invalidateQueries({ queryKey: keys.puzzle(id) });
       void client.invalidateQueries({ queryKey: keys.puzzlesAll });
       void client.invalidateQueries({ queryKey: keys.wallet });
+    },
+  });
+}
+
+/**
+ * Editing a puzzle's words and prices.
+ *
+ * The grid and the picture are not here and never will be: every owned piece is
+ * an index into that grid, and `puzzle_frozen` refuses to move it.
+ *
+ * Both lists are invalidated, and the board's own query too — the shelf shows
+ * the price on a locked card and the board shows it on its buttons, so a rename
+ * that only reached one of them would have the two disagreeing on screen.
+ */
+export function useUpdatePuzzle() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: UpdatePuzzleInput }) =>
+      api<Puzzle>(`/api/puzzles/${id}`, {
+        method: "PATCH",
+        body: patch,
+        idempotencyKey: crypto.randomUUID(),
+      }),
+    onSuccess: (_updated, { id }) => {
+      void client.invalidateQueries({ queryKey: keys.puzzlesAll });
+      void client.invalidateQueries({ queryKey: keys.puzzle(id) });
     },
   });
 }
