@@ -1,12 +1,11 @@
 import { MAX_PIECES_PER_UNLOCK, pieceCount, puzzleSpend } from "@sticker-collector/shared";
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router";
-import { DeletePuzzleDialog } from "../components/DeletePuzzleDialog";
+import { useParams } from "react-router";
 import { AppHeader } from "../components/layout";
 import { PuzzleBoard } from "../components/PuzzleBoard";
 import { PuzzleInfoDialog } from "../components/PuzzleInfoDialog";
 import { Button, Coin, ErrorState, ProgressBar, Skeleton } from "../components/ui";
-import { useDeletePuzzle, usePullPiece, useUnlockPieces, useUnlockPuzzle } from "../lib/mutations";
+import { usePullPiece, useUnlockPieces, useUnlockPuzzle } from "../lib/mutations";
 import { playPieceLanding } from "../lib/placement";
 import { usePuzzle, useWallet } from "../lib/queries";
 
@@ -23,10 +22,7 @@ import { usePuzzle, useWallet } from "../lib/queries";
  */
 export function PuzzleView() {
   const { id } = useParams();
-  const navigate = useNavigate();
   const puzzle = usePuzzle(id);
-  const remove = useDeletePuzzle();
-  const [deleting, setDeleting] = useState(false);
   const [showing, setShowing] = useState(false);
   const wallet = useWallet();
   const unlock = useUnlockPuzzle();
@@ -124,17 +120,7 @@ export function PuzzleView() {
 
   return (
     <>
-      <AppHeader
-        title={board.title}
-        trailing={
-          // On the board, not on the card. Deleting is a decision made while
-          // looking at the thing, and a delete on a shelf tile is a delete one
-          // slip away from the wrong tile.
-          <Button variant="ghost" tone="magenta" size="sm" onClick={() => setDeleting(true)}>
-            Delete
-          </Button>
-        }
-      />
+      <AppHeader title={board.title} />
 
       {/*
         Full bleed, and as tall as the screen allows.
@@ -320,20 +306,6 @@ export function PuzzleView() {
         description={board.description}
         spend={spend}
         onClose={() => setShowing(false)}
-      />
-
-      <DeletePuzzleDialog
-        open={deleting}
-        title={board.title}
-        owned={owned.size}
-        pending={remove.isPending}
-        onClose={() => setDeleting(false)}
-        onConfirm={async () => {
-          if (!id) return;
-          await remove.mutateAsync(id);
-          // Back to the shelf: the thing this screen is about no longer exists.
-          void navigate("/albums");
-        }}
       />
     </>
   );

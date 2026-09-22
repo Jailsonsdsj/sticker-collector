@@ -1003,3 +1003,193 @@ describe("the filters survive leaving and coming back", () => {
     );
   });
 });
+
+describe("deleting from a card on the shelf", () => {
+  /**
+   * Moved here from inside the album and the puzzle. Deleting one used to mean
+   * opening it first, which is a long way round for a thing you can see on the
+   * shelf and have decided about. The ⋯ sits on the tile; the typed
+   * confirmation behind it is what makes a control on a tile safe, since a
+   * shelf of covers is a shelf of chances to reach for the wrong one.
+   */
+  const optionsFor = (title: string) =>
+    screen.getByRole("button", { name: `Options for ${title}` });
+
+  const deleted = () =>
+    fetchMock.mock.calls.find(([, init]) => (init as RequestInit)?.method === "DELETE");
+
+  const openWithPuzzle = async () => {
+    puzzles = [aPuzzle()];
+    const user = await open();
+    await screen.findByText("The harbour");
+    return user;
+  };
+
+  it("keeps the options out of the way until the ⋯ is pressed", async () => {
+    await open();
+
+    expect(screen.queryByRole("button", { name: "Delete album" })).not.toBeInTheDocument();
+    expect(optionsFor("Kitchen heroes")).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("names the card it belongs to, so a shelf is not twelve identical buttons", async () => {
+    await openWithPuzzle();
+
+    expect(optionsFor("Kitchen heroes")).toBeInTheDocument();
+    expect(optionsFor("The harbour")).toBeInTheDocument();
+  });
+
+  it("does not open the album it sits on top of", async () => {
+    // The trigger overlays a link that fills the whole cover. Inside the
+    // anchor it would be invalid markup and the press would navigate.
+    const user = await open();
+
+    expect(optionsFor("Kitchen heroes").closest("a")).toBeNull();
+
+    await user.click(optionsFor("Kitchen heroes"));
+
+    expect(screen.getByRole("button", { name: "Delete album" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "All" })).toBeInTheDocument();
+  });
+
+  it("asks the album's title to be typed, and sends nothing until it is", async () => {
+    const user = await open();
+
+    await user.click(optionsFor("Kitchen heroes"));
+    await user.click(screen.getByRole("button", { name: "Delete album" }));
+
+    expect(dialog().getByRole("button", { name: "Delete for good" })).toBeDisabled();
+    expect(deleted()).toBeUndefined();
+  });
+
+  it("deletes the album once the title matches", async () => {
+    const user = await open();
+    await user.click(optionsFor("Kitchen heroes"));
+    await user.click(screen.getByRole("button", { name: "Delete album" }));
+
+    await user.type(dialog().getByLabelText(/type the album's title/i), "Kitchen heroes");
+    await user.click(dialog().getByRole("button", { name: "Delete for good" }));
+
+    await waitFor(() => expect(deleted()?.[0]).toBe("/api/albums/alb1"));
+  });
+
+  it("deletes a puzzle at its own endpoint", async () => {
+    const user = await openWithPuzzle();
+    await user.click(optionsFor("The harbour"));
+    await user.click(screen.getByRole("button", { name: "Delete puzzle" }));
+
+    await user.type(dialog().getByLabelText(/type the puzzle's title/i), "The harbour");
+    await user.click(dialog().getByRole("button", { name: "Delete for good" }));
+
+    await waitFor(() => expect(deleted()?.[0]).toBe("/api/puzzles/p1"));
+  });
+
+  it("sends nothing when the confirmation is dismissed", async () => {
+    const user = await open();
+    await user.click(optionsFor("Kitchen heroes"));
+    await user.click(screen.getByRole("button", { name: "Delete album" }));
+    await user.type(dialog().getByLabelText(/type the album's title/i), "Kitchen heroes");
+
+    await user.click(dialog().getByRole("button", { name: "Cancel" }));
+
+    expect(deleted()).toBeUndefined();
+  });
+
+  it("stays on the shelf afterwards, rather than going anywhere", async () => {
+    // The screens this replaced navigated away, because the thing being looked
+    // at had stopped existing. Here it is one tile among others.
+    const user = await open();
+    await user.click(optionsFor("Kitchen heroes"));
+    await user.click(screen.getByRole("button", { name: "Delete album" }));
+    await user.type(dialog().getByLabelText(/type the album's title/i), "Kitchen heroes");
+    await user.click(dialog().getByRole("button", { name: "Delete for good" }));
+
+    await waitFor(() => expect(deleted()).toBeDefined());
+    expect(screen.getByRole("tab", { name: "All" })).toBeInTheDocument();
+  });
+});
+
+describe("editing a puzzle from its card", () => {
+  /**
+   * Editing exists for puzzles and not for albums. An album's economics are
+   * sealed and there is no route that would take the change, so its ⋯ offers
+   * what an album can actually do.
+   */
+  const optionsFor = (title: string) =>
+    screen.getByRole("button", { name: `Options for ${title}` });
+
+  const patched = () =>
+    fetchMock.mock.calls.find(([, init]) => (init as RequestInit)?.method === "PATCH");
+
+  const openWithPuzzle = async () => {
+    puzzles = [aPuzzle({ title: "The harbour", unlockPrice: 100, piecePrice: 25, randomPrice: 0 })];
+    const user = await open();
+    await screen.findByText("The harbour");
+    return user;
+  };
+
+  it("offers Edit on a puzzle", async () => {
+    const user = await openWithPuzzle();
+
+    await user.click(optionsFor("The harbour"));
+
+    expect(screen.getByRole("button", { name: "Edit puzzle" })).toBeInTheDocument();
+  });
+
+  it("offers no Edit on an album, whose economics are sealed", async () => {
+    const user = await openWithPuzzle();
+
+    await user.click(optionsFor("Kitchen heroes"));
+
+    expect(screen.queryByRole("button", { name: /^Edit/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete album" })).toBeInTheDocument();
+  });
+
+  it("opens the form on the puzzle that was chosen", async () => {
+    const user = await openWithPuzzle();
+
+    await user.click(optionsFor("The harbour"));
+    await user.click(screen.getByRole("button", { name: "Edit puzzle" }));
+
+    expect(dialog().getByLabelText(/^Title/)).toHaveValue("The harbour");
+    expect(dialog().getByLabelText(/^Piece price/)).toHaveValue(25);
+  });
+
+  it("saves the change to that puzzle's own endpoint", async () => {
+    const user = await openWithPuzzle();
+    await user.click(optionsFor("The harbour"));
+    await user.click(screen.getByRole("button", { name: "Edit puzzle" }));
+
+    await user.clear(dialog().getByLabelText(/^Title/));
+    await user.type(dialog().getByLabelText(/^Title/), "The north pier");
+    await user.click(dialog().getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => expect(patched()).toBeDefined());
+    expect(patched()?.[0]).toBe("/api/puzzles/p1");
+    const body = JSON.parse((patched()?.[1] as RequestInit)?.body as string);
+    expect(body).toMatchObject({ title: "The north pier", piecePrice: 25 });
+  });
+
+  it("closes the form once it has saved", async () => {
+    const user = await openWithPuzzle();
+    await user.click(optionsFor("The harbour"));
+    await user.click(screen.getByRole("button", { name: "Edit puzzle" }));
+
+    await user.click(dialog().getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => expect(patched()).toBeDefined());
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument(),
+    );
+  });
+
+  it("sends nothing when the form is cancelled", async () => {
+    const user = await openWithPuzzle();
+    await user.click(optionsFor("The harbour"));
+    await user.click(screen.getByRole("button", { name: "Edit puzzle" }));
+
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(patched()).toBeUndefined();
+  });
+});

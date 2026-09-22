@@ -1,7 +1,7 @@
 import { type Puzzle, pieceCount } from "@sticker-collector/shared";
 import { Link } from "react-router";
 import { imageSrc } from "../lib/imageUpload";
-import { Badge, Button, ImageTile, ProgressBar } from "./ui";
+import { Badge, Button, ImageTile, OptionsMenu, ProgressBar } from "./ui";
 import { cx } from "./ui/cx";
 
 export interface PuzzleCardProps {
@@ -9,6 +9,14 @@ export interface PuzzleCardProps {
   /** Whether the balance covers `unlockPrice` right now. */
   affordable: boolean;
   onUnlock: () => void;
+  /** Opens the delete confirmation — see `AlbumCard`, which carries the same ⋯. */
+  onDelete?: () => void;
+  /**
+   * Opens the edit form. Puzzles only: an album's economics are sealed and
+   * there is no route that would take the change, so the ⋯ on an album card
+   * offers what an album can actually do.
+   */
+  onEdit?: () => void;
 }
 
 /**
@@ -29,14 +37,16 @@ export interface PuzzleCardProps {
  * the other has to be opened first, is a difference the user has to learn for
  * no reason.
  */
-export function PuzzleCard({ puzzle, affordable, onUnlock }: PuzzleCardProps) {
+export function PuzzleCard({ puzzle, affordable, onUnlock, onDelete, onEdit }: PuzzleCardProps) {
   const total = pieceCount({ rows: puzzle.rows, cols: puzzle.cols });
   const done = puzzle.completedAt !== null;
   const locked = puzzle.unlockedAt === null;
   const percent = total === 0 ? 0 : (puzzle.ownedCount / total) * 100;
 
   return (
-    <div className="flex flex-col gap-2">
+    // `relative` for the ⋯ over the cover, a sibling of the link — see
+    // `AlbumCard` for why it cannot be inside it.
+    <div className="relative flex flex-col gap-2">
       <Link
         data-puzzle-id={puzzle.id}
         to={`/puzzles/${puzzle.id}`}
@@ -69,14 +79,31 @@ export function PuzzleCard({ puzzle, affordable, onUnlock }: PuzzleCardProps) {
           </Badge>
         </span>
 
+        {/* Out of the ⋯'s corner when there is one, exactly as an album's is. */}
         {done && (
-          <span className="absolute top-2 right-2">
+          <span className={cx("absolute top-2", onDelete ? "right-12" : "right-2")}>
             <Badge tone="lime" variant="overlay" size="sm">
               Complete
             </Badge>
           </span>
         )}
       </Link>
+
+      {(onEdit || onDelete) && (
+        <OptionsMenu
+          className="absolute top-0 right-0"
+          label={puzzle.title}
+          // Edit above delete, and the destructive one last: a menu that opens
+          // under a thumb should not put the irreversible item where the
+          // reversible one is expected.
+          items={[
+            ...(onEdit ? [{ label: "Edit puzzle", onSelect: onEdit }] : []),
+            ...(onDelete
+              ? [{ label: "Delete puzzle", onSelect: onDelete, tone: "danger" as const }]
+              : []),
+          ]}
+        />
+      )}
 
       {/* Wraps rather than truncates. A cut title tells you a name exists and
           refuses to say what it is, on a card whose whole job is to be

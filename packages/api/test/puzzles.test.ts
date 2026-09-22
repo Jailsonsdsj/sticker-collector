@@ -110,20 +110,40 @@ describe("creating a puzzle", () => {
   });
 });
 
-describe("a sealed puzzle is immutable", () => {
-  it("refuses a new piece price", async () => {
-    // The trigger, not the route. A price rewritten after pieces were bought
-    // would make the ledger disagree with what the board charges.
+describe("a sealed puzzle's grid and image are immutable", () => {
+  it("lets a price be rewritten, which it did not until 0018", async () => {
+    /**
+     * The prices left the frozen set by decision. What that costs is worth
+     * keeping in view: `puzzleSpend` derives what a puzzle has cost from the
+     * CURRENT prices rather than from the ledger, so re-pricing one that is
+     * part built changes what it reports having spent. The ledger still holds
+     * what was actually charged — it is the derived figure that moves.
+     */
     const made = await create();
-    await expect(
-      env.DB.prepare("UPDATE puzzle SET piece_price = 1 WHERE id = ?").bind(made.id).run(),
-    ).rejects.toThrow(/immutable/);
+
+    await env.DB.prepare("UPDATE puzzle SET piece_price = 1 WHERE id = ?").bind(made.id).run();
+
+    const row = await env.DB.prepare("SELECT piece_price FROM puzzle WHERE id = ?")
+      .bind(made.id)
+      .first<{ piece_price: number }>();
+    expect(row?.piece_price).toBe(1);
   });
 
   it("refuses a re-cut grid", async () => {
     const made = await create();
     await expect(
       env.DB.prepare("UPDATE puzzle SET cols = 99 WHERE id = ?").bind(made.id).run(),
+    ).rejects.toThrow(/immutable/);
+  });
+
+  it("refuses a swapped image", async () => {
+    // The pieces are windows onto one master. Changing it under a board that
+    // already owns pieces moves what those pieces show.
+    const made = await create();
+    await expect(
+      env.DB.prepare("UPDATE puzzle SET image_key = ? WHERE id = ?")
+        .bind(`img/${"c".repeat(64)}.jpg`, made.id)
+        .run(),
     ).rejects.toThrow(/immutable/);
   });
 
@@ -564,5 +584,130 @@ describe("buying into a puzzle", () => {
         .first<{ completed_at: string }>();
       expect(again?.completed_at).toBe(stamped?.completed_at);
     });
+  });
+});
+
+describe("editing a puzzle", () => {
+  const patch = (id: string, payload: unknown) => call("PATCH", `/api/puzzles/${id}`, payload);
+
+  const readBack = async (id: string) => {
+    const res = await call("GET", `/api/puzzles/${id}`);
+    expect(res.status).toBe(200);
+    return (await res.json()) as PuzzleDetail;
+  };
+
+  it("renames it", async () => {
+    const made = await create({ title: "Old name" });
+
+    const res = await patch(made.id, { title: "New name" });
+
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as PuzzleDetail).title).toBe("New name");
+    expect((await readBack(made.id)).title).toBe("New name");
+  });
+
+  it("changes the three prices", async () => {
+    const made = await create();
+
+    const res = await patch(made.id, { unlockPrice: 1000, piecePrice: 150, randomPrice: 100 });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as PuzzleDetail;
+    expect(body.unlockPrice).toBe(1000);
+    expect(body.piecePrice).toBe(150);
+    expect(body.randomPrice).toBe(100);
+  });
+
+  it("leaves everything it was not told about alone", async () => {
+    // A partial patch: renaming a puzzle must not restate its economics.
+    const made = await create({ unlockPrice: 300, piecePrice: 25, randomPrice: 40 });
+
+    await patch(made.id, { title: "Just the name" });
+
+    const after = await readBack(made.id);
+    expect(after.unlockPrice).toBe(300);
+    expect(after.piecePrice).toBe(25);
+    expect(after.randomPrice).toBe(40);
+    expect(after.description).toBe(made.description);
+  });
+
+  it("tells null and absent apart on the description", async () => {
+    // Omitting it leaves it; sending null clears it. Spreading the parsed body
+    // would write `undefined` over a column nobody mentioned.
+    const made = await create({ description: "Taken at dawn" });
+
+    await patch(made.id, { title: "Renamed" });
+    expect((await readBack(made.id)).description).toBe("Taken at dawn");
+
+    await patch(made.id, { description: null });
+    expect((await readBack(made.id)).description).toBeNull();
+  });
+
+  it("changes nothing on an empty patch, and says so with the row", async () => {
+    const made = await create();
+
+    const res = await patch(made.id, {});
+
+    expect(res.status).toBe(200);
+    expect((await res.json()) as PuzzleDetail).toMatchObject({
+      id: made.id,
+      title: made.title,
+      piecePrice: made.piecePrice,
+    });
+  });
+
+  it("keeps the owned count right, so the shelf does not flicker", async () => {
+    // The response feeds the same cache the listing does. Returning 0 owned
+    // would blank a part-built puzzle's progress until the next refetch.
+    const made = await create();
+    await env.DB.prepare(
+      "INSERT INTO puzzle_piece (id, puzzle_id, piece_index, acquired_at) VALUES (?,?,?,?)",
+    )
+      .bind(crypto.randomUUID(), made.id, 0, "2026-08-21T00:00:00Z")
+      .run();
+
+    const res = await patch(made.id, { title: "Part built" });
+
+    expect(((await res.json()) as PuzzleDetail).ownedCount).toBe(1);
+  });
+
+  it("refuses the grid, rather than dropping it quietly", async () => {
+    // Strict, so a client sending `rows` is told no. A silent no-op is the
+    // shape that has someone certain they changed something.
+    const made = await create();
+
+    const res = await patch(made.id, { rows: 9 });
+
+    expect(res.status).toBe(400);
+  });
+
+  it("refuses a title that is not one", async () => {
+    const made = await create();
+    expect((await patch(made.id, { title: "" })).status).toBe(400);
+  });
+
+  it("refuses a negative price", async () => {
+    const made = await create();
+    expect((await patch(made.id, { piecePrice: -5 })).status).toBe(400);
+  });
+
+  it("404s on somebody else's puzzle, and changes nothing", async () => {
+    const made = await create({ title: "Mine" });
+    const other = await makeUser();
+    token = other.token;
+
+    expect((await patch(made.id, { title: "Yours now" })).status).toBe(404);
+
+    const row = await env.DB.prepare("SELECT title FROM puzzle WHERE id = ?")
+      .bind(made.id)
+      .first<{ title: string }>();
+    expect(row?.title).toBe("Mine");
+  });
+
+  it("404s on a deleted one", async () => {
+    const made = await create();
+    await call("DELETE", `/api/puzzles/${made.id}`);
+
+    expect((await patch(made.id, { title: "Back from the dead" })).status).toBe(404);
   });
 });

@@ -16,6 +16,11 @@ export { Field, type FieldProps } from "./Field";
 export { ImageTile, type ImageTileProps } from "./ImageTile";
 export { Input, type InputProps, type InputSize, type InputTone } from "./Input";
 export {
+  OptionsMenu,
+  type OptionsMenuItem,
+  type OptionsMenuProps,
+} from "./OptionsMenu";
+export {
   ProgressBar,
   type ProgressBarProps,
   type ProgressFill,

@@ -1,8 +1,7 @@
 import type { PullResult, Tier, TierRecord } from "@sticker-collector/shared";
 import { canPullRandom, duplicateRefund, effectiveWeights } from "@sticker-collector/shared";
 import { useEffect, useRef, useState } from "react";
-import { Navigate, useNavigate, useParams } from "react-router";
-import { DeleteAlbumDialog } from "../components/DeleteAlbumDialog";
+import { Navigate, useParams } from "react-router";
 import { ExportPanel } from "../components/ExportPanel";
 import { AppHeader, StickerGrid } from "../components/layout";
 import { RevealDialog } from "../components/RevealDialog";
@@ -19,7 +18,7 @@ import {
   Skeleton,
 } from "../components/ui";
 import { ApiError } from "../lib/api";
-import { useBuySticker, useDeleteAlbum, usePullSticker, useSellDuplicate } from "../lib/mutations";
+import { useBuySticker, usePullSticker, useSellDuplicate } from "../lib/mutations";
 import { celebrateSticker, placeSticker } from "../lib/placement";
 import { useAlbum, useWallet } from "../lib/queries";
 
@@ -49,15 +48,12 @@ export function AlbumDetail() {
   /** A sticker just bought outright, waiting for its slot to re-render owned. */
   const [bought, setBought] = useState<{ id: string; tier: Tier } | null>(null);
   const wasComplete = useRef<boolean | null>(null);
-  const [deleting, setDeleting] = useState(false);
-  const navigate = useNavigate();
 
   const album = useAlbum(id);
   const wallet = useWallet();
   const buy = useBuySticker(id);
   const pull = usePullSticker(id);
   const sell = useSellDuplicate(id);
-  const remove = useDeleteAlbum();
 
   /**
    * Scroll to the sticker once the grid is actually showing it.
@@ -280,12 +276,6 @@ export function AlbumDetail() {
       {/* Completion unlocks the print export — the reward for finishing (§Completed 1). */}
       {summary.status === "completed" && <ExportPanel album={album.data} />}
 
-      <div className="mt-8 border-border border-t pt-4">
-        <Button variant="ghost" tone="magenta" size="sm" onClick={() => setDeleting(true)}>
-          Delete this album
-        </Button>
-      </div>
-
       {celebrating && (
         <Celebration
           title={summary.title}
@@ -299,19 +289,6 @@ export function AlbumDetail() {
         index={viewing}
         onIndex={setViewing}
         onClose={() => setViewing(null)}
-      />
-
-      <DeleteAlbumDialog
-        open={deleting}
-        title={summary.title}
-        owned={summary.owned}
-        pending={remove.isPending}
-        onClose={() => setDeleting(false)}
-        onConfirm={async () => {
-          await remove.mutateAsync(id);
-          setDeleting(false);
-          navigate("/albums");
-        }}
       />
 
       <RevealDialog

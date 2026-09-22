@@ -395,43 +395,13 @@ describe("selling a spare from the grid", () => {
 });
 
 describe("deleting the album", () => {
-  it("asks the user to type the title, and sends nothing until they do", async () => {
-    const user = await open();
-    await user.click(screen.getByRole("button", { name: "Delete this album" }));
+  it("is not offered here — it lives on the shelf card's ⋯", async () => {
+    // Moved out deliberately: deleting an album meant opening it first, and
+    // the decision is one you can make from the cover. The confirmation that
+    // makes it safe moved with it, and is covered in `Albums.test.tsx`.
+    await open();
 
-    expect(screen.getByRole("button", { name: "Delete for good" })).toBeDisabled();
-    expect(
-      fetchMock.mock.calls.some(([, init]) => (init as RequestInit)?.method === "DELETE"),
-    ).toBe(false);
-  });
-
-  it("deletes and returns to the shelf", async () => {
-    const user = await open();
-    await user.click(screen.getByRole("button", { name: "Delete this album" }));
-    await user.type(screen.getByLabelText(/type the album's title/i), "Kitchen heroes");
-    await user.click(screen.getByRole("button", { name: "Delete for good" }));
-
-    await waitFor(() => {
-      const del = fetchMock.mock.calls.find(
-        ([, init]) => (init as RequestInit)?.method === "DELETE",
-      );
-      expect(del?.[0]).toBe("/api/albums/alb1");
-    });
-
-    // Staying on the page would leave the user looking at an album that no
-    // longer exists — and a refresh would 404.
-    expect(await screen.findByText("the shelf")).toBeInTheDocument();
-  });
-
-  it("sends nothing when the dialog is dismissed", async () => {
-    const user = await open();
-    await user.click(screen.getByRole("button", { name: "Delete this album" }));
-    await user.type(screen.getByLabelText(/type the album's title/i), "Kitchen heroes");
-    await user.click(screen.getByRole("button", { name: "Cancel" }));
-
-    expect(
-      fetchMock.mock.calls.some(([, init]) => (init as RequestInit)?.method === "DELETE"),
-    ).toBe(false);
+    expect(screen.queryByRole("button", { name: /delete/i })).not.toBeInTheDocument();
   });
 });
 

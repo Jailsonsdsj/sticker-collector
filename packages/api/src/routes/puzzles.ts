@@ -1,4 +1,9 @@
-import { createPuzzleSchema, gridFor, type Puzzle } from "@sticker-collector/shared";
+import {
+  createPuzzleSchema,
+  gridFor,
+  type Puzzle,
+  updatePuzzleSchema,
+} from "@sticker-collector/shared";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { db } from "../db/client";
@@ -7,7 +12,7 @@ import { idempotency } from "../middleware/idempotency";
 import { requireAuth } from "../middleware/require-auth";
 
 /**
- * Puzzles: create, list, read. Buying is `puzzlePurchases.ts` (P9-05).
+ * Puzzles: create, list, read, edit. Buying is `puzzlePurchases.ts` (P9-05).
  *
  * Deletion is **soft**, and not by preference. `ledger.puzzle_id` is a foreign
  * key and the ledger is append-only by trigger, so the coins spent inside a
@@ -157,6 +162,69 @@ puzzleRoutes.get("/:id", async (c) => {
   const ownedPieces = owned.map((piece) => piece.pieceIndex).sort((a, b) => a - b);
 
   return c.json({ ...toPuzzle(row, ownedPieces.length), ownedPieces });
+});
+
+/**
+ * PATCH /api/puzzles/:id — the words and the prices.
+ *
+ * A partial patch: only what is sent is written, so renaming a puzzle leaves
+ * its economics alone. An empty body is a no-op that returns the row, not a
+ * 400 — "change nothing" is a coherent request and the client need not diff.
+ *
+ * The grid and the image are not here and cannot be. `puzzle_frozen` still
+ * refuses them at the database, and this route never offers them, so the two
+ * agree rather than one quietly working around the other. `updatePuzzleSchema`
+ * is strict, so a client that sends `rows` gets a 400 naming the field instead
+ * of a silent no-op.
+ *
+ * Prices ARE editable, by decision (migration 0018). The cost is written down
+ * there and on the schema: `puzzleSpend` reads the current prices, so
+ * re-pricing a part-built puzzle changes what it reports having cost. The
+ * ledger still holds what was actually charged.
+ */
+puzzleRoutes.patch("/:id", idempotency, async (c) => {
+  const parsed = updatePuzzleSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) {
+    return c.json({ error: "bad request", issues: parsed.error.issues }, 400);
+  }
+
+  const input = parsed.data;
+  const patch: Partial<typeof puzzle.$inferInsert> = {};
+  // Field by field, and `undefined` is not `null`: omitting a description
+  // leaves it alone, while sending null clears it. Spreading the parsed object
+  // would write `undefined` over columns nobody mentioned.
+  if (input.title !== undefined) patch.title = input.title;
+  if (input.description !== undefined) patch.description = input.description ?? null;
+  if (input.unlockPrice !== undefined) patch.unlockPrice = input.unlockPrice;
+  if (input.piecePrice !== undefined) patch.piecePrice = input.piecePrice;
+  if (input.randomPrice !== undefined) patch.randomPrice = input.randomPrice;
+
+  const database = db(c.env);
+  const id = c.req.param("id");
+
+  if (Object.keys(patch).length > 0) {
+    const updated = await database
+      .update(puzzle)
+      .set(patch)
+      .where(and(eq(puzzle.id, id), livePuzzles(c.get("userId"))))
+      .returning({ id: puzzle.id });
+    if (updated.length === 0) return c.json({ error: "puzzle not found" }, 404);
+  }
+
+  const row = await database
+    .select()
+    .from(puzzle)
+    .where(and(eq(puzzle.id, id), livePuzzles(c.get("userId"))))
+    .get();
+  if (!row) return c.json({ error: "puzzle not found" }, 404);
+
+  const owned = await database
+    .select({ n: sql<number>`count(*)` })
+    .from(puzzlePiece)
+    .where(eq(puzzlePiece.puzzleId, id))
+    .get();
+
+  return c.json(toPuzzle(row, owned?.n ?? 0));
 });
 
 /**

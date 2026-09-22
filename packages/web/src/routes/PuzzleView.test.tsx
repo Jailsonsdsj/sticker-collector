@@ -227,46 +227,15 @@ describe("a puzzle already finished", () => {
 });
 
 describe("deleting one", () => {
-  it("asks you to type the title, like an album does", async () => {
-    // The most destructive thing on this screen: the pieces bought and the
-    // coins that bought them, gone, with no refund. A red button alone is
-    // dismissed by muscle memory.
-    const user = userEvent.setup();
-    open(puzzle({ ownedPieces: [0, 1], ownedCount: 2 }));
-
-    await user.click(await screen.findByRole("button", { name: "Delete" }));
-
-    expect(screen.getByText(/no coins are refunded/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Delete for good" })).toBeDisabled();
-  });
-
-  it("says how much is being thrown away", async () => {
-    const user = userEvent.setup();
-    open(puzzle({ ownedPieces: [0, 1], ownedCount: 2 }));
-
-    await user.click(await screen.findByRole("button", { name: "Delete" }));
-
-    expect(screen.getByText("2")).toBeInTheDocument();
-    expect(screen.getByText(/pieces you have bought/i)).toBeInTheDocument();
-  });
-
-  it("goes through once the title matches", async () => {
-    const user = userEvent.setup();
+  it("is not offered on the board — the shelf card's ⋯ carries it", async () => {
+    // The header used to hold a Delete, on the reasoning that deleting is a
+    // decision made while looking at the thing. It is now on the tile, behind
+    // a menu and a typed confirmation, which is the same reasoning served
+    // without making the user open the puzzle to act on it.
     open();
-    await user.click(await screen.findByRole("button", { name: "Delete" }));
+    await screen.findByTestId("puzzle-canvas");
 
-    await user.type(screen.getByLabelText(/type the puzzle's title/i), "the HARBOUR ");
-
-    // Trimmed and case-insensitive: the point is intent, not typing accuracy.
-    const confirm = screen.getByRole("button", { name: "Delete for good" });
-    expect(confirm).toBeEnabled();
-
-    await user.click(confirm);
-
-    await waitFor(() => {
-      const call = fetchMock.mock.calls.find(([, init]) => init?.method === "DELETE");
-      expect(call?.[0]).toBe("/api/puzzles/p1");
-    });
+    expect(screen.queryByRole("button", { name: /delete/i })).not.toBeInTheDocument();
   });
 });
 
