@@ -1,12 +1,13 @@
 import { MAX_PIECES_PER_UNLOCK, pieceCount, puzzleSpend } from "@sticker-collector/shared";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router";
 import { AppHeader } from "../components/layout";
 import { PuzzleBoard } from "../components/PuzzleBoard";
 import { PuzzleInfoDialog } from "../components/PuzzleInfoDialog";
+import { Celebration } from "../components/reveal/Celebration";
 import { Button, Coin, ErrorState, ProgressBar, Skeleton } from "../components/ui";
 import { usePullPiece, useUnlockPieces, useUnlockPuzzle } from "../lib/mutations";
-import { playPieceLanding } from "../lib/placement";
+import { LANDING_FLOURISH_MS, playPieceLanding } from "../lib/placement";
 import { usePuzzle, useWallet } from "../lib/queries";
 
 /**
@@ -33,6 +34,42 @@ export function PuzzleView() {
   // boolean: pressing reset twice in a row has to work the second time.
   const [resetToken, setResetToken] = useState(0);
   const [failure, setFailure] = useState<string | null>(null);
+  const [celebrating, setCelebrating] = useState(false);
+
+  /**
+   * Fire on the TRANSITION into complete, never on arrival.
+   *
+   * The same shape the album uses, for the same reason: opening a puzzle you
+   * finished last week should not throw confetti at you every time. The first
+   * observed state seeds the ref instead of triggering, so only a completion
+   * that happens while you are watching counts.
+   *
+   * Read from the board rather than from a purchase result, so it covers every
+   * way the last hole can be filled — a bought piece, a gamble, or a refetch
+   * that arrives after one.
+   */
+  const wasComplete = useRef<boolean | null>(null);
+  useEffect(() => {
+    const data = puzzle.data;
+    if (data === undefined) return;
+    const complete = data.completedAt !== null;
+
+    if (wasComplete.current === null) {
+      wasComplete.current = complete;
+      return;
+    }
+    if (!complete || wasComplete.current) {
+      wasComplete.current = complete;
+      return;
+    }
+    wasComplete.current = complete;
+
+    // After the last piece has been seen landing, not over the top of it. The
+    // flourish on the final piece IS the moment; covering it with an overlay
+    // the same frame it starts throws away the thing being celebrated.
+    const timer = window.setTimeout(() => setCelebrating(true), LANDING_FLOURISH_MS);
+    return () => window.clearTimeout(timer);
+  }, [puzzle.data]);
 
   if (puzzle.isLoading) {
     return (
@@ -299,6 +336,19 @@ export function PuzzleView() {
           )}
         </div>
       </div>
+
+      {celebrating && (
+        <Celebration
+          title={board.title}
+          coverKey={board.imageKey}
+          message={`Every piece of ${board.title} is in place.`}
+          action="See the picture"
+          // The puzzle's own shape: cropping the picture to a portrait card at
+          // the moment it is finished would hide part of what was assembled.
+          aspect={`${board.imageWidth} / ${board.imageHeight}`}
+          onClose={() => setCelebrating(false)}
+        />
+      )}
 
       <PuzzleInfoDialog
         open={showing}

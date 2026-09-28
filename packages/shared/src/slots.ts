@@ -67,44 +67,46 @@ export function slotsOverlap(a: RoutineSlot, b: RoutineSlot): boolean {
   return a.weekday === b.weekday && a.startMin < b.endMin && b.startMin < a.endMin;
 }
 
-export interface SlotConflict {
+export interface SharedSlot {
   weekday: Weekday;
   /** The slot being placed. */
   slot: RoutineSlot;
-  /** What it runs into. */
+  /** What it shares the hour with. */
   withTaskId: string;
   withTaskTitle: string;
   withSlot: RoutineSlot;
 }
 
 /**
- * What a proposed set of slots would collide with.
+ * Which other routines a proposed set of slots shares an hour with.
  *
- * A **refusal**, not a warning. This began as a warning on the reasoning that
- * two things at nine on a Monday is a mess a person may knowingly want — but
- * the agenda puts both in the same cell, so the second block covers the first
- * and one of the two tasks disappears from the screen it was scheduled on.
- * Allowing the save meant allowing an invisible task.
+ * **Information, not a refusal** — it was a refusal until the agenda could draw
+ * two blocks side by side. The reasoning then was sound: both landed in one
+ * grid cell, the later one covered the earlier, and a saved clash was a task
+ * that vanished from the day it was scheduled on. Refusing the save was
+ * refusing to create an invisible task.
  *
- * Enforced on the server as well as in the form, because the form is not the
- * only way in and a rule that lives in one screen is a rule the API does not
- * have.
+ * `laneOut` removed that. Overlapping blocks now split the column between them,
+ * so two routines at nine on a Monday are two readable blocks — which is what
+ * a nine o'clock with two things in it actually looks like. What is left is
+ * worth saying and not worth blocking: the form names what a time is shared
+ * with, and saves it.
  *
  * `exceptTaskId` is how editing a routine avoids reporting it against itself.
  */
-export function findSlotConflicts(
+export function findSharedSlots(
   slots: readonly RoutineSlot[],
   others: readonly { id: string; title: string; slots: readonly RoutineSlot[] }[],
   exceptTaskId?: string,
-): SlotConflict[] {
-  const conflicts: SlotConflict[] = [];
+): SharedSlot[] {
+  const shared: SharedSlot[] = [];
 
   for (const slot of slots) {
     for (const other of others) {
       if (other.id === exceptTaskId) continue;
       for (const otherSlot of other.slots) {
         if (!slotsOverlap(slot, otherSlot)) continue;
-        conflicts.push({
+        shared.push({
           weekday: slot.weekday as Weekday,
           slot,
           withTaskId: other.id,
@@ -115,31 +117,30 @@ export function findSlotConflicts(
     }
   }
 
-  return conflicts;
+  return shared;
 }
 
 /**
- * The refusal, in words — one sentence naming what clashes and when.
+ * The sharing, in words — one sentence naming what else is in that hour.
  *
- * Lives here so the form and the Worker say the same thing. A 409 whose message
- * differs from the message the form showed a second earlier reads as two
- * different problems.
+ * Said in the form so the schedule is not a surprise on the agenda, and phrased
+ * as a fact rather than a problem: nothing is refused and nothing is hidden.
  */
-export function describeConflicts(conflicts: readonly SlotConflict[]): string | null {
-  if (conflicts.length === 0) return null;
+export function describeSharing(shared: readonly SharedSlot[]): string | null {
+  if (shared.length === 0) return null;
 
-  // One line per clashing task, not per slot: a routine that runs Mon–Fri at
-  // the same hour as another produces five conflicts and one problem.
-  const byTask = new Map<string, SlotConflict>();
-  for (const conflict of conflicts) {
-    if (!byTask.has(conflict.withTaskId)) byTask.set(conflict.withTaskId, conflict);
+  // One line per task, not per slot: a routine running Mon–Fri alongside
+  // another produces five overlaps and one thing worth saying.
+  const byTask = new Map<string, SharedSlot>();
+  for (const overlap of shared) {
+    if (!byTask.has(overlap.withTaskId)) byTask.set(overlap.withTaskId, overlap);
   }
 
   const named = [...byTask.values()]
-    .map((conflict) => `${conflict.withTaskTitle} (${describeSlot(conflict.withSlot)})`)
+    .map((overlap) => `${overlap.withTaskTitle} (${describeSlot(overlap.withSlot)})`)
     .join(", ");
 
-  return `This time is already taken by ${named}. Two routines in one slot hide each other on the agenda.`;
+  return `Shares this time with ${named}. They sit side by side on the agenda.`;
 }
 
 /** `540` → `"09:00"`. 24-hour, because the agenda is a grid and a column of

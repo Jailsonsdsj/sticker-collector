@@ -573,10 +573,11 @@ describe("saying when a routine runs", () => {
     );
   });
 
-  it("refuses an overlap instead of saving a task that would be invisible", async () => {
-    // This was a warning once. The agenda draws two slots in one cell on top of
-    // each other, so allowing the save meant allowing a task that vanishes from
-    // the day it is scheduled on.
+  it("saves an overlap, and says what the hour is shared with", async () => {
+    // It refused this until the agenda could draw two blocks side by side.
+    // Two routines at one o'clock is a thing people genuinely schedule, and
+    // `laneOut` now shows both — so the form describes the hour rather than
+    // refusing it.
     const u = userEvent.setup();
     const { save } = setup({
       routines: [routineWith([{ weekday: 0, startMin: 720, endMin: 840 }])],
@@ -586,11 +587,25 @@ describe("saying when a routine runs", () => {
     await u.type(screen.getByLabelText("Mon start"), "13:00");
     await u.type(screen.getByLabelText("Mon end"), "13:30");
 
-    expect(screen.getByRole("alert")).toHaveTextContent(/already taken by Gym/);
-    expect(save()).toBeDisabled();
+    expect(screen.getByRole("status")).toHaveTextContent(/Shares this time with Gym/);
+    expect(save()).toBeEnabled();
   });
 
-  it("names the day and hour that is taken, not just the task", async () => {
+  it("says it as news, not as an error", async () => {
+    // `status`, not `alert`: nothing here needs answering, and a red warning
+    // over a schedule the app accepts is the app disagreeing with itself.
+    const u = userEvent.setup();
+    setup({ routines: [routineWith([{ weekday: 0, startMin: 720, endMin: 840 }])] });
+    await u.type(screen.getByLabelText(/title/i), "Lunch run");
+    await asRoutine(u);
+    await u.type(screen.getByLabelText("Mon start"), "13:00");
+    await u.type(screen.getByLabelText("Mon end"), "13:30");
+
+    expect(screen.getByRole("status")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("names the day and hour it shares, not just the task", async () => {
     // "Overlaps Gym" on a Mon–Fri routine leaves you hunting for which day.
     const u = userEvent.setup();
     setup({ routines: [routineWith([{ weekday: 0, startMin: 720, endMin: 840 }])] });
@@ -599,33 +614,32 @@ describe("saying when a routine runs", () => {
     await u.type(screen.getByLabelText("Mon start"), "13:00");
     await u.type(screen.getByLabelText("Mon end"), "13:30");
 
-    expect(screen.getByRole("alert")).toHaveTextContent(/Mon 12:00–14:00/);
+    expect(screen.getByRole("status")).toHaveTextContent(/Mon 12:00–14:00/);
   });
 
-  it("lets the save through again once the clash is cleared", async () => {
-    // The refusal has to be a state, not a latch.
+  it("drops the note once the times no longer overlap", async () => {
+    // The note has to be a state, not a latch.
     const u = userEvent.setup();
-    const { save } = setup({
+    setup({
       routines: [routineWith([{ weekday: 0, startMin: 720, endMin: 840 }])],
     });
     await u.type(screen.getByLabelText(/title/i), "Lunch run");
     await asRoutine(u);
     await u.type(screen.getByLabelText("Mon start"), "13:00");
     await u.type(screen.getByLabelText("Mon end"), "13:30");
-    expect(save()).toBeDisabled();
+    expect(screen.getByRole("status")).toBeInTheDocument();
 
     await u.clear(screen.getByLabelText("Mon start"));
     await u.type(screen.getByLabelText("Mon start"), "14:00");
     await u.clear(screen.getByLabelText("Mon end"));
     await u.type(screen.getByLabelText("Mon end"), "15:00");
 
-    expect(save()).toBeEnabled();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
-  it("refuses an EDIT that moves a routine onto another one", async () => {
-    // The commonest way to make a clash: not creating a task, but dragging an
-    // existing one onto an hour that is taken. The create path blocks through
-    // `validate`; this path only blocks if the clash is checked separately.
+  it("lets an EDIT move a routine onto another one", async () => {
+    // The commonest way to land on a taken hour: not creating a task, but
+    // moving an existing one. It used to be blocked here; both now show.
     const u = userEvent.setup();
     const gym = routineWith([{ weekday: 0, startMin: 720, endMin: 840 }]);
     const piano = {
@@ -648,12 +662,12 @@ describe("saying when a routine runs", () => {
     await u.clear(screen.getByLabelText("Mon start"));
     await u.type(screen.getByLabelText("Mon start"), "13:00");
 
-    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
   });
 
-  it("marks the row that clashes, not just the form", async () => {
-    // A Mon–Fri routine that only collides on Wednesday needs to say Wednesday;
-    // the sentence at the bottom names the task, the row marker names the day.
+  it("marks the row that shares an hour, not just the form", async () => {
+    // A Mon–Fri routine that only overlaps on Wednesday needs to say
+    // Wednesday; the sentence names the task, the row marker names the day.
     const u = userEvent.setup();
     setup({ routines: [routineWith([{ weekday: 0, startMin: 720, endMin: 840 }])] });
     await u.type(screen.getByLabelText(/title/i), "Lunch run");
@@ -666,7 +680,7 @@ describe("saying when a routine runs", () => {
     await u.type(screen.getByLabelText("Tue end"), "13:30");
 
     // Gym runs on Mondays only, so only the Monday row is marked.
-    expect(screen.getAllByTitle("Clashes with Gym")).toHaveLength(1);
+    expect(screen.getAllByTitle("Alongside Gym")).toHaveLength(1);
   });
 
   it("says nothing when the times sit back to back", async () => {
@@ -677,7 +691,7 @@ describe("saying when a routine runs", () => {
     await u.type(screen.getByLabelText("Mon start"), "14:00");
     await u.type(screen.getByLabelText("Mon end"), "15:00");
 
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
   it("does not refuse a routine because of itself while it is being edited", async () => {
@@ -685,7 +699,7 @@ describe("saying when a routine runs", () => {
     const existing = { ...routineWith([{ weekday: 0, startMin: 720, endMin: 840 }]), id: "self" };
     const { save } = setup({ task: existing, routines: [existing] });
 
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Mon start")).toHaveValue("12:00");
     expect(save()).toBeDisabled(); // nothing changed, which is a different reason
   });

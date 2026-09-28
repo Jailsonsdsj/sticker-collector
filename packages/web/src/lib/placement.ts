@@ -204,6 +204,17 @@ const SNAP_MS = 0.55;
 const GLOW_MS = 1.6;
 
 /**
+ * How long a landing is *visible* for — the glow, being the longer of the two.
+ *
+ * Derived rather than written out again: a second copy of 1.6 is a number that
+ * drifts the first time the glow is retimed. Distinct from `LAND_MS`, which is
+ * when the GSAP context is reverted and is deliberately later; this is the beat
+ * a caller waits if it wants the piece to be seen arriving before it does
+ * something else.
+ */
+export const LANDING_FLOURISH_MS = GLOW_MS * 1000;
+
+/**
  * The colours a landing can glow in.
  *
  * **Tokens, never a generated colour.** Computing one would be a line shorter

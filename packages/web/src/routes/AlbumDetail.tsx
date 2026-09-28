@@ -280,6 +280,8 @@ export function AlbumDetail() {
         <Celebration
           title={summary.title}
           coverKey={summary.coverKey}
+          message={`Every slot in ${summary.title} is filled. The print sheet is ready.`}
+          action="See the album"
           onClose={() => setCelebrating(false)}
         />
       )}
