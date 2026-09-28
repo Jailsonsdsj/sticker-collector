@@ -514,3 +514,114 @@ describe("the details behind the i", () => {
     expect(screen.queryByText("Time spent")).not.toBeVisible();
   });
 });
+
+describe("finishing the picture", () => {
+  /**
+   * The whole screen, once, at the moment the last piece lands.
+   *
+   * Fake timers only for the clock: the celebration waits out the landing
+   * flourish so the final piece is seen arriving rather than being covered by
+   * an overlay on the same frame. `userEvent` needs the real ones.
+   */
+  const finishing = (start: Partial<PuzzleDetail> = {}) => {
+    // Five of six owned; the sixth completes it.
+    let board = puzzle({ ownedPieces: [0, 1, 2, 3, 4], ownedCount: 5, ...start });
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      const read = (init?.method ?? "GET") === "GET";
+      if (read && url.startsWith("/api/puzzles/")) return json(board);
+      if (read && url.startsWith("/api/wallet")) return json({ balance: 1000 });
+      if (!read) {
+        board = {
+          ...board,
+          ownedPieces: [0, 1, 2, 3, 4, 5],
+          ownedCount: 6,
+          completedAt: "2026-09-23T00:00:00Z",
+        };
+        return json(
+          { balance: 900, spentCoins: 25, puzzleId: "p1", pieces: [5], completed: true },
+          201,
+        );
+      }
+      return json({});
+    });
+    const router = createMemoryRouter([{ path: "/puzzles/:id", element: <PuzzleView /> }], {
+      initialEntries: ["/puzzles/p1"],
+    });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+  };
+
+  const congratulations = () => screen.queryByRole("dialog", { name: /is complete/ });
+
+  it("covers the screen once the last piece is in", async () => {
+    const user = userEvent.setup();
+    finishing();
+    await screen.findByTestId("puzzle-canvas");
+
+    await user.click(await screen.findByRole("button", { name: /Random 40/ }));
+
+    await waitFor(() => expect(congratulations()).toBeInTheDocument(), { timeout: 4000 });
+    expect(screen.getByText("Every piece of The harbour is in place.")).toBeInTheDocument();
+  });
+
+  it("waits for the last piece to be seen landing", async () => {
+    // The flourish on the final piece IS the moment. An overlay thrown up on
+    // the same frame it starts covers the thing being celebrated.
+    const user = userEvent.setup();
+    finishing();
+    await screen.findByTestId("puzzle-canvas");
+
+    await user.click(await screen.findByRole("button", { name: /Random 40/ }));
+    // The board has already caught up — every piece owned — and the overlay is
+    // still not there. That gap is the landing being watched.
+    await screen.findByRole("progressbar", { name: /6 of 6 pieces/ });
+
+    expect(congratulations()).not.toBeInTheDocument();
+    await waitFor(() => expect(congratulations()).toBeInTheDocument(), { timeout: 4000 });
+  });
+
+  it("says nothing when a finished puzzle is merely opened", async () => {
+    // Confetti every time you look at something you finished last week is a
+    // reward that has stopped meaning anything.
+    open(
+      puzzle({
+        ownedPieces: [0, 1, 2, 3, 4, 5],
+        ownedCount: 6,
+        completedAt: "2026-09-01T00:00:00Z",
+      }),
+    );
+    await screen.findByTestId("puzzle-canvas");
+
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+
+    expect(congratulations()).not.toBeInTheDocument();
+  });
+
+  it("shows the picture at its own shape rather than cropped to a card", async () => {
+    const user = userEvent.setup();
+    finishing();
+    await screen.findByTestId("puzzle-canvas");
+
+    await user.click(await screen.findByRole("button", { name: /Random 40/ }));
+    await waitFor(() => expect(congratulations()).toBeInTheDocument(), { timeout: 4000 });
+
+    const frame = document.querySelector("[data-part='cover']") as HTMLElement;
+    expect(frame.getAttribute("style")).toContain("aspect-ratio: 1536 / 1024");
+  });
+
+  it("can be dismissed, leaving the finished board behind", async () => {
+    const user = userEvent.setup();
+    finishing();
+    await screen.findByTestId("puzzle-canvas");
+    await user.click(await screen.findByRole("button", { name: /Random 40/ }));
+    await waitFor(() => expect(congratulations()).toBeInTheDocument(), { timeout: 4000 });
+
+    await user.click(screen.getByRole("button", { name: "See the picture" }));
+
+    expect(congratulations()).not.toBeInTheDocument();
+    expect(screen.getByTestId("puzzle-canvas")).toBeInTheDocument();
+  });
+});

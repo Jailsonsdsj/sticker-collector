@@ -1,7 +1,7 @@
 import {
-  describeConflicts,
+  describeSharing,
   maskHasDay,
-  type SlotConflict,
+  type SharedSlot,
   WEEKDAYS,
   type Weekday,
 } from "@sticker-collector/shared";
@@ -39,14 +39,14 @@ export function ScheduleFields({
   state,
   dispatch,
   typeLocked = false,
-  conflicts = [],
+  shared = [],
 }: {
   state: TaskFormState;
   dispatch: (action: TaskFormAction) => void;
   /** True while editing: the choice is fixed at creation and the API refuses it. */
   typeLocked?: boolean;
   /** What the times entered here run into. Blocks the save. */
-  conflicts?: SlotConflict[];
+  shared?: SharedSlot[];
 }) {
   return (
     <>
@@ -79,7 +79,7 @@ export function ScheduleFields({
             </div>
           </Field>
 
-          <SlotFields state={state} dispatch={dispatch} conflicts={conflicts} />
+          <SlotFields state={state} dispatch={dispatch} shared={shared} />
         </>
       ) : (
         <div className="flex gap-3">
@@ -143,11 +143,11 @@ export function ScheduleFields({
 function SlotFields({
   state,
   dispatch,
-  conflicts,
+  shared,
 }: {
   state: TaskFormState;
   dispatch: (action: TaskFormAction) => void;
-  conflicts: SlotConflict[];
+  shared: SharedSlot[];
 }) {
   const days = WEEKDAY_INDICES.filter((index) => maskHasDay(state.weekdays, index));
   if (days.length === 0) return null;
@@ -157,7 +157,7 @@ function SlotFields({
       <div className="flex flex-col gap-2">
         {days.map((index) => {
           const slot = state.slots[index] ?? { start: "", end: "" };
-          const clash = conflicts.find((conflict) => conflict.weekday === index);
+          const alongside = shared.find((overlap) => overlap.weekday === index);
 
           return (
             <div key={WEEKDAYS[index]} className="flex items-center gap-2">
@@ -195,13 +195,16 @@ function SlotFields({
                 }
                 className="min-w-0 flex-1 rounded-lg border border-surface-4 bg-panel px-2 py-1.5 font-numeric text-md text-ink outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan"
               />
-              {clash && (
+              {alongside && (
+                // A marker, not a warning: nothing here is wrong. Two routines
+                // in one hour sit side by side on the agenda, so this says the
+                // hour is shared rather than that the time is refused.
                 <span
                   aria-hidden
-                  title={`Clashes with ${clash.withTaskTitle}`}
-                  className="text-prio-high-fg"
+                  title={`Alongside ${alongside.withTaskTitle}`}
+                  className="text-ink-muted"
                 >
-                  ⚠
+                  ⇄
                 </span>
               )}
             </div>
@@ -209,13 +212,12 @@ function SlotFields({
         })}
       </div>
 
-      {conflicts.length > 0 && (
-        // A refusal, not a warning, and Save is disabled behind it: the agenda
-        // draws two slots in one cell on top of each other, so a saved clash is
-        // a task that disappears from the day it was scheduled on. `alert`
-        // rather than `status` for the same reason — this one needs answering.
-        <p role="alert" className="mt-2 font-body text-sm text-prio-high-fg">
-          {describeConflicts(conflicts)}
+      {shared.length > 0 && (
+        // `status`, not `alert`, and Save is not held behind it: nothing needs
+        // answering. The agenda lays overlapping blocks side by side, so this
+        // is the schedule being described rather than refused.
+        <p role="status" className="mt-2 font-body text-sm text-ink-secondary">
+          {describeSharing(shared)}
         </p>
       )}
     </Field>

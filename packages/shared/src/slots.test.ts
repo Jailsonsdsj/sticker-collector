@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import { WEEKDAYS_MASK_ALL, WEEKDAYS_MASK_WEEKDAYS } from "./recurrence";
 import {
   clockToMinutes,
-  describeConflicts,
+  describeSharing,
   describeSlot,
-  findSlotConflicts,
+  findSharedSlots,
   minutesToClock,
   type RoutineSlot,
   routineSlotSchema,
@@ -117,39 +117,39 @@ describe("when two blocks collide", () => {
   });
 });
 
-describe("reporting conflicts", () => {
+describe("reporting a shared hour", () => {
   const gym = { id: "gym", title: "Gym", slots: [slot(0, "12:00", "14:00")] };
   const study = { id: "study", title: "English study", slots: [slot(1, "10:00", "12:00")] };
 
-  it("names what a proposed block runs into", () => {
-    const conflicts = findSlotConflicts([slot(0, "13:00", "15:00")], [gym, study]);
+  it("names what a proposed block shares its hour with", () => {
+    const shared = findSharedSlots([slot(0, "13:00", "15:00")], [gym, study]);
 
-    expect(conflicts).toHaveLength(1);
-    expect(conflicts[0]).toMatchObject({ withTaskId: "gym", withTaskTitle: "Gym", weekday: 0 });
+    expect(shared).toHaveLength(1);
+    expect(shared[0]).toMatchObject({ withTaskId: "gym", withTaskTitle: "Gym", weekday: 0 });
   });
 
   it("says nothing when the days differ", () => {
-    expect(findSlotConflicts([slot(2, "12:00", "14:00")], [gym, study])).toEqual([]);
+    expect(findSharedSlots([slot(2, "12:00", "14:00")], [gym, study])).toEqual([]);
   });
 
   it("does not report a routine against itself while it is being edited", () => {
     // Editing Gym's Monday block must not warn that it collides with Gym.
-    expect(findSlotConflicts([slot(0, "12:00", "14:00")], [gym, study], "gym")).toEqual([]);
+    expect(findSharedSlots([slot(0, "12:00", "14:00")], [gym, study], "gym")).toEqual([]);
   });
 
   it("reports every collision, not just the first", () => {
     const other = { id: "x", title: "Standup", slots: [slot(0, "13:30", "13:45")] };
 
-    expect(findSlotConflicts([slot(0, "12:00", "14:00")], [gym, other])).toHaveLength(2);
+    expect(findSharedSlots([slot(0, "12:00", "14:00")], [gym, other])).toHaveLength(2);
   });
 
-  it("is a warning by construction — it returns a list and refuses nothing", () => {
-    // Two things at nine on a Monday is a mess a person may knowingly want, and
-    // an app that forbids it is an app that gets lied to.
-    const conflicts = findSlotConflicts([slot(0, "12:30", "13:00")], [gym]);
+  it("reports rather than refuses — it returns a list and forbids nothing", () => {
+    // Two things at nine on a Monday is a thing people genuinely do, and the
+    // agenda draws them side by side. Refusing it was refusing the schedule.
+    const shared = findSharedSlots([slot(0, "12:30", "13:00")], [gym]);
 
-    expect(Array.isArray(conflicts)).toBe(true);
-    expect(conflicts[0]?.withSlot).toEqual(gym.slots[0]);
+    expect(Array.isArray(shared)).toBe(true);
+    expect(shared[0]?.withSlot).toEqual(gym.slots[0]);
   });
 });
 
@@ -183,43 +183,43 @@ describe("times as words and back", () => {
   });
 });
 
-describe("the refusal, in words", () => {
+describe("the sharing, in words", () => {
   const gym = { id: "gym", title: "Gym", slots: [slot(0, "12:00", "14:00")] };
 
-  it("says nothing when nothing clashes", () => {
-    expect(describeConflicts([])).toBeNull();
+  it("says nothing when no hour is shared", () => {
+    expect(describeSharing([])).toBeNull();
   });
 
-  it("names the task and the hour it already holds", () => {
+  it("names the task and the hour it shares", () => {
     // "Overlaps Gym" leaves you hunting for which day and when.
-    const message = describeConflicts(findSlotConflicts([slot(0, "13:00", "13:30")], [gym]));
+    const message = describeSharing(findSharedSlots([slot(0, "13:00", "13:30")], [gym]));
 
     expect(message).toContain("Gym");
     expect(message).toContain("Mon 12:00–14:00");
   });
 
-  it("names a task once, however many days it clashes on", () => {
-    // A Mon–Fri routine against another Mon–Fri routine is five conflicts and
-    // one problem; listing the name five times reads as five problems.
+  it("names a task once, however many days it shares", () => {
+    // A Mon–Fri routine beside another Mon–Fri routine is five overlaps and
+    // one thing worth saying; listing the name five times reads as five.
     const weekly = {
       id: "w",
       title: "Standup",
       slots: [slot(0, "09:00", "09:15"), slot(1, "09:00", "09:15")],
     };
-    const conflicts = findSlotConflicts(
+    const shared = findSharedSlots(
       [slot(0, "09:00", "10:00"), slot(1, "09:00", "10:00")],
       [weekly],
     );
 
-    expect(conflicts).toHaveLength(2);
-    expect(message(describeConflicts(conflicts)).match(/Standup/g)).toHaveLength(1);
+    expect(shared).toHaveLength(2);
+    expect(message(describeSharing(shared)).match(/Standup/g)).toHaveLength(1);
   });
 
-  it("lists every task that is in the way", () => {
+  it("lists every task sharing the hour", () => {
     const other = { id: "x", title: "Standup", slots: [slot(0, "13:30", "13:45")] };
-    const conflicts = findSlotConflicts([slot(0, "12:00", "14:00")], [gym, other]);
+    const shared = findSharedSlots([slot(0, "12:00", "14:00")], [gym, other]);
 
-    expect(message(describeConflicts(conflicts))).toMatch(/Gym.*Standup|Standup.*Gym/);
+    expect(message(describeSharing(shared))).toMatch(/Gym.*Standup|Standup.*Gym/);
   });
 });
 

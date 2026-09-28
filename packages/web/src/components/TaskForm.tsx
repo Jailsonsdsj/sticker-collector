@@ -1,5 +1,5 @@
 import type { CreateTaskInput, Epic, Task, UpdateTask } from "@sticker-collector/shared";
-import { describeConflicts, findSlotConflicts } from "@sticker-collector/shared";
+import { findSharedSlots } from "@sticker-collector/shared";
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import {
   initialState,
@@ -68,15 +68,14 @@ export function TaskForm({
   const [failed, setFailed] = useState<string | null>(null);
 
   /**
-   * What the times entered here run into.
+   * What else is already in the hours entered here.
    *
-   * Recomputed as they are typed — a refusal that arrives on submit is a
-   * refusal of a decision already made. Editing a routine never reports it
-   * against itself.
+   * Recomputed as they are typed, so the schedule is not a surprise on the
+   * agenda. Editing a routine never reports it against itself.
    */
-  const conflicts = useMemo(
+  const shared = useMemo(
     () =>
-      findSlotConflicts(
+      findSharedSlots(
         toSlots(state) ?? [],
         routines.filter((candidate) => candidate.type === "routine"),
         task?.id,
@@ -84,20 +83,15 @@ export function TaskForm({
     [state, routines, task?.id],
   );
 
-  // Blocking, not advisory: the agenda draws two slots in one cell on top of
-  // each other, so saving a clash hides one of the two tasks. The Worker
-  // refuses it too — this is the copy of the rule that can explain itself
-  // before the request is sent.
-  //
-  // The message itself belongs to `ScheduleFields`, beside the times that
-  // caused it. Repeating it in the footer would put the same sentence on screen
-  // twice; all this needs from it is whether to hold the button.
-  const clash = describeConflicts(conflicts) !== null;
+  // Advisory, and nothing more. It used to hold Save, because the agenda drew
+  // two slots in one cell and the later covered the earlier — saving a clash
+  // meant losing a task off its own day. `laneOut` puts them side by side now,
+  // so a shared hour is a busy hour and the form says so without refusing it.
   const problem = validate(state);
 
   const patch = task ? toPatch(state, task) : null;
   // Editing with nothing changed is not an error, but there is nothing to send.
-  const nothingToSave = clash || (task ? patch === null : problem !== null);
+  const nothingToSave = task ? patch === null : problem !== null;
 
   /**
    * A new task opens with the cursor already in the title.
@@ -227,7 +221,7 @@ export function TaskForm({
         state={state}
         dispatch={dispatch}
         typeLocked={Boolean(task)}
-        conflicts={conflicts}
+        shared={shared}
       />
       <EffortFields state={state} dispatch={dispatch} />
       <MetaFields state={state} dispatch={dispatch} epics={epics} />

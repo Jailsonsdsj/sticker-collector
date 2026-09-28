@@ -500,9 +500,11 @@ describe("when a routine runs — its slots", () => {
     expect(res.status).toBe(400);
   });
 
-  it("refuses a slot that lands on another routine's", async () => {
-    // The agenda puts two slots in one cell on top of each other, so a saved
-    // clash is a task that vanishes from the day it was scheduled on.
+  it("accepts a slot that shares another routine's hour", async () => {
+    // Refused with a 409 until the agenda could draw two blocks side by side.
+    // The reasoning then held — both landed in one cell and the later covered
+    // the earlier — but `laneOut` splits the column now, so a shared hour is
+    // simply a busy hour and the Worker has nothing to say about it.
     await createRoutine({ title: "Gym", weekdays: 1, slots: [slot(0, 600, 660)] });
 
     const res = await call("POST", "/api/tasks", {
@@ -512,14 +514,13 @@ describe("when a routine runs — its slots", () => {
       slots: [slot(0, 630, 690)],
     });
 
-    expect(res.status).toBe(409);
-    expect(((await res.json()) as { error: string }).error).toContain("Gym");
+    expect(res.status).toBe(201);
   });
 
-  it("does not create the task it refused", async () => {
-    // 409 before the INSERT: D1 has no transaction to roll one back with.
+  it("keeps both, with the times each was given", async () => {
+    // The point of allowing it: two routines in one hour, both real, both
+    // readable. Losing either would be the old bug in a new place.
     await createRoutine({ title: "Gym", weekdays: 1, slots: [slot(0, 600, 660)] });
-
     await call("POST", "/api/tasks", {
       ...ROUTINE,
       title: "Piano",
@@ -527,8 +528,26 @@ describe("when a routine runs — its slots", () => {
       slots: [slot(0, 630, 690)],
     });
 
-    const list = (await (await call("GET", "/api/tasks")).json()) as { title: string }[];
-    expect(list.map((t) => t.title)).not.toContain("Piano");
+    const list = (await (await call("GET", "/api/tasks")).json()) as {
+      title: string;
+      slots: unknown[];
+    }[];
+    expect(list.find((t) => t.title === "Gym")?.slots).toEqual([slot(0, 600, 660)]);
+    expect(list.find((t) => t.title === "Piano")?.slots).toEqual([slot(0, 630, 690)]);
+  });
+
+  it("takes three routines in the same hour, not merely two", async () => {
+    await createRoutine({ title: "Gym", weekdays: 1, slots: [slot(0, 600, 660)] });
+    await createRoutine({ title: "Piano", weekdays: 1, slots: [slot(0, 600, 660)] });
+
+    const res = await call("POST", "/api/tasks", {
+      ...ROUTINE,
+      title: "Reading",
+      weekdays: 1,
+      slots: [slot(0, 600, 660)],
+    });
+
+    expect(res.status).toBe(201);
   });
 
   it("allows back-to-back slots, which are not an overlap", async () => {
@@ -557,16 +576,16 @@ describe("when a routine runs — its slots", () => {
     expect(res.status).toBe(201);
   });
 
-  it("refuses a patch that moves a routine onto another one", async () => {
+  it("lets a patch move a routine onto another one", async () => {
     await createRoutine({ title: "Gym", weekdays: 1, slots: [slot(0, 600, 660)] });
     const piano = await createRoutine({ title: "Piano", weekdays: 1, slots: [slot(0, 900, 960)] });
 
     const res = await call("PATCH", `/api/tasks/${piano.id}`, { slots: [slot(0, 630, 690)] });
 
-    expect(res.status).toBe(409);
+    expect(res.status).toBe(200);
   });
 
-  it("leaves the patched task untouched when it refuses", async () => {
+  it("writes the moved slot, rather than quietly keeping the old one", async () => {
     await createRoutine({ title: "Gym", weekdays: 1, slots: [slot(0, 600, 660)] });
     const piano = await createRoutine({ title: "Piano", weekdays: 1, slots: [slot(0, 900, 960)] });
 
@@ -576,8 +595,8 @@ describe("when a routine runs — its slots", () => {
       title: string;
       slots: unknown[];
     };
-    expect(read.title).toBe("Piano");
-    expect(read.slots).toEqual([slot(0, 900, 960)]);
+    expect(read.title).toBe("Renamed");
+    expect(read.slots).toEqual([slot(0, 630, 690)]);
   });
 
   it("does not report a routine against itself", async () => {
