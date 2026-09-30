@@ -341,7 +341,7 @@ describe("searching the shelf", () => {
 
   it("goes back to the first page, since page 3 of the old list is not page 3 of the new", async () => {
     const user = userEvent.setup();
-    albums = Array.from({ length: 12 }, (_, i) =>
+    albums = Array.from({ length: ALBUMS_PER_PAGE + 2 }, (_, i) =>
       album({ id: `a${i}`, title: `Album ${String(i).padStart(2, "0")}` }),
     );
     render(<Albums />, { wrapper });
@@ -462,7 +462,7 @@ describe("showing one kind of thing", () => {
 
   it("goes back to the first page, since the list just got shorter", async () => {
     const user = userEvent.setup();
-    albums = Array.from({ length: 12 }, (_, i) =>
+    albums = Array.from({ length: ALBUMS_PER_PAGE + 2 }, (_, i) =>
       album({
         id: `a${i}`,
         title: `Album ${String(i).padStart(2, "0")}`,
@@ -654,22 +654,22 @@ describe("pagination", () => {
     expect(screen.queryByRole("navigation", { name: "Album pages" })).not.toBeInTheDocument();
   });
 
-  it("shows ten at a time", async () => {
-    albums = many(23);
+  it("shows forty at a time", async () => {
+    albums = many(93);
     await openShelf();
 
     expect(screen.getByText("Album 00")).toBeInTheDocument();
-    expect(screen.getByText("Album 09")).toBeInTheDocument();
-    expect(screen.queryByText("Album 10")).not.toBeInTheDocument();
+    expect(screen.getByText("Album 39")).toBeInTheDocument();
+    expect(screen.queryByText("Album 40")).not.toBeInTheDocument();
     expect(screen.getByText("1 of 3")).toBeInTheDocument();
   });
 
   it("walks forward and back", async () => {
-    albums = many(23);
+    albums = many(93);
     const user = await openShelf();
 
     await user.click(screen.getByRole("button", { name: "Next" }));
-    expect(screen.getByText("Album 10")).toBeInTheDocument();
+    expect(screen.getByText("Album 40")).toBeInTheDocument();
     expect(screen.queryByText("Album 00")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Previous" }));
@@ -677,7 +677,7 @@ describe("pagination", () => {
   });
 
   it("stops at both ends", async () => {
-    albums = many(23);
+    albums = many(93);
     const user = await openShelf();
 
     expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled();
@@ -690,18 +690,18 @@ describe("pagination", () => {
   });
 
   it("leaves the last page short rather than padding it", async () => {
-    albums = many(11);
+    albums = many(41);
     const user = await openShelf();
 
     await user.click(screen.getByRole("button", { name: "Next" }));
 
-    expect(screen.getByText("Album 10")).toBeInTheDocument();
+    expect(screen.getByText("Album 40")).toBeInTheDocument();
     expect(screen.getByText("2 of 2")).toBeInTheDocument();
   });
 
   it("returns to the first page when the filter changes", async () => {
     // Otherwise a narrower list leaves you on a page that no longer exists.
-    albums = many(23);
+    albums = many(93);
     const user = await openShelf();
 
     await user.click(screen.getByRole("button", { name: "Next" }));
@@ -714,13 +714,13 @@ describe("pagination", () => {
 describe("paginate", () => {
   const rows = (n: number) => Array.from({ length: n }, (_, i) => i);
 
-  it("cuts the list into pages of ten", () => {
-    expect(paginate(rows(23), 0).visible).toHaveLength(ALBUMS_PER_PAGE);
-    expect(paginate(rows(23), 0).pages).toBe(3);
+  it("cuts the list into pages of forty", () => {
+    expect(paginate(rows(93), 0).visible).toHaveLength(ALBUMS_PER_PAGE);
+    expect(paginate(rows(93), 0).pages).toBe(3);
   });
 
   it("leaves the last page short rather than padding it", () => {
-    expect(paginate(rows(23), 2).visible).toEqual([20, 21, 22]);
+    expect(paginate(rows(93), 2).visible).toEqual(rows(93).slice(80));
   });
 
   it("reports one page for an empty shelf, not zero", () => {

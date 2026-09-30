@@ -108,7 +108,15 @@ export function PuzzleView() {
 
   const cost = board.piecePrice * picked.size;
   const balance = wallet.data?.balance ?? 0;
-  const affordable = cost <= balance;
+  /**
+   * What the one Unlock button buys: the picked pieces, or — with nothing
+   * picked — a random one, when the author priced a gamble. Null when neither
+   * applies, and the button waits for a pick.
+   */
+  const gambling = picked.size === 0 && board.randomPrice > 0;
+  const price = picked.size > 0 ? cost : gambling ? board.randomPrice : null;
+  const affordable = price !== null && price <= balance;
+  const buying = buy.isPending || pull.isPending;
   // Capped because the purchase is one batch — one payment and one insert per
   // piece — and that batch is the only all-or-nothing D1 offers.
   const full = picked.size >= MAX_PIECES_PER_UNLOCK;
@@ -275,46 +283,39 @@ export function PuzzleView() {
           ) : open ? (
             <>
               <span className="mr-auto flex items-center gap-1 font-body text-sm text-ink-secondary">
-                {picked.size === 0 ? (
+                {picked.size > 0 ? (
+                  `${picked.size} picked`
+                ) : gambling ? (
+                  "A random piece"
+                ) : (
                   <>
                     <Coin size="xs" />
                     <span className="font-numeric font-bold text-coin">{board.piecePrice}</span>a
                     piece
                   </>
+                )}
+              </span>
+              {/* One button, not two. With pieces picked it buys them; with
+                  none it pulls a random one, when the author priced a gamble.
+                  The price on it is what this tap costs, whichever it is. */}
+              <Button
+                tone="lime"
+                size="sm"
+                disabled={!affordable || buying}
+                loading={buying}
+                onClick={picked.size > 0 ? purchase : gamble}
+              >
+                {price === null ? (
+                  "Unlock"
+                ) : !affordable ? (
+                  "Not enough coins"
                 ) : (
                   <>
-                    {picked.size} for
-                    <Coin size="xs" />
-                    <span className="font-numeric font-bold text-coin">{cost}</span>
+                    Unlock <Coin size="xs" />
+                    <span className="font-numeric">{price}</span>
                   </>
                 )}
-              </span>
-              <span className="flex items-center gap-2">
-                {/* Offered only when the author priced one. A puzzle without a
-                    random price simply has no gamble, the same way an album
-                    without one would not. */}
-                {board.randomPrice > 0 && picked.size === 0 && (
-                  <Button
-                    variant="outline"
-                    tone="coin"
-                    size="sm"
-                    disabled={board.randomPrice > balance || pull.isPending}
-                    loading={pull.isPending}
-                    onClick={gamble}
-                  >
-                    Random {board.randomPrice}
-                  </Button>
-                )}
-                <Button
-                  tone="lime"
-                  size="sm"
-                  disabled={picked.size === 0 || !affordable || buy.isPending}
-                  loading={buy.isPending}
-                  onClick={purchase}
-                >
-                  {picked.size > 0 && !affordable ? "Not enough coins" : "Unlock"}
-                </Button>
-              </span>
+              </Button>
             </>
           ) : (
             <>

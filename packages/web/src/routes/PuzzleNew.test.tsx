@@ -132,8 +132,8 @@ describe("the choices it puts in front of you", () => {
 
     await user.click(screen.getByRole("button", { name: "12" }));
 
-    // 1000 to unlock, 12 pieces at 150.
-    expect(screen.getByText("2800")).toBeInTheDocument();
+    // 500 to unlock, 12 pieces at 50.
+    expect(screen.getByText("1100")).toBeInTheDocument();
   });
 
   it("warns that there is no edit, before the button rather than after", () => {
@@ -200,9 +200,9 @@ describe("making it", () => {
 
     await waitFor(() => expect(posted()).not.toBeNull());
     expect(posted()).toMatchObject({
-      unlockPrice: 1000,
-      piecePrice: 150,
-      randomPrice: 100,
+      unlockPrice: 500,
+      piecePrice: 50,
+      randomPrice: 30,
       hideLocked: false,
     });
   });
