@@ -72,8 +72,15 @@ export function Tasks() {
    * further in, and deliberate.
    */
   const [viewing, setViewing] = useState<{ item: HomeItem; ref: CompletionRef } | null>(null);
-  /** The task a tick was refused on, so the refusal can say why. */
-  const [blocked, setBlocked] = useState<Task | null>(null);
+  /**
+   * The tick that was refused, so the refusal can say why — and, once its steps
+   * are ticked there, send the completion it stopped.
+   */
+  const [blocked, setBlocked] = useState<{
+    task: Task;
+    ref: CompletionRef;
+    coins: number;
+  } | null>(null);
   const [review, setReview] = useState<DailyReview | null>(null);
   /** Narrows every section as it is typed; never submitted. */
   const [query, setQuery] = useState("");
@@ -127,6 +134,11 @@ export function Tasks() {
    */
   const liveTask = viewing
     ? (tasks.data?.find((row) => row.id === viewing.item.task.id) ?? viewing.item.task)
+    : null;
+
+  /** The refused task as the cache has it now, so steps ticked in the dialog show. */
+  const blockedTask = blocked
+    ? (tasks.data?.find((row) => row.id === blocked.task.id) ?? blocked.task)
     : null;
 
   const epicById = useMemo(
@@ -253,7 +265,7 @@ export function Tasks() {
             // ticks, waits out its undo window and then springs back is a much
             // worse way to learn about it than being told.
             if (next && blockedBySteps(item.task, item.scheduledOn ?? today)) {
-              setBlocked(item.task);
+              setBlocked({ task: item.task, ref, coins });
               return;
             }
             if (next) {
@@ -358,7 +370,32 @@ export function Tasks() {
         already earned are kept.
       </Dialog>
 
-      <StepsBlockedDialog task={blocked} today={today} onClose={() => setBlocked(null)} />
+      <StepsBlockedDialog
+        task={blockedTask}
+        // The run that was ticked, which for an overdue routine is not today —
+        // the same day the gate was checked against, and the day ticks stamp.
+        today={blocked?.ref.scheduledOn ?? today}
+        onClose={() => setBlocked(null)}
+        onToggleStep={
+          blocked
+            ? (subtaskId, done) =>
+                toggleSubtask.mutate({
+                  taskId: blocked.task.id,
+                  subtaskId,
+                  done,
+                  on: blocked.ref.scheduledOn,
+                })
+            : undefined
+        }
+        onComplete={
+          blocked
+            ? () => {
+                queue.complete(blocked.ref, { title: blocked.task.title, coins: blocked.coins });
+                setBlocked(null);
+              }
+            : undefined
+        }
+      />
 
       <DailyReviewDialog review={review} heading="Yesterday" onClose={() => setReview(null)} />
 

@@ -3,8 +3,21 @@ import { SaveImageError, saveSticker } from "./saveImage";
 
 const KEY = `img/${"1".padStart(64, "0")}.jpg`;
 
+/**
+ * A fetch that answers with an image.
+ *
+ * The body is a string with a content-type header, NOT `new Blob(...)`. A
+ * `Blob` here is jsdom's, while `Response` is Node's own (undici), and undici
+ * reads a blob body by calling `.stream()` on it — which jsdom's Blob does not
+ * have on Node 22. That combination threw `object.stream is not a function`
+ * and failed all six tests, on a machine whose default Node is not the 24 in
+ * `.nvmrc`. The type still arrives: undici gives `response.blob()` the type
+ * from the header, which is all this module reads.
+ */
 const ok = () =>
-  vi.fn(async () => new Response(new Blob(["bytes"], { type: "image/jpeg" }), { status: 200 }));
+  vi.fn(
+    async () => new Response("bytes", { status: 200, headers: { "content-type": "image/jpeg" } }),
+  );
 
 let click: ReturnType<typeof vi.spyOn>;
 
