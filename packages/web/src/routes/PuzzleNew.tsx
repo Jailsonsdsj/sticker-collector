@@ -1,4 +1,4 @@
-import { IMAGE_SIZES, PIECE_PRESETS, type PiecePreset } from "@sticker-collector/shared";
+import { IMAGE_SIZES, PIECE_PRESETS, type PiecePreset, type Size } from "@sticker-collector/shared";
 import { useReducer, useRef, useState } from "react";
 import { useBlocker, useNavigate } from "react-router";
 import { DiscardDraftDialog } from "../components/DiscardDraftDialog";
@@ -42,6 +42,9 @@ export function PuzzleNew() {
 
   const grid = draftGrid(draft);
   const problem = validate(draft);
+
+  const pick = (imageKey: string, size: Size, fileName: string) =>
+    dispatch({ kind: "image", value: imageKey, width: size.width, height: size.height, fileName });
 
   const blocker = useBlocker(() => !leaving.current && !isPristine(draft));
 
@@ -101,32 +104,10 @@ export function PuzzleNew() {
                 height={IMAGE_SIZES.puzzle.height}
                 className="size-24 rounded-xl object-cover"
               />
-              <ImagePicker
-                kind="puzzle"
-                label="Replace"
-                onPicked={(imageKey, size) =>
-                  dispatch({
-                    kind: "image",
-                    value: imageKey,
-                    width: size.width,
-                    height: size.height,
-                  })
-                }
-              />
+              <ImagePicker kind="puzzle" label="Replace" onPicked={pick} />
             </div>
           ) : (
-            <ImagePicker
-              kind="puzzle"
-              label="Choose a picture"
-              onPicked={(imageKey, size) =>
-                dispatch({
-                  kind: "image",
-                  value: imageKey,
-                  width: size.width,
-                  height: size.height,
-                })
-              }
-            />
+            <ImagePicker kind="puzzle" label="Choose a picture" onPicked={pick} />
           )}
         </Field>
 

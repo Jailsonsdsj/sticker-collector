@@ -18,12 +18,14 @@ vi.mock("../components/wizard/ImagePicker", () => ({
     onPicked,
   }: {
     label: string;
-    onPicked: (key: string, size: { width: number; height: number }) => void;
+    onPicked: (key: string, size: { width: number; height: number }, fileName: string) => void;
   }) => (
     // A wide picture, because a puzzle now keeps the shape it arrived in.
     <button
       type="button"
-      onClick={() => onPicked(`img/${"a".repeat(64)}.jpg`, { width: 1536, height: 864 })}
+      onClick={() =>
+        onPicked(`img/${"a".repeat(64)}.jpg`, { width: 1536, height: 864 }, "Lagoa at dusk.jpeg")
+      }
     >
       {label}
     </button>
@@ -145,6 +147,24 @@ describe("making it", () => {
     await user.type(screen.getByLabelText(/title/i), "The harbour");
     await user.click(screen.getByRole("button", { name: "Choose a picture" }));
   };
+
+  it("names the puzzle after the picture's file when no title is typed", async () => {
+    const user = userEvent.setup();
+    open();
+
+    await user.click(screen.getByRole("button", { name: "Choose a picture" }));
+
+    expect(screen.getByLabelText(/title/i)).toHaveValue("Lagoa at dusk");
+  });
+
+  it("keeps a typed title when the picture arrives", async () => {
+    const user = userEvent.setup();
+    open();
+
+    await fill(user);
+
+    expect(screen.getByLabelText(/title/i)).toHaveValue("The harbour");
+  });
 
   it("turns the button on once the picture is in", async () => {
     const user = userEvent.setup();

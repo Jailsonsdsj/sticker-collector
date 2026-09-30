@@ -8,6 +8,7 @@ import {
   isSealable,
   type PuzzleDraft,
   reduce,
+  titleFromFileName,
   toPayload,
   totalCost,
   validate,
@@ -186,5 +187,56 @@ describe("pricing the gamble", () => {
 
   it("counts as a change worth asking about before leaving", () => {
     expect(isPristine(apply(initialDraft, { kind: "randomPrice", value: "40" }))).toBe(false);
+  });
+});
+
+describe("a title from the picture's file name", () => {
+  const pick = (fileName: string): DraftAction => ({
+    kind: "image",
+    value: KEY,
+    width: 1536,
+    height: 864,
+    fileName,
+  });
+
+  it("drops the extension, whatever it is", () => {
+    expect(titleFromFileName("Lagoa at dusk.jpeg")).toBe("Lagoa at dusk");
+    expect(titleFromFileName("harbour.PNG")).toBe("harbour");
+    expect(titleFromFileName("IMG_2041.heic")).toBe("IMG_2041");
+  });
+
+  it("drops only the last one, so dots in the name survive", () => {
+    expect(titleFromFileName("St. Ives 2024.03.jpg")).toBe("St. Ives 2024.03");
+  });
+
+  it("keeps a name that has no extension", () => {
+    expect(titleFromFileName("harbour")).toBe("harbour");
+  });
+
+  it("fills an empty title", () => {
+    expect(apply(initialDraft, pick("Lagoa at dusk.jpeg")).title).toBe("Lagoa at dusk");
+  });
+
+  it("never overwrites a title the author typed", () => {
+    const draft = apply(initialDraft, { kind: "title", value: "The harbour" }, pick("a.jpg"));
+    expect(draft.title).toBe("The harbour");
+  });
+
+  it("follows a replaced picture while the title is still the file's", () => {
+    expect(apply(initialDraft, pick("first.jpg"), pick("second.png")).title).toBe("second");
+  });
+
+  it("stops following once the author edits it", () => {
+    const draft = apply(
+      initialDraft,
+      pick("first.jpg"),
+      { kind: "title", value: "My own name" },
+      pick("second.png"),
+    );
+    expect(draft.title).toBe("My own name");
+  });
+
+  it("leaves the title alone when the name is nothing but an extension", () => {
+    expect(apply(initialDraft, pick(".jpg")).title).toBe("");
   });
 });

@@ -50,9 +50,7 @@ describe("why the tick was refused", () => {
     expect(screen.getByText("Send it")).toBeInTheDocument();
   });
 
-  it("does not offer to tick them here", () => {
-    // An explanation, not a second place to work — the task sheet already does
-    // that properly, with the list in its own order and the count beside it.
+  it("is read-only when nothing can tick the steps", () => {
     open();
 
     for (const box of screen.getAllByRole("checkbox")) expect(box).toBeDisabled();
@@ -76,5 +74,59 @@ describe("why the tick was refused", () => {
     );
 
     expect(container).toBeEmptyDOMElement();
+  });
+});
+
+describe("working through the steps from the dialog", () => {
+  it("ticks a step for the day the refusal was about", async () => {
+    const user = userEvent.setup();
+    const onToggleStep = vi.fn();
+    render(
+      <StepsBlockedDialog
+        task={task()}
+        today={TODAY}
+        onClose={vi.fn()}
+        onToggleStep={onToggleStep}
+      />,
+    );
+
+    await user.click(screen.getByRole("checkbox", { name: "Send it" }));
+
+    expect(onToggleStep).toHaveBeenCalledWith("b", true);
+  });
+
+  it("offers the refused completion once nothing is left", async () => {
+    const user = userEvent.setup();
+    const onComplete = vi.fn();
+    render(
+      <StepsBlockedDialog
+        task={task({
+          subtasks: [step({ id: "a", doneOn: TODAY }), step({ id: "b", doneOn: TODAY })],
+        })}
+        today={TODAY}
+        onClose={vi.fn()}
+        onToggleStep={vi.fn()}
+        onComplete={onComplete}
+      />,
+    );
+
+    expect(screen.getByText(/has every step ticked/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Complete it" }));
+
+    expect(onComplete).toHaveBeenCalled();
+  });
+
+  it("does not offer completion while a step is still open", () => {
+    render(
+      <StepsBlockedDialog
+        task={task()}
+        today={TODAY}
+        onClose={vi.fn()}
+        onToggleStep={vi.fn()}
+        onComplete={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Complete it" })).not.toBeInTheDocument();
   });
 });
