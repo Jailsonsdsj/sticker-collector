@@ -38,6 +38,13 @@ export interface PuzzleDraft {
   randomPrice: string;
   pieces: PiecePreset;
   hideLocked: boolean;
+  /**
+   * The title as filled from the last picture's file name, or null.
+   *
+   * Lets a replaced picture rename a title nobody has touched since, without
+   * ever overwriting one the author typed.
+   */
+  titleFromFile: string | null;
 }
 
 /**
@@ -72,12 +79,18 @@ export const initialDraft: PuzzleDraft = {
   randomPrice: "100",
   pieces: DEFAULT_PIECES,
   hideLocked: false,
+  titleFromFile: null,
 };
+
+/** `Sunset at Lagoa.jpeg` → `Sunset at Lagoa`. Only the last extension goes. */
+export function titleFromFileName(fileName: string): string {
+  return fileName.replace(/\.[^.]*$/, "").trim();
+}
 
 export type DraftAction =
   | { kind: "title"; value: string }
   | { kind: "description"; value: string }
-  | { kind: "image"; value: string; width: number; height: number }
+  | { kind: "image"; value: string; width: number; height: number; fileName?: string }
   | { kind: "unlockPrice"; value: string }
   | { kind: "piecePrice"; value: string }
   | { kind: "randomPrice"; value: string }
@@ -90,13 +103,19 @@ export function reduce(state: PuzzleDraft, action: DraftAction): PuzzleDraft {
       return { ...state, title: action.value };
     case "description":
       return { ...state, description: action.value };
-    case "image":
-      return {
+    case "image": {
+      const next = {
         ...state,
         imageKey: action.value,
         imageWidth: action.width,
         imageHeight: action.height,
       };
+      const fromFile = action.fileName ? titleFromFileName(action.fileName) : "";
+      // Filled only over nothing, or over what the previous file filled in.
+      const untouched = state.title.trim() === "" || state.title === state.titleFromFile;
+      if (!fromFile || !untouched) return next;
+      return { ...next, title: fromFile, titleFromFile: fromFile };
+    }
     case "unlockPrice":
       return { ...state, unlockPrice: action.value };
     case "piecePrice":

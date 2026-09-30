@@ -7,9 +7,10 @@ import { Button, Sheet } from "../ui";
 export interface ImagePickerProps {
   kind: ImageKind;
   label: string;
-  /** The stored image's key once the bytes are safely uploaded, and the size
-   *  they were stored at. A caller that only wants the key can ignore it. */
-  onPicked: (imageKey: string, size: Size) => void;
+  /** The stored image's key once the bytes are safely uploaded, the size they
+   *  were stored at, and the name of the file it came from. A caller that only
+   *  wants the key can ignore the rest. */
+  onPicked: (imageKey: string, size: Size, fileName: string) => void;
   disabled?: boolean;
   /**
    * Import a batch: pick several files, then position them one after another.
@@ -59,12 +60,12 @@ export function ImagePicker({
     setIndex(0);
   };
 
-  const commit = async (bytes: Uint8Array, size: Size) => {
+  const commit = async (bytes: Uint8Array, size: Size, fileName: string) => {
     setBusy(true);
     setError(null);
     try {
       const { key } = await uploadImage(bytes, kind);
-      onPicked(key, size);
+      onPicked(key, size, fileName);
       // Advance, or finish. Stepping Back and re-positioning an earlier image
       // adds it again rather than replacing it — content addressing makes the
       // re-upload free, and the caller can drop the one it does not want.
@@ -131,7 +132,7 @@ export function ImagePicker({
             kind={kind}
             commitLabel={queue.length > 1 ? (last ? "Done" : "Next") : undefined}
             onBack={index > 0 ? () => setIndex(index - 1) : undefined}
-            onCommit={(bytes, size) => void commit(bytes, size)}
+            onCommit={(bytes, size) => void commit(bytes, size, current.name)}
             onCancel={close}
           />
         )}
