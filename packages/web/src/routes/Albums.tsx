@@ -87,8 +87,8 @@ const SORT_LABELS: Record<(typeof ALBUM_SORTS)[number], string> = {
   created: "Newest",
 };
 
-/** Albums per page. Enough to fill a phone screen without an endless scroll. */
-export const ALBUMS_PER_PAGE = 10;
+/** Albums per page. A few screens of scrolling, so paging is rare rather than constant. */
+export const ALBUMS_PER_PAGE = 40;
 
 /**
  * One page of the shelf.

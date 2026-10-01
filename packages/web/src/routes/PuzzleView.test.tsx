@@ -105,7 +105,7 @@ describe("a puzzle still locked", () => {
 describe("picking pieces", () => {
   it("shows the price once, on the bar, before anything is picked", async () => {
     // Never on a piece: the same number 144 times is noise.
-    open();
+    open(puzzle({ randomPrice: 0 }));
     await tiles();
 
     expect(screen.getByText("25")).toBeInTheDocument();
@@ -119,8 +119,8 @@ describe("picking pieces", () => {
     await user.click(all[0] as HTMLElement);
     await user.click(all[1] as HTMLElement);
 
-    expect(screen.getByText(/2 for/)).toBeInTheDocument();
-    expect(screen.getByText("50")).toBeInTheDocument();
+    expect(screen.getByText("2 picked")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Unlock 50" })).toBeEnabled();
   });
 
   it("lets a piece be unpicked", async () => {
@@ -131,7 +131,8 @@ describe("picking pieces", () => {
     await user.click(all[0] as HTMLElement);
     await user.click(all[0] as HTMLElement);
 
-    expect(screen.getByRole("button", { name: "Unlock" })).toBeDisabled();
+    // Back to the random piece, which is what the button offers with nothing picked.
+    expect(screen.getByRole("button", { name: "Unlock 40" })).toBeInTheDocument();
   });
 
   it("never offers a piece already owned", async () => {
@@ -167,7 +168,7 @@ it("stops the selection at what one purchase can hold", async () => {
     await user.click(tile as HTMLElement);
   }
 
-  expect(screen.getByText(new RegExp(`${MAX_PIECES_PER_UNLOCK} for`))).toBeInTheDocument();
+  expect(screen.getByText(`${MAX_PIECES_PER_UNLOCK} picked`)).toBeInTheDocument();
   expect(screen.getByRole("status")).toHaveTextContent(/at a time/i);
 });
 
@@ -180,7 +181,7 @@ describe("buying them", () => {
     await user.click(all[2] as HTMLElement);
     await user.click(all[4] as HTMLElement);
 
-    await user.click(screen.getByRole("button", { name: "Unlock" }));
+    await user.click(screen.getByRole("button", { name: "Unlock 50" }));
 
     await waitFor(() => expect(posted()).not.toBeNull());
     expect(posted()?.url).toBe("/api/puzzles/p1/pieces");
@@ -193,9 +194,9 @@ describe("buying them", () => {
     const all = await tiles();
     await user.click(all[0] as HTMLElement);
 
-    await user.click(screen.getByRole("button", { name: "Unlock" }));
+    await user.click(screen.getByRole("button", { name: "Unlock 25" }));
 
-    await waitFor(() => expect(screen.getByRole("button", { name: "Unlock" })).toBeDisabled());
+    await waitFor(() => expect(screen.getByText("A random piece")).toBeInTheDocument());
   });
 
   it("keeps the selection when the purchase fails", async () => {
@@ -210,10 +211,10 @@ describe("buying them", () => {
         : json({ error: "insufficient coins" }, 402),
     );
 
-    await user.click(screen.getByRole("button", { name: "Unlock" }));
+    await user.click(screen.getByRole("button", { name: "Unlock 25" }));
 
     expect(await screen.findByText(/could not buy/i)).toBeInTheDocument();
-    expect(screen.getByText(/1 for/)).toBeInTheDocument();
+    expect(screen.getByText("1 picked")).toBeInTheDocument();
   });
 });
 
@@ -222,7 +223,7 @@ describe("a puzzle already finished", () => {
     open(puzzle({ completedAt: "2026-08-02T00:00:00Z", ownedPieces: [0, 1, 2, 3, 4, 5] }));
 
     expect(await screen.findByText(/picture is whole/i)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Unlock" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Unlock/ })).not.toBeInTheDocument();
   });
 });
 
@@ -299,7 +300,7 @@ describe("the board takes the screen", () => {
 
     const bar = document.querySelector(".app-column.fixed") as HTMLElement;
     expect(bar).toContainElement(screen.getByRole("progressbar"));
-    expect(bar).toContainElement(screen.getByRole("button", { name: "Unlock" }));
+    expect(bar).toContainElement(screen.getByRole("button", { name: "Unlock 40" }));
   });
 
   it("still shows progress once it is finished, with the buy row gone", async () => {
@@ -307,7 +308,7 @@ describe("the board takes the screen", () => {
 
     expect(await screen.findByText(/picture is whole/i)).toBeInTheDocument();
     expect(screen.getByRole("progressbar")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Unlock" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Unlock/ })).not.toBeInTheDocument();
   });
 });
 
@@ -315,18 +316,20 @@ describe("the gamble", () => {
   const posts = (path: string) =>
     fetchMock.mock.calls.filter(([url, init]) => init?.method === "POST" && url === path);
 
-  it("is offered when the author priced one", async () => {
+  it("is what the one button offers with nothing picked", async () => {
     open(puzzle({ randomPrice: 40 }));
 
-    expect(await screen.findByRole("button", { name: /Random 40/ })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Unlock 40" })).toBeEnabled();
+    // One button, not a second one beside it.
+    expect(screen.getAllByRole("button", { name: /^Unlock/ })).toHaveLength(1);
   });
 
-  it("is absent when they did not", async () => {
+  it("is absent when they did not, and the button waits for a pick", async () => {
     // Zero means "no gamble on this puzzle", never "free".
     open(puzzle({ randomPrice: 0 }));
     await tiles();
 
-    expect(screen.queryByRole("button", { name: /Random/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Unlock" })).toBeDisabled();
   });
 
   it("asks the Worker to pick, and names no piece", async () => {
@@ -335,7 +338,7 @@ describe("the gamble", () => {
     const user = userEvent.setup();
     open(puzzle({ randomPrice: 40 }));
 
-    await user.click(await screen.findByRole("button", { name: /Random 40/ }));
+    await user.click(await screen.findByRole("button", { name: "Unlock 40" }));
 
     await waitFor(() => expect(posts("/api/puzzles/p1/pieces/random")).toHaveLength(1));
     const [, init] = posts("/api/puzzles/p1/pieces/random")[0] as [string, RequestInit];
@@ -345,19 +348,20 @@ describe("the gamble", () => {
   it("is off when the wallet cannot cover it", async () => {
     open(puzzle({ randomPrice: 40 }), 10);
 
-    expect(await screen.findByRole("button", { name: /Random 40/ })).toBeDisabled();
+    expect(await screen.findByRole("button", { name: "Not enough coins" })).toBeDisabled();
   });
 
-  it("gets out of the way once pieces are picked", async () => {
-    // Two buttons offering different things at different prices on one bar is
-    // a choice nobody asked for mid-selection.
+  it("gives way to the picked pieces once there are some", async () => {
+    // The button buys what is picked, at the picked price — never the gamble.
     const user = userEvent.setup();
     open(puzzle({ randomPrice: 40 }));
     const all = await tiles();
 
     await user.click(all[0] as HTMLElement);
+    await user.click(screen.getByRole("button", { name: "Unlock 25" }));
 
-    expect(screen.queryByRole("button", { name: /Random/ })).not.toBeInTheDocument();
+    await waitFor(() => expect(posts("/api/puzzles/p1/pieces")).toHaveLength(1));
+    expect(posts("/api/puzzles/p1/pieces/random")).toHaveLength(0);
   });
 
   it("plays the piece into its slot", async () => {
@@ -382,7 +386,7 @@ describe("the gamble", () => {
       </QueryClientProvider>,
     );
 
-    await user.click(await screen.findByRole("button", { name: /Random 40/ }));
+    await user.click(await screen.findByRole("button", { name: "Unlock 40" }));
 
     // The tile the Worker chose is the one the board can hand to the animation.
     await waitFor(() =>
@@ -393,14 +397,14 @@ describe("the gamble", () => {
   it("says so when the pull fails", async () => {
     const user = userEvent.setup();
     open(puzzle({ randomPrice: 40 }));
-    await screen.findByRole("button", { name: /Random 40/ });
+    await screen.findByRole("button", { name: "Unlock 40" });
     fetchMock.mockImplementation(async (url: string, init?: RequestInit) =>
       (init?.method ?? "GET") === "GET"
         ? json(url.startsWith("/api/wallet") ? { balance: 1000 } : puzzle({ randomPrice: 40 }))
         : json({ error: "every piece is already yours" }, 409),
     );
 
-    await user.click(screen.getByRole("button", { name: /Random 40/ }));
+    await user.click(screen.getByRole("button", { name: "Unlock 40" }));
 
     expect(await screen.findByText(/could not pull/i)).toBeInTheDocument();
   });
@@ -442,7 +446,8 @@ describe("the details behind the i", () => {
   const info = () => screen.getByRole("button", { name: "Puzzle details" });
 
   it("sits left of the price, which is where it was asked for", async () => {
-    open(puzzle({ unlockedAt: "2026-08-01T00:00:00Z" }));
+    // No gamble, so the bar shows the per-piece price rather than the random offer.
+    open(puzzle({ unlockedAt: "2026-08-01T00:00:00Z", randomPrice: 0 }));
     await screen.findByRole("progressbar");
 
     const price = screen.getByText(/a\s*piece/i);
@@ -561,7 +566,7 @@ describe("finishing the picture", () => {
     finishing();
     await screen.findByTestId("puzzle-canvas");
 
-    await user.click(await screen.findByRole("button", { name: /Random 40/ }));
+    await user.click(await screen.findByRole("button", { name: "Unlock 40" }));
 
     await waitFor(() => expect(congratulations()).toBeInTheDocument(), { timeout: 4000 });
     expect(screen.getByText("Every piece of The harbour is in place.")).toBeInTheDocument();
@@ -574,7 +579,7 @@ describe("finishing the picture", () => {
     finishing();
     await screen.findByTestId("puzzle-canvas");
 
-    await user.click(await screen.findByRole("button", { name: /Random 40/ }));
+    await user.click(await screen.findByRole("button", { name: "Unlock 40" }));
     // The board has already caught up — every piece owned — and the overlay is
     // still not there. That gap is the landing being watched.
     await screen.findByRole("progressbar", { name: /6 of 6 pieces/ });
@@ -605,7 +610,7 @@ describe("finishing the picture", () => {
     finishing();
     await screen.findByTestId("puzzle-canvas");
 
-    await user.click(await screen.findByRole("button", { name: /Random 40/ }));
+    await user.click(await screen.findByRole("button", { name: "Unlock 40" }));
     await waitFor(() => expect(congratulations()).toBeInTheDocument(), { timeout: 4000 });
 
     const frame = document.querySelector("[data-part='cover']") as HTMLElement;
@@ -616,7 +621,7 @@ describe("finishing the picture", () => {
     const user = userEvent.setup();
     finishing();
     await screen.findByTestId("puzzle-canvas");
-    await user.click(await screen.findByRole("button", { name: /Random 40/ }));
+    await user.click(await screen.findByRole("button", { name: "Unlock 40" }));
     await waitFor(() => expect(congratulations()).toBeInTheDocument(), { timeout: 4000 });
 
     await user.click(screen.getByRole("button", { name: "See the picture" }));

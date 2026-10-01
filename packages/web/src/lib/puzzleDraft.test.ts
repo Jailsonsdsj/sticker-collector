@@ -65,15 +65,15 @@ describe("where the form starts", () => {
     // of the defaults: drifting one back to a "sensible" round number would
     // otherwise be a silent change to every puzzle made afterwards.
     expect(initialDraft.pieces).toBe(144);
-    expect(initialDraft.unlockPrice).toBe("1000");
-    expect(initialDraft.piecePrice).toBe("150");
-    expect(initialDraft.randomPrice).toBe("100");
+    expect(initialDraft.unlockPrice).toBe("500");
+    expect(initialDraft.piecePrice).toBe("50");
+    expect(initialDraft.randomPrice).toBe("30");
   });
 
   it("offers the gamble out of the box, where it used to be off", () => {
     // An empty random price means no gamble at all, so a filled-in default is a
     // change of behaviour and not only of number.
-    expect(toPayload(ready())?.randomPrice).toBe(100);
+    expect(toPayload(ready())?.randomPrice).toBe(30);
   });
 
   it("still lets the author turn the gamble off by clearing it", () => {
