@@ -440,19 +440,23 @@ describe("which date a tick is sent for", () => {
 describe("yesterday, read back on the first visit of the day", () => {
   const yesterday = addDays(TODAY, -1);
 
-  const withYesterday = () => {
+  /**
+   * Yesterday's list comes from the day endpoint — what was ticked ON the day —
+   * and its score from the momentum report's frozen day.
+   */
+  const withYesterday = (scheduledOn = yesterday, day?: Record<string, unknown>) => {
+    const row = {
+      taskId: "t2",
+      scheduledOn,
+      status: "done",
+      completedAt: `${yesterday}T12:00:00Z`,
+      rewardSnapshotCoins: 30,
+    };
     fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
       const read = (init?.method ?? "GET") === "GET";
-      if (read && url.startsWith("/api/occurrences"))
-        return json([
-          {
-            taskId: "t2",
-            scheduledOn: yesterday,
-            status: "done",
-            completedAt: `${yesterday}T12:00:00Z`,
-            rewardSnapshotCoins: 30,
-          },
-        ]);
+      if (read && url === `/api/reports/day/${yesterday}`) return json([row]);
+      if (read && url.startsWith("/api/reports/momentum")) return json({ days: day ? [day] : [] });
+      if (read && url.startsWith("/api/occurrences")) return json([row]);
       if (read && url.startsWith("/api/tasks")) return json(TASKS);
       if (read && url.startsWith("/api/epics")) return json([]);
       if (read && url.startsWith("/api/wallet")) return json({ balance: 0 });
@@ -467,6 +471,28 @@ describe("yesterday, read back on the first visit of the day", () => {
     expect(await screen.findByText("Yesterday")).toBeInTheDocument();
     expect(screen.getByText(/One thing finished/)).toBeInTheDocument();
     expect(screen.getByText("+30")).toBeInTheDocument();
+  });
+
+  it("lists a run ticked yesterday that was scheduled long before", async () => {
+    // Out of reach of the home window, which is keyed by the scheduled date.
+    withYesterday(addDays(TODAY, -30));
+    render(<Tasks />, { wrapper });
+
+    expect(await screen.findByText("Yesterday")).toBeInTheDocument();
+    expect(screen.getByText("+30")).toBeInTheDocument();
+  });
+
+  it("scores the day as the report froze it", async () => {
+    withYesterday(yesterday, {
+      date: yesterday,
+      scheduled: 2,
+      done: 1,
+      scheduledMinutes: 60,
+      doneMinutes: 30,
+    });
+    render(<Tasks />, { wrapper });
+
+    expect(await screen.findByText("50")).toBeInTheDocument();
   });
 
   it("does not open again the same day", async () => {

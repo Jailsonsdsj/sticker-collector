@@ -656,3 +656,38 @@ describe("the child tables that hang off a task", () => {
     expect((await restore(manifest)).status).toBe(201);
   });
 });
+
+describe("frozen day grades survive the round trip", () => {
+  it("restores each closed day's grade as it was stored, not recomputed", async () => {
+    // Recomputing on restore would read the routines as they are now — the
+    // rewrite of the past that freezing exists to prevent.
+    await seedAccount();
+    await env.DB.prepare(
+      `INSERT INTO day_score (user_id,date,scheduled,done,scheduled_minutes,done_minutes,frozen_at)
+       VALUES (?,?,3,2,90,60,?)`,
+    )
+      .bind(userId, "2026-07-20", "2026-07-21T00:00:00Z")
+      .run();
+    const manifest = await exportManifest();
+
+    const fresh = await makeUser();
+    switchTo(fresh);
+    expect((await restore(manifest)).status).toBe(201);
+
+    const row = await env.DB.prepare(
+      "SELECT scheduled, done, scheduled_minutes, done_minutes FROM day_score WHERE user_id = ? AND date = ?",
+    )
+      .bind(fresh.id, "2026-07-20")
+      .first();
+    expect(row).toEqual({ scheduled: 3, done: 2, scheduled_minutes: 90, done_minutes: 60 });
+  });
+
+  it("restores a backup taken before grades were frozen", async () => {
+    await seedAccount();
+    const manifest = (await exportManifest()) as unknown as Record<string, unknown>;
+    delete manifest.dayScores;
+
+    switchTo(await makeUser());
+    expect((await restore(manifest)).status).toBe(201);
+  });
+});

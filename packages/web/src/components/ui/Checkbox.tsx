@@ -37,16 +37,6 @@ export interface CheckboxProps
   muted?: boolean;
   /** A heavier edge, for a box whose day the routine actually runs on. */
   strong?: boolean;
-  /**
-   * Stretch the box to the label's width.
-   *
-   * The weekly grids render wide cells rather than squares, so they set this
-   * AND give the label a width. It used to be applied unconditionally, which
-   * silently broke every other use: `w-full` overrides the width half of
-   * `size-6`/`size-7`, and with no width on the label the percentage collapsed
-   * to the borders alone — a 4px-wide tap target on the home screen.
-   */
-  fill?: boolean;
   label?: string;
   className?: string;
   onChange?: (checked: boolean) => void;
@@ -57,7 +47,6 @@ export function Checkbox({
   size = "md",
   muted = false,
   strong = false,
-  fill = false,
   label,
   onChange,
   disabled,
@@ -72,9 +61,8 @@ export function Checkbox({
         "inline-flex items-center justify-center",
         // 44px minimum touch target, per Apple's guidance — the same rule the
         // tab bar follows. The visible box stays 24/28px; the label around it is
-        // what the finger actually has to hit. Grid cells opt out: seven of them
-        // across a phone cannot each be 44px, and they are already wide.
-        !fill && "min-h-11 min-w-11",
+        // what the finger actually has to hit.
+        "min-h-11 min-w-11",
         inert ? "cursor-default" : "cursor-pointer",
         className,
       )}
@@ -96,7 +84,6 @@ export function Checkbox({
           SIZE[size],
           WEIGHT[strong && !muted ? "strong" : "normal"],
           muted ? MUTED : checked ? CHECKED : UNCHECKED,
-          fill && "w-full",
         )}
       >
         {muted ? "·" : checked ? "✓" : ""}

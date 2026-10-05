@@ -260,3 +260,62 @@ describe("an expired session", () => {
     await waitFor(() => expect(screen.getByText("the login screen")).toBeInTheDocument());
   });
 });
+
+describe("reviewing a day from the calendar", () => {
+  const day = addDays(TODAY, -1);
+
+  it("lists what was ticked that day, and scores it as the report froze it", async () => {
+    // A run scheduled two weeks earlier, ticked on `day`: the day endpoint is
+    // keyed by the tick, so it is listed here and not under its own date.
+    momentumBody = momentum({
+      days: [{ date: day, scheduled: 4, done: 1, scheduledMinutes: 120, doneMinutes: 30 }],
+    });
+    const base = fetchMock.getMockImplementation() as (url: string) => Promise<Response>;
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url === `/api/reports/day/${day}`) {
+        return json([
+          {
+            taskId: "t1",
+            scheduledOn: addDays(day, -14),
+            status: "done",
+            completedAt: `${day}T12:00:00Z`,
+            rewardSnapshotCoins: 30,
+          },
+        ]);
+      }
+      if (url.startsWith("/api/tasks")) {
+        return json([{ id: "t1", title: "Stretch", epicId: null, rewardCoins: 30 }]);
+      }
+      return base(url);
+    });
+    await open();
+
+    (document.querySelector(`button[data-date="${day}"]`) as HTMLElement).click();
+
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Stretch")).toBeInTheDocument();
+    // 30 of 120 minutes — the stored day, not one recomputed here.
+    expect(within(dialog).getByText("25")).toBeInTheDocument();
+  });
+});
+
+describe("a week's report, from its R cell", () => {
+  it("opens the whole week's report, Monday first, even for a row that starts mid-week", async () => {
+    // July 2026 starts on a Wednesday, so the calendar's first row shows only
+    // 1–5 July — but its report is of the week that began on Monday 29 June.
+    const base = fetchMock.getMockImplementation() as (url: string) => Promise<Response>;
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.startsWith("/api/reports/week/")) {
+        return json({ weekStart: "2026-06-29", generatedAt: "x", routines: [], others: [] });
+      }
+      return base(url);
+    });
+    await open();
+
+    const [first] = screen.getAllByRole("button", { name: /open the week's report/i });
+    (first as HTMLElement).click();
+
+    expect(await screen.findByText("Nothing else this week.")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith("/api/reports/week/2026-06-29", expect.anything());
+  });
+});

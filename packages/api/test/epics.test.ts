@@ -42,6 +42,7 @@ type EpicBody = {
   title: string;
   description: string | null;
   status: string;
+  type: string;
   accent: string;
   coinGoalAlbumId: string | null;
   oneOffTotal: number;
@@ -343,5 +344,26 @@ describe("idempotency", () => {
     expect(r2.status).toBe(201);
     expect(await r2.json()).toEqual(await r1.json());
     expect(((await (await call("GET", "/api/epics")).json()) as unknown[]).length).toBe(1);
+  });
+});
+
+describe("epic type", () => {
+  it("defaults to maintaining — medium, the priority tasks always started at", async () => {
+    const ep = await createEpic();
+
+    expect(ep.type).toBe("maintaining");
+  });
+
+  it("is chosen at creation and changed by a patch", async () => {
+    const ep = await createEpic({ type: "construction" });
+    expect(ep.type).toBe("construction");
+
+    await call("PATCH", `/api/epics/${ep.id}`, { type: "fundamental" });
+
+    expect((await getEpic(ep.id)).type).toBe("fundamental");
+  });
+
+  it("refuses a type that is not one of the three", async () => {
+    expect((await call("POST", "/api/epics", { title: "X", type: "urgent" })).status).toBe(400);
   });
 });

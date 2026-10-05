@@ -170,14 +170,6 @@ describe("the week", () => {
     expect(await alert()).toBeInTheDocument();
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
-
-  it("keeps the view switcher reachable so the failure is not a dead end", async () => {
-    serverDown();
-    render(<Week />, { wrapper });
-    await alert();
-
-    expect(screen.getByRole("tab", { name: "Schedule" })).toBeInTheDocument();
-  });
 });
 
 describe("epics", () => {

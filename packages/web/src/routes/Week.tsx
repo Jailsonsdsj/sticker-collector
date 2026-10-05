@@ -5,9 +5,7 @@ import { AgendaGrid } from "../components/AgendaGrid";
 import { AppHeader } from "../components/layout";
 import { TaskForm } from "../components/TaskForm";
 import { TaskView } from "../components/TaskView";
-import { ErrorState, Skeleton, Tabs } from "../components/ui";
-import { WeeklyCompletionGrid } from "../components/WeeklyCompletionGrid";
-import { WeeklyGrid } from "../components/WeeklyGrid";
+import { ErrorState, Skeleton } from "../components/ui";
 import type { AgendaBlock } from "../lib/agenda";
 import { ApiError } from "../lib/api";
 import { usePendingCompletions } from "../lib/completionQueue";
@@ -24,46 +22,28 @@ import { appTimeZone, today } from "../lib/timezone";
 import { weekDates } from "../lib/week";
 
 /**
- * The week, two ways.
+ * The week, as an agenda: each day laid out by hour — what is at three
+ * o'clock, and is it done.
  *
- * **Agenda** is the day laid out by hour: what is at three o'clock, and is it
- * done. **Tick off** is the checkbox week — every routine, including the ones
- * with no times, which the agenda cannot show. **Schedule** is the spec's
- * "routine maintenance", where five taps make a Mon–Fri habit.
+ * It used to be one of three views, beside a checkbox week (*Tick off*) and a
+ * weekday editor (*Schedule*). Neither was being used, so the agenda is the
+ * screen now. A routine's weekdays are set in its own form, and a run is ticked
+ * from the task list or from the block's own sheet here.
  *
- * Three views because one gesture cannot mean three things: tapping a cell
- * cannot both schedule a weekday and tick it off. Tick off stays because the
- * agenda only shows routines that have hours, and every routine created before
- * the agenda has none — removing it would strand them.
+ * Ticking goes through the SAME undo queue as the home screen. If this screen
+ * wrote immediately, the identical misclick would be reversible in one place
+ * and would silently pay coins in the other.
  *
- * Agenda is the default: "what am I meant to be doing now" is the question this
- * tab is opened with, day to day, and re-planning is rarer than either ticking
- * or looking. Schedule held the default while it was the only view here, and
- * T-12's five-tap flow is measured from it — that flow is now six taps, one to
- * reach Schedule, which is the cost of the tab it was worth.
- *
- * Ticking here goes through the SAME undo queue as the home screen. If this
- * screen wrote immediately, the identical misclick would be reversible in one
- * place and would silently pay coins in the other.
- *
- * A tap on an agenda block **opens the task** rather than closing it. Tapping
- * to complete made the commonest gesture on the screen the destructive one, and
+ * A tap on a block **opens the task** rather than closing it. Tapping to
+ * complete made the commonest gesture on the screen the destructive one, and
  * left no way to reach a task's own words, its edit form or its delete from the
- * view where you are actually looking at your day. Tick off is still one tap
- * per day, which is what that tab is for.
+ * view where you are actually looking at your day.
  */
-const VIEWS = [
-  { value: "agenda" as const, label: "Agenda", tone: "lime" as const },
-  { value: "complete" as const, label: "Tick off", tone: "cyan" as const },
-  { value: "schedule" as const, label: "Schedule", tone: "violet" as const },
-];
-
 export function Week() {
   const localToday = today();
   const toggleSubtask = useToggleSubtask();
 
   const dates = useMemo(() => weekDates(localToday), [localToday]);
-  const [view, setView] = useState<"agenda" | "schedule" | "complete">("agenda");
   // The block that is open, not just its task: a completion is keyed by
   // (task, date), and the agenda is the one screen showing seven of a routine's
   // days at once.
@@ -111,8 +91,6 @@ export function Week() {
     <>
       <AppHeader title="This week" />
 
-      <Tabs items={VIEWS} value={view} onChange={setView} label="Week view" className="mb-5" />
-
       {tasks.isLoading ? (
         <div className="flex flex-col gap-3">
           <Skeleton variant="block" />
@@ -123,19 +101,7 @@ export function Week() {
         // otherwise draw a plausible, empty week — a routine schedule that
         // looks wiped rather than unavailable.
         <ErrorState error={tasks.error} onRetry={() => void tasks.refetch()} />
-      ) : view === "schedule" ? (
-        <>
-          <WeeklyGrid
-            routines={routines}
-            accentOf={accentOf}
-            today={localToday}
-            onChangeMask={(id, weekdays) => update.mutate({ id, patch: { weekdays } })}
-          />
-          <p className="mt-5 text-center font-body text-sm text-ink-dim">
-            Tap a cell to add or remove that weekday. A routine always keeps at least one day.
-          </p>
-        </>
-      ) : view === "agenda" ? (
+      ) : (
         <>
           <AgendaGrid
             routines={routines}
@@ -152,26 +118,6 @@ export function Week() {
             Tap a block to open it. Only routines with times appear here.
           </p>
         </>
-      ) : (
-        <WeeklyCompletionGrid
-          routines={routines}
-          accentOf={accentOf}
-          occurrences={occurrences.data ?? []}
-          dates={dates}
-          today={localToday}
-          isPending={(taskId, scheduledOn) => queue.isPending({ taskId, scheduledOn })}
-          onToggle={(taskId, scheduledOn, next) => {
-            const task = routines.find((t) => t.id === taskId);
-            const ref = { taskId, scheduledOn };
-            if (next) {
-              queue.complete(ref, { title: task?.title ?? "", coins: task?.rewardCoins ?? 0 });
-            } else if (queue.isPending(ref)) {
-              queue.cancel(ref); // still inside the window: nothing was ever sent
-            } else {
-              void uncomplete.mutateAsync(ref); // past the window: re-open it
-            }
-          }}
-        />
       )}
 
       {viewing && (

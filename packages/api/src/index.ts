@@ -8,6 +8,7 @@ import { albumListRoutes } from "./routes/albumList";
 import { albumRoutes } from "./routes/albums";
 import { authRoutes } from "./routes/auth";
 import { backupRoutes } from "./routes/backup";
+import { dayReviewRoutes } from "./routes/dayReview";
 import { epicRoutes } from "./routes/epics";
 import { imageRoutes } from "./routes/images";
 import { occurrenceRoutes } from "./routes/occurrences";
@@ -18,6 +19,7 @@ import { puzzleRoutes } from "./routes/puzzles";
 import { reportRoutes } from "./routes/reports";
 import { taskRoutes } from "./routes/tasks";
 import { walletRoutes } from "./routes/wallet";
+import { weekReportRoutes } from "./routes/weekReport";
 
 const app = new Hono<{ Bindings: Env; Variables: { userId: string } }>();
 
@@ -30,6 +32,8 @@ app.route("/api/occurrences", occurrenceRoutes);
 app.route("/api/epics", epicRoutes);
 app.route("/api/wallet", walletRoutes);
 app.route("/api/reports", reportRoutes);
+app.route("/api/reports", dayReviewRoutes);
+app.route("/api/reports", weekReportRoutes);
 app.route("/api/backup", backupRoutes);
 app.route("/api/images", imageRoutes);
 app.route("/api/albums", albumRoutes);

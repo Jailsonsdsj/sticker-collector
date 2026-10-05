@@ -7,7 +7,9 @@ import {
   createEpicSchema,
   createTaskSchema,
   DEFAULT_EFFORT_MINUTES,
+  defaultPriorityFor,
   deleteEpicSchema,
+  EPIC_TYPE_INITIAL,
   epicAccentSchema,
   occurrenceWindowQuerySchema,
   quickAddTaskSchema,
@@ -312,5 +314,22 @@ describe("album payloads", () => {
     expect(createAlbumSchema.safeParse(album({ unlockedAt: "2020-01-01T00:00:00Z" })).success).toBe(
       false,
     );
+  });
+});
+
+describe("an epic's type sets a new task's default priority", () => {
+  it("is high for Construction, medium for Maintaining, low for Fundamental", () => {
+    expect(defaultPriorityFor("construction")).toBe("high");
+    expect(defaultPriorityFor("maintaining")).toBe("medium");
+    expect(defaultPriorityFor("fundamental")).toBe("low");
+  });
+
+  it("is medium with no epic, the default every task had before types", () => {
+    expect(defaultPriorityFor(null)).toBe("medium");
+    expect(defaultPriorityFor(undefined)).toBe("medium");
+  });
+
+  it("shows as one letter", () => {
+    expect(EPIC_TYPE_INITIAL).toEqual({ construction: "C", maintaining: "M", fundamental: "F" });
   });
 });

@@ -17,6 +17,7 @@ const epic: Epic = {
   description: null,
   accent: "epic-1",
   status: "active" as const,
+  type: "maintaining" as const,
   coinGoalAlbumId: null,
   createdAt: "2026-07-01T00:00:00Z",
   oneOffTotal: 3,

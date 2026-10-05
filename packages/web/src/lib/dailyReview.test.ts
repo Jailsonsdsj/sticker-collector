@@ -1,4 +1,4 @@
-import type { Epic, Occurrence, Task } from "@sticker-collector/shared";
+import type { DayTally, Epic, Occurrence, Task } from "@sticker-collector/shared";
 import { beforeEach, describe, expect, it } from "vitest";
 import { buildReview, lastReviewedOn, markReviewed, shouldReview } from "./dailyReview";
 
@@ -199,79 +199,39 @@ describe("showing it once a day", () => {
 });
 
 describe("what the day scored", () => {
-  const routine = (over: Partial<Task> = {}): Task =>
-    task({ type: "routine", weekdays: 0b1111111, ...over });
+  const day = (over: Partial<DayTally> = {}): DayTally => ({
+    date: DAY,
+    scheduled: 3,
+    done: 2,
+    scheduledMinutes: 45,
+    doneMinutes: 30,
+    ...over,
+  });
 
-  it("compares what was done against what the day held", () => {
-    // The denominator is the SCHEDULE, not the occurrence rows: a row exists
-    // only once something is completed, so counting rows would make every day
-    // 100% by construction.
-    const tasks = [routine({ id: "a" }), routine({ id: "b" }), routine({ id: "c" })];
-    const review = buildReview(DAY, [done("a", DAY), done("b", DAY)], tasks, [], UTC);
+  it("is the day as the report has it, not a second computation", () => {
+    // The server freezes a closed day; recomputing it here from the routines
+    // as they are now would be exactly the rewrite freezing prevents.
+    const review = buildReview(DAY, [done("t1", `${DAY}T09:00:00Z`)], [task()], [], UTC, day());
 
-    // MINUTES, not tasks: three 15-minute routines is 45 minutes, of which 30
-    // got done. The proportion happens to match the headcount here because the
-    // three weigh the same — the test below is the one that separates them.
     expect(review.scheduled).toBe(45);
     expect(review.done).toBe(30);
     expect(review.score).toBe(67);
   });
 
-  it("weighs a long task above a short one", () => {
-    // The whole point of the change: three five-minute chores and one two-hour
-    // job are four tasks and two very different days. Counting them equally
-    // scored 75% for finishing the easy three and leaving the afternoon.
-    const tasks = [
-      routine({ id: "a", effortMinutes: 5 }),
-      routine({ id: "b", effortMinutes: 5 }),
-      routine({ id: "c", effortMinutes: 5 }),
-      routine({ id: "big", effortMinutes: 120 }),
-    ];
-    const review = buildReview(
-      DAY,
-      [done("a", DAY), done("b", DAY), done("c", DAY)],
-      tasks,
-      [],
-      UTC,
-    );
-
-    expect(review.scheduled).toBe(135);
-    expect(review.done).toBe(15);
-    expect(review.score).toBe(11); // not 75
-  });
-
   it("has no score on a day nothing was scheduled for", () => {
-    // A Sunday-only routine, reviewed on a Wednesday.
-    const review = buildReview(DAY, [], [routine({ id: "a", weekdays: 0 })], [], UTC);
-
-    expect(review.scheduled).toBe(0);
-    expect(review.score).toBeNull();
-  });
-
-  it("still lists unscheduled work on a day with no score", () => {
-    // Finishing something unscheduled is still finishing something — the score
-    // is absent, the list is not.
-    const capture = task({ id: "u", type: "oneoff", weekdays: null, dueAt: null });
-    const review = buildReview(DAY, [done("u", DAY)], [capture], [], UTC);
+    const review = buildReview(DAY, [], [], [], UTC, day({ scheduledMinutes: 0, doneMinutes: 0 }));
 
     expect(review.score).toBeNull();
-    expect(review.rows).toHaveLength(1);
   });
 
   it("scores a day where nothing was done as zero, not as nothing", () => {
-    const review = buildReview(DAY, [], [routine({ id: "a" })], [], UTC);
-
-    expect(review.score).toBe(0);
+    expect(buildReview(DAY, [], [], [], UTC, day({ doneMinutes: 0 })).score).toBe(0);
   });
 
-  it("ignores a deleted task, which schedules nothing", () => {
-    const tasks = [
-      routine({ id: "a" }),
-      routine({ id: "gone", deletedAt: "2026-08-01T00:00:00Z" }),
-    ];
-    const review = buildReview(DAY, [done("a", DAY)], tasks, [], UTC);
+  it("shows no score until the report has arrived, rather than guessing one", () => {
+    const review = buildReview(DAY, [done("t1", `${DAY}T09:00:00Z`)], [task()], [], UTC);
 
-    expect(review.scheduled).toBe(15);
-    expect(review.score).toBe(100);
+    expect(review.score).toBeNull();
+    expect(review.rows).toHaveLength(1);
   });
 });

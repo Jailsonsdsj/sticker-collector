@@ -81,6 +81,45 @@ export const EPIC_STATUSES = ["active", "next", "achieved"] as const;
 export const epicStatusSchema = z.enum(EPIC_STATUSES);
 export type EpicStatus = z.infer<typeof epicStatusSchema>;
 
+/**
+ * What kind of work an epic is, which says how much of the week it should get.
+ *
+ * - **Construction** — something being built: active, dynamic, the work that
+ *   moves things forward. Its tasks start at **high** priority.
+ * - **Maintaining** — something kept running in the routine, without the
+ *   strategy or effort building takes. Its tasks start at **medium**.
+ * - **Fundamental** — the base everything else stands on, at the bottom of the
+ *   priority order. Its tasks start at **low**.
+ *
+ * Only a **default**: a new task in the epic starts at that priority, and the
+ * user can change it like any other. Existing epics are `maintaining`, whose
+ * medium is the priority every new task started at before types existed — so
+ * adding the column changed nothing until someone chose otherwise.
+ */
+export const EPIC_TYPES = ["construction", "maintaining", "fundamental"] as const;
+export const epicTypeSchema = z.enum(EPIC_TYPES);
+export type EpicType = z.infer<typeof epicTypeSchema>;
+
+/** How an epic's type is shown beside its name: one letter. */
+export const EPIC_TYPE_INITIAL: Record<EpicType, string> = {
+  construction: "C",
+  maintaining: "M",
+  fundamental: "F",
+};
+
+export const EPIC_TYPE_LABEL: Record<EpicType, string> = {
+  construction: "Construction",
+  maintaining: "Maintaining",
+  fundamental: "Fundamental",
+};
+
+/** The priority a new task starts at: its epic's, or medium with no epic. */
+export function defaultPriorityFor(type: EpicType | null | undefined): Priority {
+  if (type === "construction") return "high";
+  if (type === "fundamental") return "low";
+  return "medium";
+}
+
 /** 7-bit weekday mask, bit 0 = Monday. A routine with no days is not a routine. */
 export const weekdayMaskSchema = z.int().min(1).max(WEEKDAYS_MASK_ALL);
 
@@ -369,6 +408,7 @@ export const createEpicSchema = z.strictObject({
   description: z.string().max(2000).nullish(),
   accent: epicAccentSchema.default("epic-1"),
   status: epicStatusSchema.default("active"),
+  type: epicTypeSchema.default("maintaining"),
   /** "Finish this epic to afford the Travel album" — informational only. */
   coinGoalAlbumId: idSchema.nullish(),
 });
@@ -381,6 +421,7 @@ export const updateEpicSchema = z
     description: z.string().max(2000).nullish(),
     accent: epicAccentSchema,
     status: epicStatusSchema,
+    type: epicTypeSchema,
     coinGoalAlbumId: idSchema.nullish(),
   })
   .partial()
@@ -400,6 +441,7 @@ export const epicSchema = z.object({
   description: z.string().nullable(),
   accent: epicAccentSchema,
   status: epicStatusSchema,
+  type: epicTypeSchema,
   coinGoalAlbumId: idSchema.nullable(),
   createdAt: instantSchema,
   oneOffTotal: z.int().min(0),
@@ -836,6 +878,14 @@ export const backupManifestSchema = z.object({
    */
   routineSlots: z.array(z.record(z.string(), z.unknown())).default([]),
   subtasks: z.array(z.record(z.string(), z.unknown())).default([]),
+  /**
+   * Each closed day's frozen grade. Without them a restore would recompute the
+   * past from the routines as they are now — the rewrite freezing prevents.
+   * Optional for the same reason as the tables above: old files still restore.
+   */
+  dayScores: z.array(z.record(z.string(), z.unknown())).default([]),
+  /** Each week's frozen report, for the same reason. */
+  weekReports: z.array(z.record(z.string(), z.unknown())).default([]),
   /** Every image the data references — the irreplaceable half of a backup. */
   imageKeys: z.array(z.string()),
 });

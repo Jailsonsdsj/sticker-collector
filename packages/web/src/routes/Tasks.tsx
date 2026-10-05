@@ -14,7 +14,7 @@ import { Button, Dialog, EmptyState, ErrorState, Skeleton } from "../components/
 import { WalletCard } from "../components/WalletCard";
 import { ApiError } from "../lib/api";
 import { type CompletionRef, usePendingCompletions } from "../lib/completionQueue";
-import { buildReview, type DailyReview, markReviewed, shouldReview } from "../lib/dailyReview";
+import { buildReview, lastReviewedOn, markReviewed, shouldReview } from "../lib/dailyReview";
 import {
   buildHome,
   filterHome,
@@ -33,7 +33,14 @@ import {
   useUncompleteOccurrence,
   useUpdateTask,
 } from "../lib/mutations";
-import { useEpics, useOccurrences, useTasks, useWallet } from "../lib/queries";
+import {
+  useDoneOn,
+  useEpics,
+  useMomentum,
+  useOccurrences,
+  useTasks,
+  useWallet,
+} from "../lib/queries";
 import { useCollapsibleSections } from "../lib/sectionState";
 import { useSelection } from "../lib/selection";
 import { appTimeZone } from "../lib/timezone";
@@ -81,7 +88,13 @@ export function Tasks() {
     ref: CompletionRef;
     coins: number;
   } | null>(null);
-  const [review, setReview] = useState<DailyReview | null>(null);
+  /** Whether yesterday's review is open. Its content is derived live, below. */
+  const [reviewOpen, setReviewOpen] = useState(false);
+  /**
+   * Whether this mount may still owe the day its review. Read once: the two
+   * reads it gates are only worth making on the first visit of the day.
+   */
+  const [reviewDue] = useState(() => lastReviewedOn() !== today);
   /** Narrows every section as it is typed; never submitted. */
   const [query, setQuery] = useState("");
   const updateTask = useUpdateTask();
@@ -149,20 +162,27 @@ export function Tasks() {
   /**
    * Yesterday, read back on the first visit of the day.
    *
-   * Built from the occurrences the home screen already fetched — its window
-   * reaches seven days back — so the prompt costs no extra request and no
-   * stored summary.
+   * The list is what was ticked ON yesterday — a late run, an overdue one-off —
+   * which the home window, keyed by scheduled date, cannot see. The score is
+   * yesterday as the report froze it. Both are fetched only while the review is
+   * still owed, so every later visit costs nothing.
    */
+  const yesterdayDate = addDays(today, -1);
+  const yesterdayDone = useDoneOn(yesterdayDate, reviewDue);
+  const momentum = useMomentum(reviewDue);
   const yesterday = useMemo(
     () =>
+      // Guarded: the review is a nicety on the home screen, and a malformed
+      // report must cost the review, never the screen.
       buildReview(
-        addDays(today, -1),
-        occurrences.data ?? [],
+        yesterdayDate,
+        Array.isArray(yesterdayDone.data) ? yesterdayDone.data : [],
         tasks.data ?? [],
         epics.data ?? [],
         timeZone,
+        momentum.data?.days?.find((day) => day.date === yesterdayDate),
       ),
-    [occurrences.data, tasks.data, epics.data, today, timeZone],
+    [yesterdayDone.data, tasks.data, epics.data, momentum.data, yesterdayDate, timeZone],
   );
 
   useEffect(() => {
@@ -170,7 +190,7 @@ export function Tasks() {
     // Marked before it is shown, not after: a modal the user dismisses by
     // navigating away must not come back on the next tab.
     markReviewed(today);
-    setReview(yesterday);
+    setReviewOpen(true);
   }, [today, yesterday]);
 
   if (unauthorised) return <Navigate to="/login" replace />;
@@ -397,7 +417,11 @@ export function Tasks() {
         }
       />
 
-      <DailyReviewDialog review={review} heading="Yesterday" onClose={() => setReview(null)} />
+      <DailyReviewDialog
+        review={reviewOpen ? yesterday : null}
+        heading="Yesterday"
+        onClose={() => setReviewOpen(false)}
+      />
 
       {viewing && (
         <TaskView

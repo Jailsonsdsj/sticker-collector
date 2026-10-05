@@ -1,4 +1,5 @@
 import type { Epic, EpicAccent, Task } from "@sticker-collector/shared";
+import { EPIC_TYPE_INITIAL, EPIC_TYPE_LABEL } from "@sticker-collector/shared";
 import type { CSSProperties } from "react";
 import { SectionHeading } from "./SectionHeading";
 import { Badge, Button, Checkbox, ProgressBar } from "./ui";
@@ -174,9 +175,14 @@ export function EpicCard({
         <span className="min-w-0 flex-1 truncate font-display text-xl tracking-display uppercase italic">
           {epic.title}
         </span>
-        <Badge tone="neutral" font="numeric" size="sm">
-          {epic.oneOffDone}/{epic.oneOffTotal}
-        </Badge>
+        {/* Beside the count rather than the title: both are small facts about
+            the epic, and a long title truncates without pushing the tag off. */}
+        <span className="flex shrink-0 items-center gap-1">
+          <EpicTypeTag epic={epic} />
+          <Badge tone="neutral" font="numeric" size="sm">
+            {epic.oneOffDone}/{epic.oneOffTotal}
+          </Badge>
+        </span>
       </button>
 
       <ProgressBar
@@ -244,5 +250,29 @@ export function EpicCard({
         </div>
       )}
     </article>
+  );
+}
+
+/**
+ * The epic's type as one letter beside its task count — C, M or F — in the colour of
+ * the priority it gives a new task: Construction reads as high, Maintaining as
+ * medium, Fundamental as low. The letter is the label; the full word is there
+ * for a screen reader and on hover.
+ */
+const TYPE_TONE = { construction: "high", maintaining: "med", fundamental: "low" } as const;
+
+function EpicTypeTag({ epic }: { epic: Epic }) {
+  return (
+    <Badge
+      tone={TYPE_TONE[epic.type]}
+      font="numeric"
+      size="sm"
+      title={EPIC_TYPE_LABEL[epic.type]}
+      className="shrink-0"
+      data-epic-type={epic.type}
+    >
+      <span aria-hidden>{EPIC_TYPE_INITIAL[epic.type]}</span>
+      <span className="sr-only">{EPIC_TYPE_LABEL[epic.type]}</span>
+    </Badge>
   );
 }

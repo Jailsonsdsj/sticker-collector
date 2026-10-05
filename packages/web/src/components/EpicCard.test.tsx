@@ -11,6 +11,7 @@ const epic = (over: Partial<Epic> = {}): Epic => ({
   description: null,
   accent: "epic-1",
   status: "active" as const,
+  type: "maintaining" as const,
   coinGoalAlbumId: null,
   createdAt: "2026-07-01T00:00:00Z",
   oneOffTotal: 4,
@@ -334,5 +335,21 @@ describe("the order tasks read in", () => {
 
     expect(titles()[0]).toContain("Ship it");
     expect(titles()[1]).toContain("Daily standup");
+  });
+});
+
+describe("its type", () => {
+  it("shows the type's initial after the name, and the whole word to a screen reader", () => {
+    setup({ epic: epic({ title: "Study", type: "construction" }) });
+
+    const tag = screen.getByTitle("Construction");
+    expect(tag).toHaveTextContent("C");
+    expect(tag).toHaveAttribute("data-epic-type", "construction");
+  });
+
+  it("is coloured by the priority it sets — Fundamental reads as low", () => {
+    setup({ epic: epic({ type: "fundamental" }) });
+
+    expect(screen.getByTitle("Fundamental")).toHaveTextContent("F");
   });
 });

@@ -1,4 +1,4 @@
-import type { LocalDate } from "@sticker-collector/shared";
+import { addDays, type LocalDate, weekReportReady, weekScore } from "@sticker-collector/shared";
 import { useMemo, useState } from "react";
 import { Navigate } from "react-router";
 import { DailyReviewDialog } from "../components/DailyReviewDialog";
@@ -9,10 +9,11 @@ import { EffortPanel } from "../components/reports/EffortPanel";
 import { RateCards } from "../components/reports/RateCards";
 import { StreakList } from "../components/reports/StreakList";
 import { WeekdayBars } from "../components/reports/WeekdayBars";
+import { WeekReportSheet } from "../components/reports/WeekReportSheet";
 import { EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { ApiError } from "../lib/api";
 import { buildReview } from "../lib/dailyReview";
-import { useEffort, useEpics, useMomentum, useOccurrences, useTasks } from "../lib/queries";
+import { useDoneOn, useEffort, useEpics, useMomentum, useTasks } from "../lib/queries";
 import { appTimeZone } from "../lib/timezone";
 
 /**
@@ -42,24 +43,28 @@ export function Reports() {
   /**
    * The day the user tapped on the calendar.
    *
-   * Its occurrences are fetched on demand — one day, one request — rather than
-   * a year of them being carried around on the chance that a cell is clicked.
+   * What was done on it is fetched on demand — one day, one request — rather
+   * than a year of it being carried around on the chance that a cell is
+   * clicked. Its score is the calendar's own: the day as the report froze it.
    */
   const [picked, setPicked] = useState<LocalDate | null>(null);
-  const dayOccurrences = useOccurrences(picked ?? "1970-01-01", picked ?? "1970-01-01");
+  /** The Monday of the week whose report is open, from its R cell. */
+  const [week, setWeek] = useState<LocalDate | null>(null);
+  const dayDone = useDoneOn(picked);
 
   const review = useMemo(
     () =>
       picked
         ? buildReview(
             picked,
-            dayOccurrences.data ?? [],
+            dayDone.data ?? [],
             tasks.data ?? [],
             epics.data ?? [],
             appTimeZone(),
+            momentum.data?.days.find((day) => day.date === picked),
           )
         : null,
-    [picked, dayOccurrences.data, tasks.data, epics.data],
+    [picked, dayDone.data, tasks.data, epics.data, momentum.data],
   );
 
   const epicsById = useMemo(
@@ -128,12 +133,34 @@ export function Reports() {
 
       <Section title="Consistency">
         <RateCards rates={report.rates} />
-        <Heatmap days={report.days} today={report.today} onSelectDay={setPicked} />
+        <Heatmap
+          days={report.days}
+          today={report.today}
+          onSelectDay={setPicked}
+          onSelectWeek={setWeek}
+          isWeekReady={(monday) => weekReportReady(monday, appTimeZone(), new Date())}
+        />
       </Section>
 
       <DailyReviewDialog
         review={review && review.rows.length > 0 ? review : null}
         onClose={() => setPicked(null)}
+      />
+
+      <WeekReportSheet
+        weekStart={week}
+        // The whole Mon–Sun week, from the frozen days — the calendar's R cell
+        // scores only the days its row shows, which at a month's edge is part
+        // of a week.
+        score={
+          week
+            ? weekScore(
+                report.days.filter((day) => day.date >= week && day.date <= addDays(week, 6)),
+                report.today,
+              )
+            : null
+        }
+        onClose={() => setWeek(null)}
       />
 
       <Section title="Streaks">

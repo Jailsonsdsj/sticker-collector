@@ -106,6 +106,22 @@ describe("forbidden mutations are rejected by the database", () => {
     ).rejects.toThrow(/sticker rows are immutable/);
   });
 
+  it("a frozen day grade cannot be rewritten or removed (day_score_no_update/no_delete)", async () => {
+    await env.DB.prepare(
+      `INSERT INTO day_score (user_id,date,scheduled,done,scheduled_minutes,done_minutes,frozen_at)
+       VALUES (?,?,2,1,60,30,?)`,
+    )
+      .bind(ids.user, "2026-07-22", TS)
+      .run();
+
+    await expect(
+      env.DB.prepare("UPDATE day_score SET done = 2 WHERE user_id = ?").bind(ids.user).run(),
+    ).rejects.toThrow(/day_score is append-only/);
+    await expect(
+      env.DB.prepare("DELETE FROM day_score WHERE user_id = ?").bind(ids.user).run(),
+    ).rejects.toThrow(/day_score is append-only/);
+  });
+
   it("an album whose odds sum to 99 is rejected (CHECK album_odds_sum_100)", async () => {
     await expect(
       env.DB.prepare(

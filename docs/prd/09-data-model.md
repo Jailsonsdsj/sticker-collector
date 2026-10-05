@@ -37,6 +37,21 @@ occurrence(
   UNIQUE(task_id, scheduled_on)
 )
 
+-- a closed day's grade, frozen when the day closes. append-only (day_score_no_update/no_delete).
+day_score(
+  user_id, date,                         -- PK (user_id, date); date is the user's civil day
+  scheduled, done,                       -- runs the day held / runs done in it
+  scheduled_minutes, done_minutes,       -- what the grade is computed from
+  frozen_at
+)
+
+-- a week's report, built once after Sunday 22:00 (user's time). append-only (week_report_no_update/no_delete).
+week_report(
+  user_id, week_start,                   -- PK (user_id, week_start); week_start is the Monday
+  body,                                  -- the whole WeekReport as JSON, names copied in
+  generated_at
+)
+
 -- the single source of truth for the wallet. append-only.
 ledger(
   id, user_id,

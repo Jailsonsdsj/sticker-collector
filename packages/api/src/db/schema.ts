@@ -104,6 +104,10 @@ export const epic = sqliteTable("epic", {
   accent: text("accent").notNull(),
   /** active | next | achieved. Defaulted so existing rows stay where they are. */
   status: text("status").notNull().default("active"),
+  /** construction | maintaining | fundamental — sets a new task's default
+   *  priority. Defaulted to maintaining (medium), the priority every task
+   *  started at before types existed. */
+  type: text("type").notNull().default("maintaining"),
   coinGoalAlbumId: text("coin_goal_album_id").references(() => album.id),
   createdAt: text("created_at").notNull(),
 });
@@ -165,7 +169,12 @@ export const occurrence = sqliteTable(
     // frozen at completion, never recomputed (enforced by the occurrence_snapshot_write_once trigger).
     rewardSnapshotCoins: integer("reward_snapshot_coins"),
   },
-  (table) => [unique("occurrence_task_scheduled_unique").on(table.taskId, table.scheduledOn)],
+  (table) => [
+    unique("occurrence_task_scheduled_unique").on(table.taskId, table.scheduledOn),
+    // The day review lists what was ticked ON a day, whatever run it belonged
+    // to — a range over the tick time, not over the scheduled date.
+    index("occurrence_completed_idx").on(table.completedAt),
+  ],
 );
 
 /**
@@ -328,6 +337,60 @@ export const puzzlePiece = sqliteTable(
     // would take the coins and grant nothing new.
     unique("puzzle_piece_unique").on(table.puzzleId, table.pieceIndex),
   ],
+);
+
+/**
+ * A finished day's grade, as it stood when the day closed.
+ *
+ * Evidence of whether things are improving, so it is **frozen**: a later edit
+ * to a routine — its weekdays, its effort, deleting it — must not rewrite how
+ * a past day went. Append-only, enforced by the day_score_no_update and
+ * day_score_no_delete triggers.
+ *
+ * Written lazily, by the momentum report, for every past day in its window
+ * that has no row yet; today is never stored, because it has not closed.
+ * The counts rather than the score: the score is derived (`dayScore`), and the
+ * counts are what the weekly average, the rates and the perfect days read.
+ */
+export const dayScore = sqliteTable(
+  "day_score",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id),
+    /** The user's civil date. */
+    date: text("date").notNull(),
+    scheduled: integer("scheduled").notNull(),
+    done: integer("done").notNull(),
+    scheduledMinutes: integer("scheduled_minutes").notNull(),
+    doneMinutes: integer("done_minutes").notNull(),
+    frozenAt: text("frozen_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.date] })],
+);
+
+/**
+ * A week's report, as it stood at Sunday 22:00 the user's time.
+ *
+ * Frozen for the same reason `day_score` is: it is evidence of how the week
+ * went, and a routine edited or deleted afterwards must not rewrite it. The
+ * body is the whole `WeekReport` as JSON — written once, read whole, never
+ * queried into — with names and epic colours copied in so a rename cannot
+ * reach it either. Append-only, enforced by week_report_no_update and
+ * week_report_no_delete.
+ */
+export const weekReport = sqliteTable(
+  "week_report",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id),
+    /** The Monday, in the user's calendar. */
+    weekStart: text("week_start").notNull(),
+    body: text("body").notNull(),
+    generatedAt: text("generated_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.weekStart] })],
 );
 
 // the single source of truth for the wallet. append-only (enforced by the ledger_no_update/ledger_no_delete triggers).

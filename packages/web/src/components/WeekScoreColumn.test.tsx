@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
 import { WeekScoreColumn } from "./WeekScoreColumn";
 
 const column = (scores: (number | null)[]) => render(<WeekScoreColumn scores={scores} />).container;
@@ -82,5 +83,29 @@ describe("lining up with the calendar", () => {
     for (const cell of container.querySelectorAll("li")) {
       expect(cell.className).toContain("flex-1");
     }
+  });
+});
+
+describe("opening a week's report", () => {
+  it("opens the report of a week whose report has been made", async () => {
+    const onSelect = vi.fn();
+    render(<WeekScoreColumn scores={[40, 80]} ready={[true, true]} onSelect={onSelect} />);
+
+    await userEvent.click(screen.getByRole("button", { name: /Week score 80 .*report/ }));
+
+    expect(onSelect).toHaveBeenCalledWith(1);
+  });
+
+  it("offers nothing before Sunday 22:00 — the report does not exist yet", () => {
+    render(<WeekScoreColumn scores={[40, 80]} ready={[true, false]} onSelect={vi.fn()} />);
+
+    expect(screen.getAllByRole("button")).toHaveLength(1);
+    expect(screen.getByLabelText("Week score 80 out of 100")).toBeInTheDocument();
+  });
+
+  it("offers nothing on a week with no score", () => {
+    render(<WeekScoreColumn scores={[null]} ready={[true]} onSelect={vi.fn()} />);
+
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 });

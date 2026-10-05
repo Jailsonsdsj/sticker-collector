@@ -176,7 +176,7 @@ describe("switching type discards the other type's scheduling", () => {
       { kind: "title", value: "Stretch" },
       { kind: "effort", value: "45" },
       { kind: "priority", value: "high" },
-      { kind: "epic", value: "e1" },
+      { kind: "epic", value: "e1", defaultPriority: "medium" },
       { kind: "type", value: "oneoff" },
     ]);
     expect(s).toMatchObject({
@@ -232,8 +232,12 @@ describe("the payload is clean for its type", () => {
   });
 
   it("carries the epic through", () => {
-    expect(toPayload(valid([{ kind: "epic", value: "e1" }]))?.epicId).toBe("e1");
-    expect(toPayload(valid([{ kind: "epic", value: null }]))?.epicId).toBeNull();
+    expect(
+      toPayload(valid([{ kind: "epic", value: "e1", defaultPriority: "medium" }]))?.epicId,
+    ).toBe("e1");
+    expect(
+      toPayload(valid([{ kind: "epic", value: null, defaultPriority: "medium" }]))?.epicId,
+    ).toBeNull();
   });
 });
 
@@ -634,5 +638,23 @@ describe("when a routine runs — the form's slots", () => {
     expect(toPatch(at(state, 0, "12:00", "13:00"), task)).toMatchObject({
       slots: [{ weekday: 0, startMin: 720, endMin: 780 }],
     });
+  });
+});
+
+describe("priority follows the epic's type, as a default only", () => {
+  it("takes the epic's default while the user has not picked one", () => {
+    expect(run([{ kind: "epic", value: "c", defaultPriority: "high" }]).priority).toBe("high");
+  });
+
+  it("keeps the user's own choice when the epic changes afterwards", () => {
+    const s = run([
+      { kind: "priority", value: "low" },
+      { kind: "epic", value: "c", defaultPriority: "high" },
+    ]);
+    expect(s.priority).toBe("low");
+  });
+
+  it("starts at the given priority when opened from an epic", () => {
+    expect(initialState({ epicId: "c", priority: "high" }).priority).toBe("high");
   });
 });

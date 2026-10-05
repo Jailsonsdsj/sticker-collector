@@ -1,5 +1,5 @@
-import type { Epic, LocalDate, Occurrence, Task } from "@sticker-collector/shared";
-import { dailyTally, dayScore, localDateIn, scheduleOf } from "@sticker-collector/shared";
+import type { DayTally, Epic, LocalDate, Occurrence, Task } from "@sticker-collector/shared";
+import { dayScore, localDateIn } from "@sticker-collector/shared";
 
 /**
  * What you finished on a given day, in the three things worth reading back:
@@ -12,8 +12,11 @@ import { dailyTally, dayScore, localDateIn, scheduleOf } from "@sticker-collecto
  * database already holds, and the first thing to drift the day a task is
  * renamed.
  *
- * The cost of deriving it is one occurrence query per day looked at, which is
- * the same query the home screen already makes.
+ * The list comes from `GET /api/reports/day/:date` — everything ticked ON the
+ * day, whatever run it belonged to. **The score is not computed here.** It is
+ * the day as the server froze it when the day closed (`day_score`), handed in
+ * from the momentum report, so the modal and the calendar can never disagree
+ * and a later edit to a routine can never rewrite a day that has passed.
  */
 export interface ReviewRow {
   taskId: string;
@@ -52,6 +55,8 @@ export function buildReview(
   tasks: readonly Task[],
   epics: readonly Epic[],
   timeZone: string,
+  /** The day as the momentum report has it — frozen once it has closed. */
+  day?: DayTally,
 ): DailyReview {
   const taskById = new Map(tasks.map((task) => [task.id, task]));
   const epicById = new Map(epics.map((epic) => [epic.id, epic]));
@@ -81,63 +86,15 @@ export function buildReview(
 
   rows.sort((a, b) => b.coins - a.coins || a.title.localeCompare(b.title));
 
-  // What the day HELD, which is the denominator the score compares against.
-  // Derived from the schedule rather than counted from occurrence rows: a row
-  // exists only once something is completed or archived, so counting rows would
-  // make every day 100% by construction.
-  //
-  // `scheduleOf` is the server's own function, moved into `shared` for this —
-  // a second opinion here on when a routine starts counting would be a second
-  // opinion on a rule that already has a bug named after it.
-  const tally = dailyTally(
-    {
-      tasks: tasks
-        .filter((task) => !task.deletedAt)
-        .map((task) => ({
-          id: task.id,
-          title: task.title,
-          schedule: scheduleOf(task, timeZone),
-          effortMinutes: task.effortMinutes,
-        })),
-      completions: completionsByTask(occurrences, timeZone),
-      today: date,
-    },
-    date,
-    date,
-  );
-  const day = tally[0] ?? { date, scheduled: 0, done: 0, scheduledMinutes: 0, doneMinutes: 0 };
-
   return {
     date,
     rows,
     coins: rows.reduce((sum, row) => sum + row.coins, 0),
-    score: dayScore(day),
-    scheduled: day.scheduledMinutes,
-    done: day.doneMinutes,
+    // No day yet — the report is still loading — is no score, never a guess.
+    score: day ? dayScore(day) : null,
+    scheduled: day?.scheduledMinutes ?? 0,
+    done: day?.doneMinutes ?? 0,
   };
-}
-
-/**
- * Which days each task was completed on, keyed by task.
- *
- * By the day it was **scheduled for**, not the day it was ticked — that is what
- * `dailyTally` compares against the schedule, and a Monday routine ticked on
- * Thursday still fills Monday's slot. The review's own list is dated the other
- * way round (see above), and the two are answering different questions: what
- * you did today, versus how much of a given day got done.
- */
-function completionsByTask(
-  occurrences: readonly Occurrence[],
-  _timeZone: string,
-): Map<string, Set<LocalDate>> {
-  const byTask = new Map<string, Set<LocalDate>>();
-  for (const occurrence of occurrences) {
-    if (occurrence.status !== "done") continue;
-    const days = byTask.get(occurrence.taskId) ?? new Set<LocalDate>();
-    days.add(occurrence.scheduledOn);
-    byTask.set(occurrence.taskId, days);
-  }
-  return byTask;
 }
 
 /**

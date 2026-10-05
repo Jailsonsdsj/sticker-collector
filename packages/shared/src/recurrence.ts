@@ -133,14 +133,56 @@ export function compareDates(a: LocalDate, b: LocalDate): number {
  * arithmetic. Uses `Intl` (present in Node and in workerd), not a dependency.
  */
 export function localDateIn(timeZone: string, instant: Date): LocalDate {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(instant);
+  const parts = formatterFor(timeZone).formatToParts(instant);
   const at = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
   return `${at("year")}-${at("month")}-${at("day")}`;
+}
+
+/**
+ * One formatter per timezone, built once.
+ *
+ * Constructing an `Intl.DateTimeFormat` costs far more than using one, and the
+ * day-score report dates every completion it has not yet frozen — thousands of
+ * them on a first backfill, inside a 10 ms CPU budget.
+ */
+const formatters = new Map<string, Intl.DateTimeFormat>();
+
+function formatterFor(timeZone: string): Intl.DateTimeFormat {
+  let formatter = formatters.get(timeZone);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    });
+    formatters.set(timeZone, formatter);
+  }
+  return formatter;
+}
+
+/**
+ * The civil date **and wall-clock minute** an instant falls on, in a timezone.
+ *
+ * For rules stated in local time — "the week's report is generated on Sunday
+ * at 22:00" — without converting a wall-clock time into an instant, which is
+ * the conversion daylight-saving makes ambiguous.
+ */
+export function localClockIn(
+  timeZone: string,
+  instant: Date,
+): { date: LocalDate; minutes: number } {
+  const parts = formatterFor(timeZone).formatToParts(instant);
+  const at = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  // `h23` still prints midnight as "24" in some engines; it is minute zero.
+  const hour = Number(at("hour")) % 24;
+  return {
+    date: `${at("year")}-${at("month")}-${at("day")}`,
+    minutes: hour * 60 + Number(at("minute")),
+  };
 }
 
 /** "Today" for the user. Resolved from their timezone, never from the server's. */

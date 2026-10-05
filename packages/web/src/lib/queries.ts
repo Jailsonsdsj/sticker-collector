@@ -11,6 +11,7 @@ import type {
   PuzzleDetail,
   Task,
   Wallet,
+  WeekReport,
 } from "@sticker-collector/shared";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "./api";
@@ -34,6 +35,8 @@ export const keys = {
   puzzlesAll: ["puzzles"] as const,
   puzzle: (id: string) => ["puzzles", "detail", id] as const,
   momentum: ["reports", "momentum"] as const,
+  day: (date: LocalDate) => ["reports", "day", date] as const,
+  week: (weekStart: LocalDate) => ["reports", "week", weekStart] as const,
   effort: ["reports", "effort"] as const,
 };
 
@@ -102,10 +105,37 @@ export function useAlbum(id: string) {
  * Momentum: streaks, perfect days, trailing rates, weekday shape and the
  * heatmap's per-day series — all from one tally, so they cannot disagree.
  */
-export function useMomentum() {
+export function useMomentum(enabled = true) {
   return useQuery({
     queryKey: keys.momentum,
     queryFn: () => api<MomentumReport>("/api/reports/momentum"),
+    enabled,
+  });
+}
+
+/**
+ * A week's report — frozen on the server once Sunday 22:00 has passed, so it is
+ * fetched once and never considered stale.
+ */
+export function useWeekReport(weekStart: LocalDate | null) {
+  return useQuery({
+    queryKey: keys.week(weekStart ?? ""),
+    queryFn: () => api<WeekReport>(`/api/reports/week/${weekStart}`),
+    enabled: weekStart !== null,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+}
+
+/**
+ * Everything ticked ON a day, whatever run it belonged to — the daily review's
+ * list. Not the occurrence window: that is keyed by the scheduled date, so it
+ * misses a late run and an overdue one-off.
+ */
+export function useDoneOn(date: LocalDate | null, enabled = true) {
+  return useQuery({
+    queryKey: keys.day(date ?? ""),
+    queryFn: () => api<Occurrence[]>(`/api/reports/day/${date}`),
+    enabled: enabled && date !== null,
   });
 }
 
