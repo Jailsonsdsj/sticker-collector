@@ -3,6 +3,7 @@ import { addDays, type LocalDate, maskFromDays, WEEKDAYS, weekdayOf } from "./re
 import {
   completionRate,
   type DayTally,
+  type DoneEntry,
   dailyTally,
   dayScore,
   effortByEpic,
@@ -20,6 +21,7 @@ import {
   weekdayShape,
   weekScore,
   weekStart,
+  withFrozen,
 } from "./reports.js";
 
 /**
@@ -736,5 +738,124 @@ describe("a tally that arrived without minutes", () => {
       doneMinutes: 30,
     };
     expect(weekScore([legacy, real], "2026-09-07")).toBe(100);
+  });
+});
+
+describe("a day is graded on what was done in it", () => {
+  const done = (taskId: string, scheduledOn: LocalDate, doneOn: LocalDate): DoneEntry => ({
+    taskId,
+    scheduledOn,
+    doneOn,
+  });
+  const tally = (tasks: ReportTask[], entries: DoneEntry[], from: LocalDate, to: LocalDate) =>
+    dailyTally({ tasks, completions: new Map(), done: entries, today: to }, from, to);
+  const on = (days: DayTally[], date: LocalDate) => days.find((day) => day.date === date);
+
+  it("counts a one-off with no date on the day it was done", () => {
+    // The reported bug: an undated one-off has no scheduled day, so it was in
+    // no day's grade at all.
+    const days = tally([oneoff("call", null)], [done("call", TUESDAY, TUESDAY)], MONDAY, TUESDAY);
+
+    expect(on(days, TUESDAY)).toMatchObject({ scheduled: 1, done: 1, doneMinutes: 30 });
+    expect(on(days, MONDAY)).toMatchObject({ scheduled: 0, done: 0 });
+  });
+
+  it("counts a dated one-off done on its due day once, not twice", () => {
+    const days = tally(
+      [oneoff("dentist", WEDNESDAY)],
+      [done("dentist", WEDNESDAY, WEDNESDAY)],
+      MONDAY,
+      WEDNESDAY,
+    );
+
+    expect(on(days, WEDNESDAY)).toMatchObject({ scheduled: 1, done: 1 });
+  });
+
+  it("puts a late routine run on the day it was done, and leaves the miss where it was", () => {
+    // Monday's run ticked on Wednesday: Monday is a miss, Wednesday did the work.
+    const days = tally([routine("gym", [0])], [done("gym", MONDAY, WEDNESDAY)], MONDAY, WEDNESDAY);
+
+    expect(on(days, MONDAY)).toMatchObject({ scheduled: 1, done: 0 });
+    expect(on(days, WEDNESDAY)).toMatchObject({ scheduled: 1, done: 1, doneMinutes: 30 });
+  });
+
+  it("adds the late run to a day that also had its own", () => {
+    const days = tally(
+      [routine("read", [0, 1, 2, 3, 4, 5, 6])],
+      [done("read", MONDAY, TUESDAY), done("read", TUESDAY, TUESDAY)],
+      MONDAY,
+      TUESDAY,
+    );
+
+    expect(on(days, TUESDAY)).toMatchObject({ scheduled: 2, done: 2, scheduledMinutes: 60 });
+    expect(dayScore(on(days, TUESDAY) as DayTally)).toBe(100);
+  });
+
+  it("does not call a one-off done early a miss on its due day", () => {
+    const days = tally(
+      [oneoff("taxes", FRIDAY)],
+      [done("taxes", TUESDAY, TUESDAY)],
+      MONDAY,
+      FRIDAY,
+    );
+
+    expect(on(days, TUESDAY)).toMatchObject({ scheduled: 1, done: 1 });
+    expect(on(days, FRIDAY)).toMatchObject({ scheduled: 0, done: 0 });
+  });
+
+  it("keeps a late one-off as a miss on its due day and as work on the day it was done", () => {
+    const days = tally(
+      [oneoff("taxes", MONDAY)],
+      [done("taxes", MONDAY, THURSDAY)],
+      MONDAY,
+      THURSDAY,
+    );
+
+    expect(on(days, MONDAY)).toMatchObject({ scheduled: 1, done: 0 });
+    expect(on(days, THURSDAY)).toMatchObject({ scheduled: 1, done: 1 });
+  });
+
+  it("grades routines and one-offs together", () => {
+    const days = tally(
+      [routine("gym", [1], { effortMinutes: 60 }), oneoff("call", null)],
+      [done("call", TUESDAY, TUESDAY)],
+      TUESDAY,
+      TUESDAY,
+    );
+
+    // 30 of 90 minutes: the one-off counts, the routine is still open.
+    expect(dayScore(on(days, TUESDAY) as DayTally)).toBe(33);
+  });
+});
+
+describe("a closed day is frozen", () => {
+  const frozenMonday: DayTally = {
+    date: MONDAY,
+    scheduled: 2,
+    done: 2,
+    scheduledMinutes: 60,
+    doneMinutes: 60,
+  };
+
+  it("replaces the computed day with the stored one", () => {
+    // The routine has since changed so Monday computes as empty; the evidence
+    // stays what it was when Monday closed.
+    const computed = dailyTally(input([], {}, TUESDAY), MONDAY, TUESDAY);
+
+    expect(withFrozen(computed, [frozenMonday])[0]).toEqual(frozenMonday);
+  });
+
+  it("leaves days with no stored row to be computed", () => {
+    const computed = dailyTally(input([routine("d", [1])], {}, TUESDAY), MONDAY, TUESDAY);
+
+    expect(withFrozen(computed, [frozenMonday])[1]).toMatchObject({ date: TUESDAY, scheduled: 1 });
+  });
+
+  it("feeds the frozen day to everything the report derives", () => {
+    const report = momentumReport(input([], {}, TUESDAY), [frozenMonday]);
+
+    expect(report.days.find((day) => day.date === MONDAY)).toEqual(frozenMonday);
+    expect(report.perfect.count).toBe(1);
+    expect(report.rates[0]).toMatchObject({ scheduled: 2, done: 2 });
   });
 });

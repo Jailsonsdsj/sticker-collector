@@ -197,7 +197,7 @@ describe("which rows count", () => {
 });
 
 describe("the endpoint itself", () => {
-  it("writes nothing — a report is a read", async () => {
+  it("writes no task data — only the grades of days that have closed", async () => {
     const id = await routine("Stretch");
     await complete(id, addDays(today(), -1));
 
@@ -466,5 +466,156 @@ describe("the minutes a day is weighed by", () => {
       scheduledMinutes: 120,
       doneMinutes: 115,
     });
+  });
+});
+
+describe("a day's grade", () => {
+  const dayOf = (report: MomentumReport, date: string) =>
+    report.days.find((day) => day.date === date);
+
+  async function oneoff(title: string): Promise<string> {
+    const id = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO task (id,user_id,title,effort_minutes,reward_coins,priority,type,created_at)
+       VALUES (?,?,?,?,?,'medium','oneoff',?)`,
+    )
+      .bind(id, userId, title, 30, 30, "2026-07-01T00:00:00Z")
+      .run();
+    return id;
+  }
+
+  /** A completion of `scheduledOn`'s run, ticked on `doneOn`. */
+  async function completeLate(taskId: string, scheduledOn: string, doneOn: string) {
+    await env.DB.prepare(
+      `INSERT INTO occurrence (id,task_id,scheduled_on,status,completed_at,reward_snapshot_coins)
+       VALUES (?,?,?,'done',?,30)`,
+    )
+      .bind(crypto.randomUUID(), taskId, scheduledOn, `${doneOn}T09:00:00Z`)
+      .run();
+  }
+
+  it("counts a one-off on the day it was done, beside the routines", async () => {
+    // The reported bug: only routines were graded, so an undated one-off was
+    // in no day at all.
+    const yesterday = addDays(today(), -1);
+    await routine("Stretch");
+    const call = await oneoff("Call the bank");
+    await completeLate(call, yesterday, yesterday);
+
+    expect(dayOf(await momentum(), yesterday)).toMatchObject({ scheduled: 2, done: 1 });
+  });
+
+  it("grades a late run on the day it was ticked, and leaves the miss on its own day", async () => {
+    const yesterday = addDays(today(), -1);
+    const earlier = addDays(today(), -3);
+    const id = await routine("Stretch");
+    await completeLate(id, earlier, yesterday);
+
+    const report = await momentum();
+
+    expect(dayOf(report, earlier)).toMatchObject({ scheduled: 1, done: 0 });
+    expect(dayOf(report, yesterday)).toMatchObject({ scheduled: 2, done: 1 });
+  });
+
+  it("is frozen once the day has closed — a later edit to the routine does not reach it", async () => {
+    const yesterday = addDays(today(), -1);
+    const id = await routine("Stretch", WEEKDAYS_MASK_ALL, 30);
+    await complete(id, yesterday);
+    const before = dayOf(await momentum(), yesterday);
+
+    // Change everything the grade is computed from.
+    await env.DB.prepare("UPDATE task SET weekdays = 0, effort_minutes = 90 WHERE id = ?")
+      .bind(id)
+      .run();
+    await routine("Added later");
+
+    expect(dayOf(await momentum(), yesterday)).toEqual(before);
+  });
+
+  it("keeps today live, because it has not closed", async () => {
+    const id = await routine("Stretch");
+    await momentum();
+    await complete(id, today());
+
+    expect(dayOf(await momentum(), today())).toMatchObject({ scheduled: 1, done: 1 });
+    const stored = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM day_score WHERE user_id = ? AND date = ?",
+    )
+      .bind(userId, today())
+      .first<{ n: number }>();
+    expect(stored?.n).toBe(0);
+  });
+
+  it("stores each closed day once", async () => {
+    await routine("Stretch");
+    await momentum();
+    await momentum();
+
+    const rows = await env.DB.prepare(
+      "SELECT COUNT(*) AS n, COUNT(DISTINCT date) AS d FROM day_score WHERE user_id = ?",
+    )
+      .bind(userId)
+      .first<{ n: number; d: number }>();
+    expect(rows?.n).toBe(rows?.d);
+    expect(rows?.n).toBeGreaterThan(0);
+  });
+});
+
+describe("what was done on a day", () => {
+  const dayList = async (date: string) => {
+    const response = await app.fetch(
+      new Request(`http://localhost/api/reports/day/${date}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+      env,
+    );
+    expect(response.status).toBe(200);
+    return (await response.json()) as { taskId: string; scheduledOn: string }[];
+  };
+
+  async function tick(taskId: string, scheduledOn: string, doneOn: string) {
+    await env.DB.prepare(
+      `INSERT INTO occurrence (id,task_id,scheduled_on,status,completed_at,reward_snapshot_coins)
+       VALUES (?,?,?,'done',?,30)`,
+    )
+      .bind(crypto.randomUUID(), taskId, scheduledOn, `${doneOn}T09:00:00Z`)
+      .run();
+  }
+
+  it("lists a late run on the day it was ticked, not the day it was for", async () => {
+    const monday = addDays(today(), -3);
+    const wednesday = addDays(today(), -1);
+    const id = await routine("Stretch");
+    await tick(id, monday, wednesday);
+
+    expect(await dayList(wednesday)).toEqual([expect.objectContaining({ taskId: id })]);
+    expect(await dayList(monday)).toEqual([]);
+  });
+
+  it("finds a one-off finished long after its due date", async () => {
+    // Its row stays filed under the due date, weeks back — out of reach of any
+    // window keyed by the scheduled day.
+    const id = await routine("Old due date");
+    await tick(id, addDays(today(), -40), addDays(today(), -1));
+
+    expect(await dayList(addDays(today(), -1))).toHaveLength(1);
+  });
+
+  it("never lists another user's work", async () => {
+    const id = await routine("Mine");
+    await tick(id, addDays(today(), -1), addDays(today(), -1));
+    switchTo(await makeUser());
+
+    expect(await dayList(addDays(today(), -1))).toEqual([]);
+  });
+
+  it("refuses something that is not a date", async () => {
+    const response = await app.fetch(
+      new Request("http://localhost/api/reports/day/yesterday", {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+      env,
+    );
+    expect(response.status).toBe(400);
   });
 });

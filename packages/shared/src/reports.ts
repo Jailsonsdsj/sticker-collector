@@ -47,7 +47,13 @@ export type CompletionsByTask = ReadonlyMap<string, ReadonlySet<LocalDate>>;
 
 export interface ReportInput {
   tasks: readonly ReportTask[];
+  /** Keyed by the day each run was scheduled for — what streaks are made of. */
   completions: CompletionsByTask;
+  /**
+   * The same completions dated by the day they were done — what a day's grade
+   * is made of. Omitted, each run counts as done on its own scheduled day.
+   */
+  done?: readonly DoneEntry[];
   /** The user's today, in their own calendar. */
   today: LocalDate;
 }
@@ -130,46 +136,150 @@ export interface DayTally {
 }
 
 /**
- * One tally per day in the window: how much was scheduled, how much was done.
+ * One completion, dated twice.
+ *
+ * `scheduledOn` is the run it belongs to — what a streak asks about. `doneOn`
+ * is the user's civil date when it was ticked — what a **day** is graded on.
+ * They differ when a Monday routine is ticked on Wednesday: Monday keeps the
+ * miss, and Wednesday gets the work.
+ */
+export interface DoneEntry {
+  taskId: string;
+  scheduledOn: LocalDate;
+  doneOn: LocalDate;
+}
+
+/**
+ * A finished day as it was stored when it closed (`day_score`).
+ *
+ * The same shape as a computed tally, on purpose: the report lays these over
+ * what it computes, and everything downstream reads one kind of day.
+ */
+export type FrozenDay = DayTally;
+
+/**
+ * Every completion with its done-day, from the input.
+ *
+ * Callers that only know scheduled days — the older tests, and any caller with
+ * no timestamps — are treated as having ticked each run on its own day.
+ */
+function doneEntries(input: ReportInput): readonly DoneEntry[] {
+  if (input.done) return input.done;
+  const entries: DoneEntry[] = [];
+  for (const [taskId, days] of input.completions) {
+    for (const day of days) entries.push({ taskId, scheduledOn: day, doneOn: day });
+  }
+  return entries;
+}
+
+/**
+ * One tally per day in the window: what the day held, and what got done in it.
+ *
+ * **A day holds its scheduled work plus everything else finished in it.**
+ *
+ * - A scheduled run (a routine's weekday, a one-off's due date) is in the day
+ *   it was scheduled for, and counts as done there only if it was ticked that
+ *   same day.
+ * - Anything finished on a day it was not scheduled for — a routine's earlier
+ *   run ticked late, an undated one-off, a one-off done off its due date — is
+ *   added to the day it was done on, as both held and done.
+ *
+ * So a Monday routine ticked on Wednesday is a miss on Monday and work done on
+ * Wednesday, and a one-off with no date still counts on the day it was done.
+ * Only counting scheduled runs left every undated one-off out of every grade.
+ *
+ * A one-off done **before** its due date is not also a miss on the due date:
+ * the task no longer exists to be done.
  *
  * The shared basis for perfect days, the trailing rates and the heatmap, so
  * those three can never disagree about what a day contained.
  */
 export function dailyTally(input: ReportInput, from: LocalDate, to: LocalDate): DayTally[] {
-  const scheduledOn = new Map<LocalDate, number>();
-  const doneOn = new Map<LocalDate, number>();
-  const scheduledMins = new Map<LocalDate, number>();
-  const doneMins = new Map<LocalDate, number>();
+  const days = new Map<LocalDate, DayTally>();
+  const dayOf = (date: LocalDate): DayTally => {
+    let day = days.get(date);
+    if (!day) {
+      day = { date, scheduled: 0, done: 0, scheduledMinutes: 0, doneMinutes: 0 };
+      days.set(date, day);
+    }
+    return day;
+  };
+
+  const entries = doneEntries(input);
+  // Indexed by task and done-day: a year of a daily routine is hundreds of
+  // entries, and scanning them for every scheduled day is the walk that blows
+  // a 10 ms budget.
+  const byTaskDay = new Map<string, DoneEntry[]>();
+  const firstDone = new Map<string, LocalDate>();
+  for (const entry of entries) {
+    const key = `${entry.taskId}|${entry.doneOn}`;
+    const list = byTaskDay.get(key) ?? [];
+    list.push(entry);
+    byTaskDay.set(key, list);
+    const first = firstDone.get(entry.taskId);
+    if (!first || entry.doneOn < first) firstDone.set(entry.taskId, entry.doneOn);
+  }
+
+  const used = new Set<DoneEntry>();
+  const taskById = new Map(input.tasks.map((task) => [task.id, task]));
 
   for (const task of input.tasks) {
-    const days = occurrencesInWindow(task.schedule, from, to);
-    const done = input.completions.get(task.id);
+    const oneoff = task.schedule.kind === "oneoff";
+    const first = firstDone.get(task.id);
+    for (const date of occurrencesInWindow(task.schedule, from, to)) {
+      // Done earlier than it was due: there is nothing left to miss.
+      if (oneoff && first !== undefined && first < date) continue;
 
-    for (const day of days) {
-      scheduledOn.set(day, (scheduledOn.get(day) ?? 0) + 1);
-      scheduledMins.set(day, (scheduledMins.get(day) ?? 0) + task.effortMinutes);
-      if (done?.has(day)) {
-        doneOn.set(day, (doneOn.get(day) ?? 0) + 1);
-        // The task's effort as it stands, not a snapshot: it weighs both sides
-        // of the same fraction, so editing an estimate cannot move a day that
-        // was finished or a day that was missed — only one part-way through.
-        doneMins.set(day, (doneMins.get(day) ?? 0) + task.effortMinutes);
+      const day = dayOf(date);
+      day.scheduled += 1;
+      day.scheduledMinutes += task.effortMinutes;
+
+      // The effort as it stands, not a snapshot: it weighs both sides of the
+      // same fraction, and a closed day is frozen before an edit can reach it.
+      const filled = byTaskDay
+        .get(`${task.id}|${date}`)
+        ?.find((entry) => !used.has(entry) && (oneoff || entry.scheduledOn === date));
+      if (filled) {
+        used.add(filled);
+        day.done += 1;
+        day.doneMinutes += task.effortMinutes;
       }
     }
   }
 
+  // Finished on a day that did not schedule it: the day held it, and did it.
+  for (const entry of entries) {
+    if (used.has(entry) || entry.doneOn < from || entry.doneOn > to) continue;
+    const task = taskById.get(entry.taskId);
+    if (!task) continue;
+    const day = dayOf(entry.doneOn);
+    day.scheduled += 1;
+    day.done += 1;
+    day.scheduledMinutes += task.effortMinutes;
+    day.doneMinutes += task.effortMinutes;
+  }
+
   const tally: DayTally[] = [];
-  for (let day = toDayNumber(from); day <= toDayNumber(to); day++) {
-    const date = addDays(from, day - toDayNumber(from));
-    tally.push({
-      date,
-      scheduled: scheduledOn.get(date) ?? 0,
-      done: doneOn.get(date) ?? 0,
-      scheduledMinutes: scheduledMins.get(date) ?? 0,
-      doneMinutes: doneMins.get(date) ?? 0,
-    });
+  for (let n = toDayNumber(from); n <= toDayNumber(to); n++) {
+    const date = addDays(from, n - toDayNumber(from));
+    tally.push(
+      days.get(date) ?? { date, scheduled: 0, done: 0, scheduledMinutes: 0, doneMinutes: 0 },
+    );
   }
   return tally;
+}
+
+/**
+ * The window's days, with every frozen one replacing its computed twin.
+ *
+ * A closed day is evidence: what it said when it closed is what it says now,
+ * whatever has happened to the routines since. Only days with no frozen row —
+ * today, and any day not yet closed — are computed.
+ */
+export function withFrozen(tally: readonly DayTally[], frozen: readonly FrozenDay[]): DayTally[] {
+  if (frozen.length === 0) return [...tally];
+  const byDate = new Map(frozen.map((day) => [day.date, day]));
+  return tally.map((day) => byDate.get(day.date) ?? day);
 }
 
 /**
@@ -308,11 +418,14 @@ export const RATE_WINDOWS = [7, 30, 90] as const;
  */
 export function completionRate(input: ReportInput, days: number): CompletionRate {
   const from = addDays(input.today, -(days - 1));
-  const tally = dailyTally(input, from, input.today);
+  return rateOf(dailyTally(input, from, input.today), days);
+}
 
+/** The rate over the last `days` entries of a tally that ends today. */
+function rateOf(tally: readonly DayTally[], days: number): CompletionRate {
   let scheduled = 0;
   let done = 0;
-  for (const day of tally) {
+  for (const day of tally.slice(-days)) {
     scheduled += day.scheduled;
     done += day.done;
   }
@@ -344,8 +457,11 @@ export interface WeekdayShape {
  */
 export function weekdayShape(input: ReportInput, days = 90): WeekdayShape[] {
   const from = addDays(input.today, -(days - 1));
-  const tally = dailyTally(input, from, input.today);
+  return shapeOf(dailyTally(input, from, input.today));
+}
 
+/** The weekday breakdown of every day in a tally. */
+function shapeOf(tally: readonly DayTally[]): WeekdayShape[] {
   const shape: WeekdayShape[] = WEEKDAYS.map((label, index) => ({
     weekday: index as Weekday,
     label,
@@ -382,10 +498,19 @@ export interface MomentumReport {
   days: DayTally[];
 }
 
-/** Everything R-01 owns, from one pass over the same inputs. */
-export function momentumReport(input: ReportInput): MomentumReport {
+/**
+ * Everything R-01 owns, from one pass over the same inputs.
+ *
+ * `frozen` are the closed days as stored. They replace their computed twins
+ * before anything is derived, so the heatmap, the rates, the perfect days and
+ * the weekday shape all read the same evidence.
+ */
+export function momentumReport(
+  input: ReportInput,
+  frozen: readonly FrozenDay[] = [],
+): MomentumReport {
   const from = addDays(input.today, -(MAX_HISTORY_DAYS - 1));
-  const tally = dailyTally(input, from, input.today);
+  const tally = withFrozen(dailyTally(input, from, input.today), frozen);
 
   return {
     today: input.today,
@@ -394,8 +519,8 @@ export function momentumReport(input: ReportInput): MomentumReport {
       .filter((task) => task.schedule.kind === "routine")
       .map((task) => streakFor(task, input.completions.get(task.id) ?? new Set(), input.today)),
     perfect: perfectDays(tally, input.today),
-    rates: RATE_WINDOWS.map((days) => completionRate(input, days)),
-    weekdays: weekdayShape(input),
+    rates: RATE_WINDOWS.map((days) => rateOf(tally, days)),
+    weekdays: shapeOf(tally.slice(-90)),
     days: tally,
   };
 }

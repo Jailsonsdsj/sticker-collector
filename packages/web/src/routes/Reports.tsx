@@ -12,7 +12,7 @@ import { WeekdayBars } from "../components/reports/WeekdayBars";
 import { EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { ApiError } from "../lib/api";
 import { buildReview } from "../lib/dailyReview";
-import { useEffort, useEpics, useMomentum, useOccurrences, useTasks } from "../lib/queries";
+import { useDoneOn, useEffort, useEpics, useMomentum, useTasks } from "../lib/queries";
 import { appTimeZone } from "../lib/timezone";
 
 /**
@@ -42,24 +42,26 @@ export function Reports() {
   /**
    * The day the user tapped on the calendar.
    *
-   * Its occurrences are fetched on demand — one day, one request — rather than
-   * a year of them being carried around on the chance that a cell is clicked.
+   * What was done on it is fetched on demand — one day, one request — rather
+   * than a year of it being carried around on the chance that a cell is
+   * clicked. Its score is the calendar's own: the day as the report froze it.
    */
   const [picked, setPicked] = useState<LocalDate | null>(null);
-  const dayOccurrences = useOccurrences(picked ?? "1970-01-01", picked ?? "1970-01-01");
+  const dayDone = useDoneOn(picked);
 
   const review = useMemo(
     () =>
       picked
         ? buildReview(
             picked,
-            dayOccurrences.data ?? [],
+            dayDone.data ?? [],
             tasks.data ?? [],
             epics.data ?? [],
             appTimeZone(),
+            momentum.data?.days.find((day) => day.date === picked),
           )
         : null,
-    [picked, dayOccurrences.data, tasks.data, epics.data],
+    [picked, dayDone.data, tasks.data, epics.data, momentum.data],
   );
 
   const epicsById = useMemo(

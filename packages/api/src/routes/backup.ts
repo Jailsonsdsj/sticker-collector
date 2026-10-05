@@ -9,6 +9,7 @@ import { Hono } from "hono";
 import { db } from "../db/client";
 import {
   album,
+  dayScore,
   epic,
   holding,
   ledger,
@@ -101,6 +102,7 @@ backupRoutes.get("/manifest", async (c) => {
   );
 
   const entries = await database.select().from(ledger).where(eq(ledger.userId, userId));
+  const dayScores = await database.select().from(dayScore).where(eq(dayScore.userId, userId));
 
   // Covers and stickers alike. Deduplicated: a derived edition shares keys with
   // its source, and the client fetches one copy of each.
@@ -132,6 +134,7 @@ backupRoutes.get("/manifest", async (c) => {
     puzzlePieces,
     routineSlots,
     subtasks,
+    dayScores,
     imageKeys,
   };
   return c.json(body);
@@ -257,6 +260,8 @@ backupRoutes.post("/restore", idempotency, async (c) => {
     id: idFor(row.id),
     stickerId: idFor(row.stickerId),
   }));
+  // Keyed by (user, date) with no id of its own: only the owner is rewritten.
+  const dayScores = manifest.dayScores.map((row) => ({ ...row, userId }));
   const entries = manifest.ledger.map((row) => ({
     ...row,
     id: idFor(row.id),
@@ -284,6 +289,7 @@ backupRoutes.post("/restore", idempotency, async (c) => {
     ...chunkFor(puzzles).map((rows) => database.insert(puzzle).values(rows as never)),
     ...chunkFor(puzzlePieces).map((rows) => database.insert(puzzlePiece).values(rows as never)),
     ...chunkFor(entries).map((rows) => database.insert(ledger).values(rows as never)),
+    ...chunkFor(dayScores).map((rows) => database.insert(dayScore).values(rows as never)),
   ];
 
   if (statements.length > 0) {

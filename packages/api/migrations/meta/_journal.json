@@ -127,6 +127,27 @@
       "when": 1790084049094,
       "tag": "0018_puzzle_prices_editable",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1791224391458,
+      "tag": "0019_mixed_terror",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1791224396394,
+      "tag": "0020_day_score_frozen",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1791224639573,
+      "tag": "0021_whole_the_twelve",
+      "breakpoints": true
     }
   ]
 }

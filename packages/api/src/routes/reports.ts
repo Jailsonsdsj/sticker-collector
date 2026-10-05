@@ -5,7 +5,6 @@ import {
   effortByEpic,
   effortByMonth,
   effortByWeek,
-  type LocalDate,
   localDateIn,
   MAX_HISTORY_DAYS,
   type MomentumReport,
@@ -20,6 +19,7 @@ import { Hono } from "hono";
 import { db } from "../db/client";
 import { album, holding, ledger, occurrence, sticker, task } from "../db/schema";
 
+import { datedCompletions, firstOpenDay, freezeClosedDays, loadFrozen } from "../lib/dayScores";
 import { selectIn } from "../lib/selectIn";
 import { listGeneratingTasks } from "../lib/tasks";
 import { timeZoneOf } from "../lib/user";
@@ -42,6 +42,11 @@ reportRoutes.use("*", requireAuth);
  * The window is a year, matching `MAX_HISTORY_DAYS`. Everything the report says
  * is bounded by it, which is what keeps a three-year-old routine inside the
  * 10 ms CPU budget.
+ *
+ * **Closed days are frozen.** A past day's grade is read from `day_score` when
+ * it has a row, and computed then stored when it does not — so a GET that
+ * writes, once per day closed. Only today stays live. A day's grade is
+ * evidence of how it went; editing a routine afterwards must not rewrite it.
  */
 reportRoutes.get("/momentum", async (c) => {
   const database = db(c.env);
@@ -56,6 +61,9 @@ reportRoutes.get("/momentum", async (c) => {
   // Deleted tasks generate nothing, so they contribute no scheduled days —
   // the same predicate the occurrence window uses.
   const tasks = await listGeneratingTasks(database, userId);
+  const frozen = await loadFrozen(database, userId, from);
+  const window = Array.from({ length: MAX_HISTORY_DAYS }, (_, i) => addDays(from, i));
+  const open = firstOpenDay(frozen, window, today);
 
   // Only completions matter: a stored `missed` or `archived` row is not a
   // completion, and `pending` is never authoritative when stored.
@@ -67,7 +75,11 @@ reportRoutes.get("/momentum", async (c) => {
   // screen's window is.
   const rows = await selectIn(taskIds, (batch) =>
     database
-      .select({ taskId: occurrence.taskId, scheduledOn: occurrence.scheduledOn })
+      .select({
+        taskId: occurrence.taskId,
+        scheduledOn: occurrence.scheduledOn,
+        completedAt: occurrence.completedAt,
+      })
       .from(occurrence)
       .where(
         and(
@@ -78,12 +90,7 @@ reportRoutes.get("/momentum", async (c) => {
       ),
   );
 
-  const completions = new Map<string, Set<LocalDate>>();
-  for (const row of rows) {
-    const days = completions.get(row.taskId) ?? new Set<LocalDate>();
-    days.add(row.scheduledOn);
-    completions.set(row.taskId, days);
-  }
+  const { completions, done } = datedCompletions(rows, open, timeZone);
 
   const reportTasks: ReportTask[] = tasks.map((task) => ({
     id: task.id,
@@ -94,7 +101,11 @@ reportRoutes.get("/momentum", async (c) => {
     effortMinutes: task.effortMinutes,
   }));
 
-  const body: MomentumReport = momentumReport({ tasks: reportTasks, completions, today });
+  const body: MomentumReport = momentumReport(
+    { tasks: reportTasks, completions, done, today },
+    frozen,
+  );
+  await freezeClosedDays(database, userId, body.days, frozen, today);
   return c.json(body);
 });
 

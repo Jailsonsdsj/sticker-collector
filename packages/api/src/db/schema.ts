@@ -165,7 +165,12 @@ export const occurrence = sqliteTable(
     // frozen at completion, never recomputed (enforced by the occurrence_snapshot_write_once trigger).
     rewardSnapshotCoins: integer("reward_snapshot_coins"),
   },
-  (table) => [unique("occurrence_task_scheduled_unique").on(table.taskId, table.scheduledOn)],
+  (table) => [
+    unique("occurrence_task_scheduled_unique").on(table.taskId, table.scheduledOn),
+    // The day review lists what was ticked ON a day, whatever run it belonged
+    // to — a range over the tick time, not over the scheduled date.
+    index("occurrence_completed_idx").on(table.completedAt),
+  ],
 );
 
 /**
@@ -328,6 +333,36 @@ export const puzzlePiece = sqliteTable(
     // would take the coins and grant nothing new.
     unique("puzzle_piece_unique").on(table.puzzleId, table.pieceIndex),
   ],
+);
+
+/**
+ * A finished day's grade, as it stood when the day closed.
+ *
+ * Evidence of whether things are improving, so it is **frozen**: a later edit
+ * to a routine — its weekdays, its effort, deleting it — must not rewrite how
+ * a past day went. Append-only, enforced by the day_score_no_update and
+ * day_score_no_delete triggers.
+ *
+ * Written lazily, by the momentum report, for every past day in its window
+ * that has no row yet; today is never stored, because it has not closed.
+ * The counts rather than the score: the score is derived (`dayScore`), and the
+ * counts are what the weekly average, the rates and the perfect days read.
+ */
+export const dayScore = sqliteTable(
+  "day_score",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id),
+    /** The user's civil date. */
+    date: text("date").notNull(),
+    scheduled: integer("scheduled").notNull(),
+    done: integer("done").notNull(),
+    scheduledMinutes: integer("scheduled_minutes").notNull(),
+    doneMinutes: integer("done_minutes").notNull(),
+    frozenAt: text("frozen_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.date] })],
 );
 
 // the single source of truth for the wallet. append-only (enforced by the ledger_no_update/ledger_no_delete triggers).

@@ -76,13 +76,23 @@ async function createTask(body: Record<string, unknown>): Promise<{ id: string }
  * day needs a task that was actually around then. Without this the window is
  * simply empty, which is correct behaviour and a useless fixture.
  */
-async function createOldTask(body: Record<string, unknown>, daysAgo = 60) {
+async function createOldTask(body: Record<string, unknown>, since: number | string = 60) {
   const task = await createTask(body);
+  const createdOn = typeof since === "string" ? since : addDays(today, -since);
   await env.DB.prepare("UPDATE task SET created_at = ? WHERE id = ?")
-    .bind(`${addDays(today, -daysAgo)}T00:00:00Z`, task.id)
+    .bind(`${createdOn}T00:00:00Z`, task.id)
     .run();
   return task;
 }
+
+/**
+ * Before every fixed August date the generation tests ask about.
+ *
+ * Those tests used `daysAgo = 60`, which put the task's creation inside their
+ * window as soon as the real calendar passed early October — and a routine
+ * schedules nothing before it existed, so Aug 3–5 silently vanished.
+ */
+const BEFORE_AUGUST_FIXTURES = "2026-07-01";
 
 const monFri = (extra: Record<string, unknown> = {}) => ({
   type: "routine",
@@ -159,7 +169,7 @@ describe("generation", () => {
   // Creating them "now" made the whole block pass only until the real calendar
   // moved past those dates — which it did, on 2026-08-06.
   it("produces a Mon–Fri routine and skips weekends", async () => {
-    await createOldTask(monFri());
+    await createOldTask(monFri(), BEFORE_AUGUST_FIXTURES);
     // 2026-08-03 is a Monday.
     const got = await fetchWindow("2026-08-03", "2026-08-09");
     expect(got.map((o) => o.scheduledOn)).toEqual([
@@ -172,13 +182,16 @@ describe("generation", () => {
   });
 
   it("produces a Sat-only routine", async () => {
-    await createOldTask(monFri({ weekdays: maskFromDays([SAT]) }));
+    await createOldTask(monFri({ weekdays: maskFromDays([SAT]) }), BEFORE_AUGUST_FIXTURES);
     const got = await fetchWindow("2026-08-03", "2026-08-16");
     expect(got.map((o) => o.scheduledOn)).toEqual(["2026-08-08", "2026-08-15"]);
   });
 
   it("clips to startsOn and endsOn", async () => {
-    await createOldTask(monFri({ startsOn: "2026-08-05", endsOn: "2026-08-06" }));
+    await createOldTask(
+      monFri({ startsOn: "2026-08-05", endsOn: "2026-08-06" }),
+      BEFORE_AUGUST_FIXTURES,
+    );
     const got = await fetchWindow("2026-08-03", "2026-08-14");
     expect(got.map((o) => o.scheduledOn)).toEqual(["2026-08-05", "2026-08-06"]);
   });
@@ -198,7 +211,7 @@ describe("generation", () => {
   });
 
   it("returns results sorted by date", async () => {
-    await createOldTask(monFri());
+    await createOldTask(monFri(), BEFORE_AUGUST_FIXTURES);
     const got = await fetchWindow("2026-08-03", "2026-08-21");
     const dates = got.map((o) => o.scheduledOn);
     expect([...dates].sort()).toEqual(dates);
@@ -390,7 +403,7 @@ describe("scoping and guards", () => {
   });
 
   it("generates nothing for a soft-deleted routine", async () => {
-    const task = await createOldTask(monFri());
+    const task = await createOldTask(monFri(), BEFORE_AUGUST_FIXTURES);
     expect((await fetchWindow("2026-08-03", "2026-08-09")).length).toBe(5);
 
     await call("DELETE", `/api/tasks/${task.id}`);

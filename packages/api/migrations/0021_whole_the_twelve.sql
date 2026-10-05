@@ -1,0 +1,1 @@
+CREATE INDEX `occurrence_completed_idx` ON `occurrence` (`completed_at`);

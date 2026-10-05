@@ -836,6 +836,12 @@ export const backupManifestSchema = z.object({
    */
   routineSlots: z.array(z.record(z.string(), z.unknown())).default([]),
   subtasks: z.array(z.record(z.string(), z.unknown())).default([]),
+  /**
+   * Each closed day's frozen grade. Without them a restore would recompute the
+   * past from the routines as they are now — the rewrite freezing prevents.
+   * Optional for the same reason as the tables above: old files still restore.
+   */
+  dayScores: z.array(z.record(z.string(), z.unknown())).default([]),
   /** Every image the data references — the irreplaceable half of a backup. */
   imageKeys: z.array(z.string()),
 });

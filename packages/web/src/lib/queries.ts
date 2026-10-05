@@ -34,6 +34,7 @@ export const keys = {
   puzzlesAll: ["puzzles"] as const,
   puzzle: (id: string) => ["puzzles", "detail", id] as const,
   momentum: ["reports", "momentum"] as const,
+  day: (date: LocalDate) => ["reports", "day", date] as const,
   effort: ["reports", "effort"] as const,
 };
 
@@ -102,10 +103,24 @@ export function useAlbum(id: string) {
  * Momentum: streaks, perfect days, trailing rates, weekday shape and the
  * heatmap's per-day series — all from one tally, so they cannot disagree.
  */
-export function useMomentum() {
+export function useMomentum(enabled = true) {
   return useQuery({
     queryKey: keys.momentum,
     queryFn: () => api<MomentumReport>("/api/reports/momentum"),
+    enabled,
+  });
+}
+
+/**
+ * Everything ticked ON a day, whatever run it belonged to — the daily review's
+ * list. Not the occurrence window: that is keyed by the scheduled date, so it
+ * misses a late run and an overdue one-off.
+ */
+export function useDoneOn(date: LocalDate | null, enabled = true) {
+  return useQuery({
+    queryKey: keys.day(date ?? ""),
+    queryFn: () => api<Occurrence[]>(`/api/reports/day/${date}`),
+    enabled: enabled && date !== null,
   });
 }
 
