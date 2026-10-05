@@ -1,0 +1,1 @@
+ALTER TABLE `epic` ADD `type` text DEFAULT 'maintaining' NOT NULL;

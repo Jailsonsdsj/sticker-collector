@@ -1,5 +1,11 @@
-import type { CreateTaskInput, Epic, Task, UpdateTask } from "@sticker-collector/shared";
-import { findSharedSlots } from "@sticker-collector/shared";
+import {
+  type CreateTaskInput,
+  defaultPriorityFor,
+  type Epic,
+  findSharedSlots,
+  type Task,
+  type UpdateTask,
+} from "@sticker-collector/shared";
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import {
   initialState,
@@ -61,7 +67,13 @@ export function TaskForm({
   defaultEpicId,
 }: TaskFormProps) {
   const [state, dispatch] = useReducer(reduce, undefined, () =>
-    task ? stateFromTask(task) : initialState({ epicId: defaultEpicId }),
+    task
+      ? stateFromTask(task)
+      : initialState({
+          epicId: defaultEpicId,
+          // Opened from an epic: start at that epic's type's priority.
+          priority: defaultPriorityFor(epics.find((epic) => epic.id === defaultEpicId)?.type),
+        }),
   );
   const [saving, setSaving] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);

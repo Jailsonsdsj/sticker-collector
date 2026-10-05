@@ -1,8 +1,11 @@
 import {
   EPIC_ACCENTS,
+  EPIC_TYPE_LABEL,
+  EPIC_TYPES,
   type Epic,
   type EpicAccent,
   type EpicStatus,
+  type EpicType,
 } from "@sticker-collector/shared";
 import type { CSSProperties } from "react";
 import { useEffect, useState } from "react";
@@ -33,6 +36,7 @@ export interface EpicFormProps {
     description: string | null;
     accent: EpicAccent;
     status: EpicStatus;
+    type: EpicType;
   }) => Promise<unknown>;
   /** Present when renaming rather than creating. */
   epic?: Epic | null;
@@ -58,6 +62,7 @@ export function EpicForm({
   const [description, setDescription] = useState(epic?.description ?? "");
   const [accent, setAccent] = useState<EpicAccent>(epic?.accent ?? "epic-1");
   const [status, setStatus] = useState<EpicStatus>(epic?.status ?? defaultStatus);
+  const [type, setType] = useState<EpicType>(epic?.type ?? "maintaining");
   const [saving, setSaving] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -68,6 +73,7 @@ export function EpicForm({
     setDescription(epic?.description ?? "");
     setAccent(epic?.accent ?? "epic-1");
     setStatus(epic?.status ?? defaultStatus);
+    setType(epic?.type ?? "maintaining");
     setFailed(false);
     // `defaultStatus` belongs here: reopening from a different section's ＋
     // must start on that section, and the sheet is remounted per opening
@@ -86,6 +92,7 @@ export function EpicForm({
         description: description.trim() || null,
         accent,
         status,
+        type,
       });
       onClose();
     } catch {
@@ -128,6 +135,23 @@ export function EpicForm({
         value={description}
         onChange={(e) => setDescription(e.target.value)}
       />
+
+      {/* What kind of work this is — and so the priority its new tasks start
+          at: Construction high, Maintaining medium, Fundamental low. */}
+      <Field label="Type" htmlFor="epic-type" hint="sets new tasks' default priority">
+        <select
+          id="epic-type"
+          value={type}
+          onChange={(e) => setType(e.target.value as EpicType)}
+          className="w-full rounded-lg border border-border bg-panel px-3 py-2 font-body text-sm text-ink"
+        >
+          {EPIC_TYPES.map((option) => (
+            <option key={option} value={option}>
+              {EPIC_TYPE_LABEL[option]}
+            </option>
+          ))}
+        </select>
+      </Field>
 
       <Field label="Section">
         <Tabs items={SECTIONS} value={status} onChange={setStatus} tone="violet" label="Section" />

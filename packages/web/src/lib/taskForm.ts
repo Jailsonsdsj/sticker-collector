@@ -70,6 +70,13 @@ export interface TaskFormState {
   /** Refuse to close the task until every step is ticked. */
   blockUntilSteps: boolean;
   priority: Priority;
+  /**
+   * Set once the user picks a priority. Until then it follows the epic — a new
+   * task in a Construction epic starts high — and after, choosing another epic
+   * leaves their choice alone. Editing an existing task starts locked: an epic
+   * type only ever supplies a **new** task's default.
+   */
+  priorityLocked: boolean;
   epicId: string | null;
 }
 
@@ -83,7 +90,13 @@ export type TaskFormAction =
   | { kind: "pinToday"; value: boolean }
   | { kind: "slot"; weekday: Weekday; field: "start" | "end"; value: string }
   | { kind: "priority"; value: Priority }
-  | { kind: "epic"; value: string | null }
+  | {
+      kind: "epic";
+      value: string | null;
+      /** The chosen epic's default (`defaultPriorityFor`), applied while the
+       *  user has not picked a priority themselves. */
+      defaultPriority: Priority;
+    }
   | { kind: "subtask"; index: number; value: string }
   | { kind: "addSubtask"; after?: number }
   | { kind: "removeSubtask"; index: number }
@@ -102,7 +115,9 @@ export const EFFORT_PRESETS = [5, 10, 15, 30, 60, 90, 120] as const;
  * That single difference is the whole of the done-when: from an epic the label
  * arrives filled in; from the main button nothing is.
  */
-export function initialState(options: { epicId?: string | null } = {}): TaskFormState {
+export function initialState(
+  options: { epicId?: string | null; priority?: Priority } = {},
+): TaskFormState {
   return {
     title: "",
     description: "",
@@ -131,7 +146,10 @@ export function initialState(options: { epicId?: string | null } = {}): TaskForm
     pinnedToday: false,
     subtasks: [],
     blockUntilSteps: false,
-    priority: "medium",
+    // The epic's default when opened from one (`defaultPriorityFor`), else
+    // medium — still a suggestion until the user picks.
+    priority: options.priority ?? "medium",
+    priorityLocked: false,
     epicId: options.epicId ?? null,
   };
 }
@@ -249,10 +267,14 @@ export function reduce(state: TaskFormState, action: TaskFormAction): TaskFormSt
       return { ...state, rewardCoins: action.value, rewardLocked: true };
 
     case "priority":
-      return { ...state, priority: action.value };
+      return { ...state, priority: action.value, priorityLocked: true };
 
     case "epic":
-      return { ...state, epicId: action.value };
+      return {
+        ...state,
+        epicId: action.value,
+        priority: state.priorityLocked ? state.priority : action.defaultPriority,
+      };
   }
 }
 
@@ -422,6 +444,8 @@ export function stateFromTask(task: Task): TaskFormState {
     subtasks: task.subtasks.map((step) => step.title),
     blockUntilSteps: task.blockUntilSteps,
     priority: task.priority,
+    // An existing task's priority is the user's, whatever epic it moves to.
+    priorityLocked: true,
     epicId: task.epicId,
   };
 }

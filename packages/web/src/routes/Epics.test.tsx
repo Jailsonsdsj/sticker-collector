@@ -22,6 +22,7 @@ const EPICS: Epic[] = [
     description: null,
     accent: "epic-1",
     status: "active" as const,
+    type: "maintaining" as const,
     coinGoalAlbumId: null,
     createdAt: "2026-07-01T00:00:00Z",
     oneOffTotal: 2,
@@ -33,6 +34,7 @@ const EPICS: Epic[] = [
     description: null,
     accent: "epic-2",
     status: "active" as const,
+    type: "maintaining" as const,
     coinGoalAlbumId: null,
     createdAt: "2026-07-01T00:00:00Z",
     oneOffTotal: 0,
@@ -266,6 +268,7 @@ describe("epic CRUD", () => {
         description: null,
         accent: "epic-3",
         status: "active" as const,
+        type: "maintaining" as const,
       });
     });
   });

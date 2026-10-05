@@ -18,6 +18,7 @@ const EPICS: Epic[] = [
     description: null,
     accent: "epic-1",
     status: "active" as const,
+    type: "maintaining" as const,
     coinGoalAlbumId: null,
     createdAt: "2026-07-01T00:00:00Z",
     oneOffTotal: 0,
@@ -29,6 +30,7 @@ const EPICS: Epic[] = [
     description: null,
     accent: "epic-2",
     status: "active" as const,
+    type: "maintaining" as const,
     coinGoalAlbumId: null,
     createdAt: "2026-07-01T00:00:00Z",
     oneOffTotal: 0,
@@ -946,5 +948,34 @@ describe("Enter continues the list of steps", () => {
     const add = screen.getByRole("button", { name: "Add a step" });
 
     expect(add.style.getPropertyValue("--ui-accent")).toBe("var(--color-cyan)");
+  });
+});
+
+describe("an epic's type sets the starting priority", () => {
+  const typed: Epic[] = [
+    { ...(EPICS[0] as Epic), id: "c", title: "Study", type: "construction" },
+    { ...(EPICS[0] as Epic), id: "f", title: "Basics", type: "fundamental" },
+  ];
+  const pressed = (name: string) =>
+    screen.getByRole("button", { name }).getAttribute("aria-pressed");
+
+  it("starts high when opened from a Construction epic", () => {
+    setup({ epics: typed, defaultEpicId: "c" });
+
+    expect(pressed("HIGH")).toBe("true");
+  });
+
+  it("follows the epic picked, until the user picks a priority", async () => {
+    const u = userEvent.setup();
+    setup({ epics: typed });
+    expect(pressed("MED")).toBe("true");
+
+    await u.click(screen.getByRole("button", { name: "Basics" }));
+    expect(pressed("LOW")).toBe("true");
+
+    await u.click(screen.getByRole("button", { name: "MED" }));
+    await u.click(screen.getByRole("button", { name: "Study" }));
+    // Only a default: the user's own choice stands.
+    expect(pressed("MED")).toBe("true");
   });
 });

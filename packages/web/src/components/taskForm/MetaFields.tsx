@@ -1,4 +1,4 @@
-import type { Epic, Priority } from "@sticker-collector/shared";
+import { defaultPriorityFor, type Epic, type Priority } from "@sticker-collector/shared";
 import type { TaskFormAction, TaskFormState } from "../../lib/taskForm";
 import { Chip, Field } from "../ui";
 
@@ -47,7 +47,9 @@ export function MetaFields({
             size="sm"
             surface="filled"
             selected={state.epicId === null}
-            onClick={() => dispatch({ kind: "epic", value: null })}
+            onClick={() =>
+              dispatch({ kind: "epic", value: null, defaultPriority: defaultPriorityFor(null) })
+            }
           >
             None
           </Chip>
@@ -59,7 +61,13 @@ export function MetaFields({
               size="sm"
               surface="filled"
               selected={state.epicId === epic.id}
-              onClick={() => dispatch({ kind: "epic", value: epic.id })}
+              onClick={() =>
+                dispatch({
+                  kind: "epic",
+                  value: epic.id,
+                  defaultPriority: defaultPriorityFor(epic.type),
+                })
+              }
             >
               {epic.title}
             </Chip>

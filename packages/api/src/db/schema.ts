@@ -104,6 +104,10 @@ export const epic = sqliteTable("epic", {
   accent: text("accent").notNull(),
   /** active | next | achieved. Defaulted so existing rows stay where they are. */
   status: text("status").notNull().default("active"),
+  /** construction | maintaining | fundamental — sets a new task's default
+   *  priority. Defaulted to maintaining (medium), the priority every task
+   *  started at before types existed. */
+  type: text("type").notNull().default("maintaining"),
   coinGoalAlbumId: text("coin_goal_album_id").references(() => album.id),
   createdAt: text("created_at").notNull(),
 });
