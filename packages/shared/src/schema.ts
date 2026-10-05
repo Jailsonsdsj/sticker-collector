@@ -842,6 +842,8 @@ export const backupManifestSchema = z.object({
    * Optional for the same reason as the tables above: old files still restore.
    */
   dayScores: z.array(z.record(z.string(), z.unknown())).default([]),
+  /** Each week's frozen report, for the same reason. */
+  weekReports: z.array(z.record(z.string(), z.unknown())).default([]),
   /** Every image the data references — the irreplaceable half of a backup. */
   imageKeys: z.array(z.string()),
 });

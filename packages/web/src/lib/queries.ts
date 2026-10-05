@@ -11,6 +11,7 @@ import type {
   PuzzleDetail,
   Task,
   Wallet,
+  WeekReport,
 } from "@sticker-collector/shared";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "./api";
@@ -35,6 +36,7 @@ export const keys = {
   puzzle: (id: string) => ["puzzles", "detail", id] as const,
   momentum: ["reports", "momentum"] as const,
   day: (date: LocalDate) => ["reports", "day", date] as const,
+  week: (weekStart: LocalDate) => ["reports", "week", weekStart] as const,
   effort: ["reports", "effort"] as const,
 };
 
@@ -108,6 +110,19 @@ export function useMomentum(enabled = true) {
     queryKey: keys.momentum,
     queryFn: () => api<MomentumReport>("/api/reports/momentum"),
     enabled,
+  });
+}
+
+/**
+ * A week's report — frozen on the server once Sunday 22:00 has passed, so it is
+ * fetched once and never considered stale.
+ */
+export function useWeekReport(weekStart: LocalDate | null) {
+  return useQuery({
+    queryKey: keys.week(weekStart ?? ""),
+    queryFn: () => api<WeekReport>(`/api/reports/week/${weekStart}`),
+    enabled: weekStart !== null,
+    staleTime: Number.POSITIVE_INFINITY,
   });
 }
 

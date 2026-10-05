@@ -365,6 +365,30 @@ export const dayScore = sqliteTable(
   (table) => [primaryKey({ columns: [table.userId, table.date] })],
 );
 
+/**
+ * A week's report, as it stood at Sunday 22:00 the user's time.
+ *
+ * Frozen for the same reason `day_score` is: it is evidence of how the week
+ * went, and a routine edited or deleted afterwards must not rewrite it. The
+ * body is the whole `WeekReport` as JSON — written once, read whole, never
+ * queried into — with names and epic colours copied in so a rename cannot
+ * reach it either. Append-only, enforced by week_report_no_update and
+ * week_report_no_delete.
+ */
+export const weekReport = sqliteTable(
+  "week_report",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id),
+    /** The Monday, in the user's calendar. */
+    weekStart: text("week_start").notNull(),
+    body: text("body").notNull(),
+    generatedAt: text("generated_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.weekStart] })],
+);
+
 // the single source of truth for the wallet. append-only (enforced by the ledger_no_update/ledger_no_delete triggers).
 export const ledger = sqliteTable(
   "ledger",

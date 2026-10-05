@@ -155,10 +155,34 @@ function formatterFor(timeZone: string): Intl.DateTimeFormat {
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
     });
     formatters.set(timeZone, formatter);
   }
   return formatter;
+}
+
+/**
+ * The civil date **and wall-clock minute** an instant falls on, in a timezone.
+ *
+ * For rules stated in local time — "the week's report is generated on Sunday
+ * at 22:00" — without converting a wall-clock time into an instant, which is
+ * the conversion daylight-saving makes ambiguous.
+ */
+export function localClockIn(
+  timeZone: string,
+  instant: Date,
+): { date: LocalDate; minutes: number } {
+  const parts = formatterFor(timeZone).formatToParts(instant);
+  const at = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  // `h23` still prints midnight as "24" in some engines; it is minute zero.
+  const hour = Number(at("hour")) % 24;
+  return {
+    date: `${at("year")}-${at("month")}-${at("day")}`,
+    minutes: hour * 60 + Number(at("minute")),
+  };
 }
 
 /** "Today" for the user. Resolved from their timezone, never from the server's. */

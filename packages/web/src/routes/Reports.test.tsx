@@ -298,3 +298,24 @@ describe("reviewing a day from the calendar", () => {
     expect(within(dialog).getByText("25")).toBeInTheDocument();
   });
 });
+
+describe("a week's report, from its R cell", () => {
+  it("opens the whole week's report, Monday first, even for a row that starts mid-week", async () => {
+    // July 2026 starts on a Wednesday, so the calendar's first row shows only
+    // 1–5 July — but its report is of the week that began on Monday 29 June.
+    const base = fetchMock.getMockImplementation() as (url: string) => Promise<Response>;
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.startsWith("/api/reports/week/")) {
+        return json({ weekStart: "2026-06-29", generatedAt: "x", routines: [], others: [] });
+      }
+      return base(url);
+    });
+    await open();
+
+    const [first] = screen.getAllByRole("button", { name: /open the week's report/i });
+    (first as HTMLElement).click();
+
+    expect(await screen.findByText("Nothing else this week.")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith("/api/reports/week/2026-06-29", expect.anything());
+  });
+});

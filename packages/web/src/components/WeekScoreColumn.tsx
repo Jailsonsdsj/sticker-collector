@@ -3,6 +3,12 @@ import { scoreBand } from "@sticker-collector/shared";
 export interface WeekScoreColumnProps {
   /** One entry per week row of the calendar beside it, top to bottom. */
   scores: readonly (number | null)[];
+  /**
+   * Opens a week's report. A row offers it only once `ready[index]` is true —
+   * after that week's Sunday 22:00, when the report is made.
+   */
+  onSelect?: (index: number) => void;
+  ready?: readonly boolean[];
 }
 
 /** The three bands, as the tokens that draw them. */
@@ -28,7 +34,7 @@ const BAND_COLOUR: Record<string, string> = {
  * given the same `gap-1`. Measured in a browser rather than assumed: the two
  * are checked to land on the same pixel rows.
  */
-export function WeekScoreColumn({ scores }: WeekScoreColumnProps) {
+export function WeekScoreColumn({ scores, onSelect, ready }: WeekScoreColumnProps) {
   return (
     // `w-7` rather than a square: the cell's height comes from the calendar row
     // it sits against, so its width is the only thing left to choose.
@@ -51,6 +57,7 @@ export function WeekScoreColumn({ scores }: WeekScoreColumnProps) {
             // biome-ignore lint/suspicious/noArrayIndexKey: see above
             key={index}
             score={score}
+            onSelect={onSelect && ready?.[index] ? () => onSelect(index) : undefined}
           />
         ))}
       </ul>
@@ -65,11 +72,32 @@ export function WeekScoreColumn({ scores }: WeekScoreColumnProps) {
  * future, or one that held no scheduled work — neither is a zero, and printing
  * one would say the user failed a week that never asked anything of them.
  */
-function ScoreCell({ score }: { score: number | null }) {
+function ScoreCell({ score, onSelect }: { score: number | null; onSelect?: () => void }) {
   const shape = "flex flex-1 items-center justify-center rounded-md font-numeric text-2xs";
 
   if (score === null) {
     return <li data-score="none" className={shape} />;
+  }
+
+  const look = { background: BAND_COLOUR[scoreBand(score)] };
+
+  // Once the week's report has been made, the score opens it — the number is
+  // the summary, and the report is what it summarises.
+  if (onSelect) {
+    return (
+      <li data-score={score} data-band={scoreBand(score)} className="flex flex-1">
+        <button
+          type="button"
+          title={`Week score ${score} — open the week's report`}
+          aria-label={`Week score ${score} out of 100. Open the week's report`}
+          onClick={onSelect}
+          className={`${shape} w-full cursor-pointer font-bold text-ink outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan`}
+          style={look}
+        >
+          {score}
+        </button>
+      </li>
+    );
   }
 
   return (
@@ -79,7 +107,7 @@ function ScoreCell({ score }: { score: number | null }) {
       title={`Week score ${score}`}
       aria-label={`Week score ${score} out of 100`}
       className={`${shape} font-bold text-ink`}
-      style={{ background: BAND_COLOUR[scoreBand(score)] }}
+      style={look}
     >
       {score}
     </li>

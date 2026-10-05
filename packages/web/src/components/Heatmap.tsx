@@ -13,6 +13,10 @@ export interface HeatmapProps {
   today: LocalDate;
   /** Opens that day's review. Absent leaves the cells inert pictures. */
   onSelectDay?: (date: LocalDate) => void;
+  /** Opens the report of the week starting on this Monday. */
+  onSelectWeek?: (monday: LocalDate) => void;
+  /** Whether that week's report has been made yet (Sunday 22:00, the user's time). */
+  isWeekReady?: (monday: LocalDate) => boolean;
 }
 
 /**
@@ -74,7 +78,7 @@ const LEVEL_INK: Record<string, string> = {
 /** One square in the grid: a day, or a blank at either end of the month. */
 type Cell = { key: string; date: LocalDate | null; side?: "lead" | "tail" };
 
-export function Heatmap({ days, today, onSelectDay }: HeatmapProps) {
+export function Heatmap({ days, today, onSelectDay, onSelectWeek, isWeekReady }: HeatmapProps) {
   // Opens on today's month, which is the one the user is living in — not on the
   // oldest month in a year of history.
   const [month, setMonth] = useState(() => monthOf(today));
@@ -122,7 +126,7 @@ export function Heatmap({ days, today, onSelectDay }: HeatmapProps) {
    * — the same week would read differently depending on which month you were
    * looking at.
    */
-  const weeks: { key: string; cells: Cell[]; score: number | null }[] = [];
+  const weeks: { key: string; cells: Cell[]; score: number | null; monday: LocalDate }[] = [];
   {
     const cells: Cell[] = [];
     for (let i = 0; i < lead; i++) {
@@ -141,7 +145,15 @@ export function Heatmap({ days, today, onSelectDay }: HeatmapProps) {
       const days = row
         .map((cell) => (cell.date ? tally.get(cell.date) : undefined))
         .filter((day): day is DayTally => day !== undefined);
-      weeks.push({ key: row[0]?.key ?? String(i), cells: row, score: weekScore(days, today) });
+      // The row's own Monday, even when the row starts with blanks from the
+      // month before: the report is of the whole week, not of the days shown.
+      const first = row.find((cell) => cell.date !== null)?.date ?? start;
+      weeks.push({
+        key: row[0]?.key ?? String(i),
+        cells: row,
+        score: weekScore(days, today),
+        monday: addDays(first, -weekdayOf(first)),
+      });
     }
   }
 
@@ -235,7 +247,13 @@ export function Heatmap({ days, today, onSelectDay }: HeatmapProps) {
           )}
         </div>
 
-        <WeekScoreColumn scores={weeks.map((week) => week.score)} />
+        <WeekScoreColumn
+          scores={weeks.map((week) => week.score)}
+          ready={weeks.map((week) => isWeekReady?.(week.monday) ?? false)}
+          onSelect={
+            onSelectWeek ? (index) => onSelectWeek(weeks[index]?.monday ?? start) : undefined
+          }
+        />
       </div>
 
       <div className="flex items-center gap-2 font-body text-2xs text-ink-muted">

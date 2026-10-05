@@ -45,6 +45,13 @@ day_score(
   frozen_at
 )
 
+-- a week's report, built once after Sunday 22:00 (user's time). append-only (week_report_no_update/no_delete).
+week_report(
+  user_id, week_start,                   -- PK (user_id, week_start); week_start is the Monday
+  body,                                  -- the whole WeekReport as JSON, names copied in
+  generated_at
+)
+
 -- the single source of truth for the wallet. append-only.
 ledger(
   id, user_id,

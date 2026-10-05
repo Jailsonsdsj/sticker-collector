@@ -21,6 +21,7 @@ import {
   subtask,
   task,
   user,
+  weekReport,
 } from "../db/schema";
 import { selectIn } from "../lib/selectIn";
 import { idempotency } from "../middleware/idempotency";
@@ -103,6 +104,7 @@ backupRoutes.get("/manifest", async (c) => {
 
   const entries = await database.select().from(ledger).where(eq(ledger.userId, userId));
   const dayScores = await database.select().from(dayScore).where(eq(dayScore.userId, userId));
+  const weekReports = await database.select().from(weekReport).where(eq(weekReport.userId, userId));
 
   // Covers and stickers alike. Deduplicated: a derived edition shares keys with
   // its source, and the client fetches one copy of each.
@@ -135,6 +137,7 @@ backupRoutes.get("/manifest", async (c) => {
     routineSlots,
     subtasks,
     dayScores,
+    weekReports,
     imageKeys,
   };
   return c.json(body);
@@ -262,6 +265,7 @@ backupRoutes.post("/restore", idempotency, async (c) => {
   }));
   // Keyed by (user, date) with no id of its own: only the owner is rewritten.
   const dayScores = manifest.dayScores.map((row) => ({ ...row, userId }));
+  const weekReports = manifest.weekReports.map((row) => ({ ...row, userId }));
   const entries = manifest.ledger.map((row) => ({
     ...row,
     id: idFor(row.id),
@@ -290,6 +294,7 @@ backupRoutes.post("/restore", idempotency, async (c) => {
     ...chunkFor(puzzlePieces).map((rows) => database.insert(puzzlePiece).values(rows as never)),
     ...chunkFor(entries).map((rows) => database.insert(ledger).values(rows as never)),
     ...chunkFor(dayScores).map((rows) => database.insert(dayScore).values(rows as never)),
+    ...chunkFor(weekReports).map((rows) => database.insert(weekReport).values(rows as never)),
   ];
 
   if (statements.length > 0) {
