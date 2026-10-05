@@ -50,23 +50,6 @@ test("its visible box is a square, not a sliver", async ({ page }) => {
   expect(Math.abs(box.width - box.height)).toBeLessThanOrEqual(1);
 });
 
-test("weekly grid cells still stretch to fill their column", async ({ page }) => {
-  // The grids are why `w-full` was there at all. Fixing the home screen must
-  // not turn their wide cells back into small squares floating in a column.
-  await login(page);
-  await page.goto("/week");
-  // The Week tab opens on the agenda now, which has no checkboxes — the wide
-  // cells this guards live one tab across.
-  await page.getByRole("tab", { name: "Tick off" }).click();
-
-  const cell = page.getByRole("checkbox").first();
-  const label = await size(cell.locator("xpath=.."));
-  const visible = await size(cell.locator("xpath=../span"));
-
-  expect(visible.width).toBeCloseTo(label.width, 0);
-  expect(visible.width).toBeGreaterThan(visible.height);
-});
-
 test("settings is an icon in the wallet, and still big enough to hit", async ({ page }) => {
   // It moved out of the header and into the wallet's corner, above the hours
   // line. An icon is smaller than the words it replaced, so the 44px rule

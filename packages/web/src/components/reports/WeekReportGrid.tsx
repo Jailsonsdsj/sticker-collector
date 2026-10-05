@@ -31,7 +31,7 @@ export function WeekReportGrid({ routines }: { routines: readonly WeekReportRout
   }
 
   return (
-    <WeekGridShell today={null} rows={routines.length}>
+    <WeekGridShell>
       {routines.map((routine) => (
         <Row key={routine.taskId} routine={routine} />
       ))}

@@ -151,13 +151,9 @@ Completing anything moves it to *Completed today* immediately, and undoing
 inside the undo window moves it back. "For today" therefore counts what is
 left, not what was scheduled.
 
-**The weekly grid**
+**The Week tab**
 
-Routine maintenance does not happen through the task form. It happens on a single screen: tasks as rows, the seven weekdays as columns, a checkbox in every cell. The user sees the whole week at once and toggles cells. Creating a Mon–Fri habit is five taps, not five forms.
-
-The screen has three views: **Agenda**, **Tick off** and **Schedule**. Each row wears its epic's accent on its leading edge, the same colour the home screen gives it, and titles wrap rather than truncate: the label column is narrow, and a cut-off title routinely hid the word that told two routines apart.
-
-**Agenda is the default** — "what am I meant to be doing now" is the question this tab is opened with, day to day. *Tick off* is the checkbox week, and it stays: the agenda can only show a routine that has hours, and every routine created before slots existed has none, so removing it would strand them. *Schedule* is where five taps make a Mon–Fri habit; that flow is now six taps, one to reach it.
+The Week tab **is the agenda** — "what am I meant to be doing now" is the question it is opened with. It used to have two more views, *Tick off* (a checkbox week) and *Schedule* (a weekday editor); neither was used, and both were removed. A routine's weekdays are set in its own form, and a run is ticked from the task list or from a block's sheet on the agenda.
 
 **The agenda** *(W8-03)*
 
@@ -168,7 +164,7 @@ The screen has three views: **Agenda**, **Tick off** and **Schedule**. Each row 
 - The grid **opens scrolled** to now, or to the day's first block when the shown day is not today. Fifteen rows holding three blocks is otherwise a page of empty morning.
 - **Now** is a line drawn inside its own hour row (rows are content-sized, so a fraction of the whole grid drifts), carrying the current time as a label, and the block containing it gets a ring. All of it moves on a minute tick — the one thing on this screen that is wrong the moment it stops moving.
 - **The hour reads in quarters.** An hour rule alone left 14:30 looking like "a bit past 14:00": there was nothing between the labels to measure against and no digits anywhere. A tick every 15 minutes gives the line something to sit against, and the label on the line says the rest. The hour rows carry **no row gap** — a gap sits between tracks and belongs to no hour, so it made an hour 48px on screen while a position inside it resolved against the 44px track, putting every reading at 44/48 of where it belonged.
-- Tapping a block **opens that task**, for the day the block sits on — Done, Start, Edit and Delete, the same sheet the task list uses. It used to complete outright, which made the commonest gesture on the screen the destructive one and left no way to reach a task's own words, its form or its delete from the view where you are looking at your day. One-tap ticking still exists, on *Tick off*, which is what that tab is for.
+- Tapping a block **opens that task**, for the day the block sits on — Done, Start, Edit and Delete, the same sheet the task list uses. It used to complete outright, which made the commonest gesture on the screen the destructive one and left no way to reach a task's own words, its form or its delete from the view where you are looking at your day.
 - Completing from the sheet goes through the **same undo queue** as everywhere else, keyed by the block's own date — the agenda shows seven of a routine's days at once, so the day tapped is the day ticked. A completed block gets a wash of the coin colour plus a struck-through title. A wash, not a fill: the name has to stay readable, which is the whole point of showing names.
 - A block on a **day that has not arrived** still opens — reading, editing and deleting are all worth doing ahead — but the sheet withholds **Done** and **Start**: `canComplete` refuses the future (W8-05), and *In progress* takes a routine through today's occurrence only.
 

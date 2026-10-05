@@ -1,6 +1,5 @@
 import type { Task } from "@sticker-collector/shared";
 import {
-  maskFromDays,
   WEEKDAYS_MASK_ALL,
   WEEKDAYS_MASK_WEEKDAYS,
   type Weekday,
@@ -17,10 +16,8 @@ import { today } from "../lib/timezone";
 import { Week } from "./Week";
 
 /**
- * The two views are separate because one gesture cannot mean both "run this
- * routine on Tuesdays" and "I did it on Tuesday". These tests care that the
- * switch is real and that Schedule stays the default — T-12's five taps depend
- * on it.
+ * The Week tab is the agenda. Ticking a run from a block's sheet still goes
+ * through the undo queue, like the home screen.
  */
 
 const ROUTINES: Task[] = [
@@ -113,93 +110,16 @@ afterEach(() => {
 });
 
 const renderScreen = () => render(<Week />, { wrapper });
-const scheduleCell = (day: string) => screen.getByRole("checkbox", { name: `Stretch — ${day}` });
 
-describe("the two views", () => {
-  it('opens on Agenda — "what am I meant to be doing now" is the question this tab is opened with', async () => {
+describe("the screen", () => {
+  it("is the agenda, with no views to switch between", async () => {
+    // Tick off and Schedule were removed: unused, and a routine's weekdays live
+    // in its own form.
     renderScreen();
 
-    await waitFor(() =>
-      expect(screen.getByRole("tab", { name: "Agenda" })).toHaveAttribute("aria-selected", "true"),
-    );
-    // Only one grid is mounted at a time, so Schedule's help text is not merely
-    // hidden — it is not there until you switch.
-    expect(screen.queryByText(/add or remove that weekday/i)).not.toBeInTheDocument();
-  });
-
-  it("switches to Tick off, and only one grid is on screen at a time", async () => {
-    const user = userEvent.setup();
-    renderScreen();
-    await screen.findByRole("tab", { name: "Agenda" });
-
-    await user.click(screen.getByRole("tab", { name: "Tick off" }));
-
-    expect(screen.getByText(/tap a cell to complete/i)).toBeInTheDocument();
-    expect(screen.queryByText(/add or remove that weekday/i)).not.toBeInTheDocument();
-  });
-
-  it("lists only routines — a one-off has no weekly schedule", async () => {
-    const user = userEvent.setup();
-    renderScreen();
-    await user.click(await screen.findByRole("tab", { name: "Tick off" }));
-
-    await waitFor(() => expect(screen.getByText("Stretch")).toBeInTheDocument());
-    expect(screen.queryByText("Buy milk")).not.toBeInTheDocument();
-  });
-});
-
-describe("Schedule still edits the mask", () => {
-  it("patches the task when a cell is tapped", async () => {
-    const user = userEvent.setup();
-    renderScreen();
-
-    // Agenda is the default view now; scheduling lives two tabs across.
-    await user.click(await screen.findByRole("tab", { name: "Schedule" }));
-    await waitFor(() => expect(scheduleCell("Sat")).toBeInTheDocument());
-
-    await user.click(scheduleCell("Sat"));
-
-    await waitFor(() => {
-      const patch = fetchMock.mock.calls.find(([, init]) => init?.method === "PATCH");
-      expect(patch?.[0]).toBe("/api/tasks/t1");
-      expect(JSON.parse(patch?.[1].body as string)).toEqual({
-        weekdays: maskFromDays([0, 1, 2, 3, 4, 5] as Weekday[]),
-      });
-    });
-  });
-});
-
-describe("Tick off goes through the undo queue", () => {
-  it("issues no request when a cell is ticked — it waits out the window", async () => {
-    const user = userEvent.setup();
-    renderScreen();
-    await screen.findByRole("tab", { name: "Agenda" });
-    await user.click(screen.getByRole("tab", { name: "Tick off" }));
-    await screen.findByRole("checkbox", { name: "Stretch — Mon" });
-
-    const before = fetchMock.mock.calls.length;
-    await user.click(screen.getByRole("checkbox", { name: "Stretch — Mon" }));
-
-    // Same rule as the home screen: a misclick must not silently pay coins.
-    expect(onCommit).not.toHaveBeenCalled();
-    expect(fetchMock.mock.calls.length).toBe(before);
-    expect(screen.getByRole("checkbox", { name: "Stretch — Mon" })).toBeChecked();
-  });
-
-  it("untick inside the window cancels rather than re-opening", async () => {
-    const user = userEvent.setup();
-    renderScreen();
-    await screen.findByRole("tab", { name: "Agenda" });
-    await user.click(screen.getByRole("tab", { name: "Tick off" }));
-
-    const cell = () => screen.getByRole("checkbox", { name: "Stretch — Mon" });
-    await screen.findByRole("checkbox", { name: "Stretch — Mon" });
-    await user.click(cell());
-    await user.click(cell());
-
-    expect(cell()).not.toBeChecked();
-    expect(onCommit).not.toHaveBeenCalled();
-    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("uncomplete"))).toBe(false);
+    expect(await screen.findByText(/tap a block to open it/i)).toBeInTheDocument();
+    expect(screen.queryByRole("tab")).not.toBeInTheDocument();
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
 });
 
