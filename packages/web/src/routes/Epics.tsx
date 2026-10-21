@@ -186,6 +186,8 @@ export function Epics() {
                       epic={epic}
                       tasks={tasksByEpic.get(epic.id) ?? []}
                       expanded={expanded === epic.id}
+                      today={localToday}
+                      timeZone={appTimeZone()}
                       onToggleExpand={() => setExpanded((id) => (id === epic.id ? null : epic.id))}
                       onAddTask={() => setAddingTo({ epicId: epic.id, nonce: Date.now() })}
                       onCompleteTask={(task) =>

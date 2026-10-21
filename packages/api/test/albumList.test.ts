@@ -187,6 +187,23 @@ describe("status", () => {
     expect((await list("?sort=title")).length).toBe(2);
   });
 
+  it("lists finished albums most recently finished first, not alphabetically", async () => {
+    const finish = async (title: string, at: string) => {
+      const { album, stickers } = await seal({ title, unlockPrice: 0 });
+      await post(`/api/albums/${album.id}/unlock`);
+      for (const s of stickers) await grant(s.id);
+      await env.DB.prepare("UPDATE album SET completed_at = ? WHERE id = ?")
+        .bind(at, album.id)
+        .run();
+      return album.id;
+    };
+    const alpha = await finish("Alpha", "2026-08-01T00:00:00.000Z");
+    const bravo = await finish("Bravo", "2026-09-01T00:00:00.000Z");
+
+    expect((await list("?status=completed")).map((a) => a.id)).toEqual([bravo, alpha]);
+    expect((await list("?sort=progress")).map((a) => a.id)).toEqual([bravo, alpha]);
+  });
+
   it("rejects an unknown status or sort rather than ignoring it", async () => {
     expect((await get("/api/albums?status=halfway")).status).toBe(400);
     expect((await get("/api/albums?sort=vibes")).status).toBe(400);

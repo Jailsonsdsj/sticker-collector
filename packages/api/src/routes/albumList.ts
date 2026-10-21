@@ -161,15 +161,24 @@ function comparator(sort: "status" | "title" | "progress" | "created") {
       case "progress":
         // Fullest first, and an album one slot from done outranks a fuller
         // percentage on a bigger album only if its percentage is higher.
-        return b.percent - a.percent || a.title.localeCompare(b.title);
+        return b.percent - a.percent || byCompleted(a, b) || a.title.localeCompare(b.title);
       case "created":
         return b.createdAt.localeCompare(a.createdAt);
       case "status":
         return (
           STATUS_ORDER[a.status] - STATUS_ORDER[b.status] ||
+          // Completed albums all sit at 100%, so without this they fell back to
+          // alphabetical. Most recently finished first; a no-op for anything
+          // unfinished, whose `completed_at` is null on both sides.
+          byCompleted(a, b) ||
           b.percent - a.percent ||
           a.title.localeCompare(b.title)
         );
     }
   };
+}
+
+/** Most recently finished first; an unstamped album sorts after every stamp. */
+function byCompleted(a: AlbumSummary, b: AlbumSummary): number {
+  return (b.completedAt ?? "").localeCompare(a.completedAt ?? "");
 }

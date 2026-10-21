@@ -1,7 +1,10 @@
-import type { Epic, EpicAccent, Task } from "@sticker-collector/shared";
+import type { Epic, EpicAccent, LocalDate, Task } from "@sticker-collector/shared";
 import { EPIC_TYPE_INITIAL, EPIC_TYPE_LABEL } from "@sticker-collector/shared";
 import type { CSSProperties } from "react";
+import { taskStatus } from "../lib/taskStatus";
+import { appTimeZone, today as appToday } from "../lib/timezone";
 import { SectionHeading } from "./SectionHeading";
+import { TaskStatusTag } from "./TaskStatusTag";
 import { Badge, Button, Checkbox, ProgressBar } from "./ui";
 import { cx } from "./ui/cx";
 
@@ -61,6 +64,9 @@ export interface EpicCardProps {
   onAddTask: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  /** The day and zone each task's status tag is read in. Default: the app's. */
+  today?: LocalDate;
+  timeZone?: string;
 }
 
 export function EpicCard({
@@ -76,6 +82,8 @@ export function EpicCard({
   onAddTask,
   onEdit,
   onDelete,
+  today = appToday(),
+  timeZone = appTimeZone(),
 }: EpicCardProps) {
   const percent = epic.oneOffTotal === 0 ? 0 : (epic.oneOffDone / epic.oneOffTotal) * 100;
 
@@ -155,6 +163,8 @@ export function EpicCard({
           <span className="min-w-0 flex-1 font-body text-md break-words">{task.title}</span>
         )}
 
+        <TaskStatusTag status={taskStatus(task, today, timeZone)} />
+
         <span className="font-numeric text-2xs font-bold text-coin">+{task.rewardCoins}</span>
       </li>
     );
@@ -193,6 +203,22 @@ export function EpicCard({
         value={percent}
         aria-label={`${epic.title} progress`}
       />
+
+      {/* Under the bar rather than after the list: a long epic would otherwise
+          put its own controls a scroll away from the card they act on. */}
+      {expanded && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button size="sm" tone="violet" onClick={onAddTask}>
+            ＋ Add task
+          </Button>
+          <Button size="sm" variant="outline" tone="neutral" onClick={onEdit}>
+            Edit
+          </Button>
+          <Button size="sm" variant="outline" tone="magenta" onClick={onDelete}>
+            Delete
+          </Button>
+        </div>
+      )}
 
       {/* Collapsed, the description is a hint at what the epic is for; the whole
           thing only appears once the card is open, so a long one cannot push
@@ -235,18 +261,6 @@ export function EpicCard({
               )}
             </>
           )}
-
-          <div className="mt-2 flex flex-wrap gap-2">
-            <Button size="sm" tone="violet" onClick={onAddTask}>
-              ＋ Add task
-            </Button>
-            <Button size="sm" variant="outline" tone="neutral" onClick={onEdit}>
-              Edit
-            </Button>
-            <Button size="sm" variant="outline" tone="magenta" onClick={onDelete}>
-              Delete
-            </Button>
-          </div>
         </div>
       )}
     </article>
