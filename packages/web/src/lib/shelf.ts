@@ -151,6 +151,11 @@ function createdOf(item: ShelfItem): string {
   return item.kind === "album" ? item.album.createdAt : item.puzzle.createdAt;
 }
 
+/** When it was finished, or `""` — which sorts after every stamp, newest first. */
+function completedOf(item: ShelfItem): string {
+  return (item.kind === "album" ? item.album.completedAt : item.puzzle.completedAt) ?? "";
+}
+
 /** How full, 0–100. A puzzle's is its pieces; an album already carries one. */
 function percentOf(item: ShelfItem): number {
   if (item.kind === "album") return item.album.percent;
@@ -167,12 +172,20 @@ function comparator(sort: ShelfSort) {
       case "title":
         return titleOf(a).localeCompare(titleOf(b));
       case "progress":
-        return percentOf(b) - percentOf(a) || titleOf(a).localeCompare(titleOf(b));
+        return (
+          percentOf(b) - percentOf(a) ||
+          completedOf(b).localeCompare(completedOf(a)) ||
+          titleOf(a).localeCompare(titleOf(b))
+        );
       case "created":
         return createdOf(b).localeCompare(createdOf(a));
       case "status":
         return (
           STATUS_ORDER[statusOf(a)] - STATUS_ORDER[statusOf(b)] ||
+          // Finished things are all at 100%, so without this they fell back to
+          // alphabetical. Most recently finished first; a no-op for anything
+          // unfinished, whose stamp is empty on both sides.
+          completedOf(b).localeCompare(completedOf(a)) ||
           percentOf(b) - percentOf(a) ||
           titleOf(a).localeCompare(titleOf(b))
         );

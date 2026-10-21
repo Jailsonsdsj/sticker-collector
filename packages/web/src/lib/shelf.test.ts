@@ -223,6 +223,57 @@ describe("the order, which has to match the server's", () => {
     expect(ids(items)).toEqual(["a", "b"]);
   });
 
+  it("puts the most recently finished first, albums and puzzles together", () => {
+    // Everything finished is at 100%, so this used to fall through to the title.
+    const items = shelf(
+      [
+        album({
+          id: "a-aug",
+          title: "Alpha",
+          status: "completed",
+          percent: 100,
+          completedAt: "2026-08-01T00:00:00Z",
+        }),
+        album({
+          id: "z-oct",
+          title: "Zulu",
+          status: "completed",
+          percent: 100,
+          completedAt: "2026-10-01T00:00:00Z",
+        }),
+      ],
+      [puzzle({ id: "sep", ownedCount: 6, completedAt: "2026-09-01T00:00:00Z" })],
+      "done",
+      "status",
+    );
+    expect(ids(items)).toEqual(["z-oct", "sep", "a-aug"]);
+  });
+
+  it("does the same when sorted by progress, where they all tie at 100%", () => {
+    const items = shelf(
+      [
+        album({
+          id: "a-aug",
+          title: "Alpha",
+          status: "completed",
+          percent: 100,
+          completedAt: "2026-08-01T00:00:00Z",
+        }),
+        album({
+          id: "z-oct",
+          title: "Zulu",
+          status: "completed",
+          percent: 100,
+          completedAt: "2026-10-01T00:00:00Z",
+        }),
+      ],
+      [],
+      "done",
+      "progress",
+    );
+    expect(ids(items)).toEqual(["z-oct", "a-aug"]);
+  });
+
   it("gives an empty puzzle 0% rather than dividing by zero", () => {
     // `rows * cols` cannot be zero — a CHECK forbids it — but the shelf should
     // not be the thing that discovers otherwise.

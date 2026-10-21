@@ -125,6 +125,16 @@ describe("actions", () => {
     await user.click(screen.getByRole("button", { name: "Delete" }));
     expect(onDelete).toHaveBeenCalledOnce();
   });
+
+  it("puts them under the progress bar, ahead of the task list", () => {
+    setup({ expanded: true });
+    const bar = screen.getByRole("progressbar");
+    const add = screen.getByRole("button", { name: /add task/i });
+    const list = screen.getByText(/nothing in here yet/i);
+
+    expect(bar.compareDocumentPosition(add) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(add.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
 });
 
 describe("finished subtasks", () => {
@@ -238,11 +248,15 @@ describe("the order tasks read in", () => {
       />,
     );
 
-  /** Row text is "↻Title+30" — the marker and the reward are not the order. */
+  /** Row text is "↻TitleTo do+30" — the marker, status tag and reward are not the order. */
   const titles = () =>
-    screen
-      .getAllByRole("listitem")
-      .map((row) => (row.textContent ?? "").replace(/^↻/, "").replace(/\+\d+$/, ""));
+    screen.getAllByRole("listitem").map((row) => {
+      const tag = row.querySelector("[data-task-status]")?.textContent ?? "";
+      return (row.textContent ?? "")
+        .replace(/^↻/, "")
+        .replace(/\+\d+$/, "")
+        .replace(tag, "");
+    });
 
   it("puts one-offs first and routines after", () => {
     // A one-off is what the epic finishes and the only thing its progress bar
@@ -351,5 +365,41 @@ describe("its type", () => {
     setup({ epic: epic({ type: "fundamental" }) });
 
     expect(screen.getByTitle("Fundamental")).toHaveTextContent("F");
+  });
+});
+
+describe("task status", () => {
+  it("tags each task with its status beside the title", () => {
+    setup({
+      expanded: true,
+      today: "2026-10-21",
+      timeZone: "UTC",
+      tasks: [
+        task({ id: "a", title: "Untouched" }),
+        task({ id: "b", title: "Started", startedAt: "2026-10-20T09:00:00Z" }),
+        task({ id: "c", title: "Late", dueAt: "2026-10-19T09:00:00Z" }),
+      ],
+    });
+
+    const tagOf = (title: string) =>
+      screen.getByText(title).closest("li")?.querySelector("[data-task-status]");
+
+    expect(tagOf("Untouched")).toHaveTextContent("To do");
+    expect(tagOf("Started")).toHaveTextContent("In progress");
+    expect(tagOf("Late")).toHaveTextContent("Missed");
+  });
+
+  it("tags a finished task as done once its section is open", () => {
+    setup({
+      expanded: true,
+      today: "2026-10-21",
+      timeZone: "UTC",
+      doneOpen: true,
+      onToggleDone: vi.fn(),
+      tasks: [task({ id: "d", title: "Shipped", lastCompletedOn: "2026-10-20" })],
+    });
+
+    const row = screen.getByText("Shipped").closest("li");
+    expect(row?.querySelector("[data-task-status]")).toHaveTextContent("Done");
   });
 });
