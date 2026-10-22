@@ -5,24 +5,15 @@ import {
   WEEKDAYS,
   type Weekday,
 } from "@sticker-collector/shared";
-import type { TaskFormAction, TaskFormState } from "../../lib/taskForm";
+import {
+  TASK_SECTION_LABEL,
+  TASK_SECTIONS,
+  type TaskFormAction,
+  type TaskFormState,
+  type TaskSection,
+} from "../../lib/taskForm";
 import { Chip, Field, Input, Tabs } from "../ui";
 import { WEEKDAY_INDICES } from "../weekGrid/WeekGridShell";
-
-// One-off first, and it is also `initialState`'s default — the first tab being
-// the selected one is the whole point of the order.
-/**
- * The two lists an undated one-off can land in, named as the home screen names
- * them.
- *
- * **General first, and selected**: capture is the common case, and the first
- * tab being the selected one is what makes a two-option switch readable at a
- * glance. Committing a new task to today is the deliberate half.
- */
-const SECTIONS = [
-  { value: "general" as const, label: "General", tone: "cyan" as const },
-  { value: "today" as const, label: "For today", tone: "lime" as const },
-];
 
 const TYPES = [
   { value: "oneoff" as const, label: "· One-off", tone: "cyan" as const },
@@ -104,7 +95,7 @@ export function ScheduleFields({
         </div>
       )}
 
-      {/* Which list this lands in, said as the two lists themselves.
+      {/* Which list this lands in, said as the lists themselves.
           A checkbox called "Do this today" asked the user to work out where an
           unticked box put the task; the sections are named on the screen it
           came from, so name them here too.
@@ -115,14 +106,22 @@ export function ScheduleFields({
           list would be a row the server refuses to tick. Giving a date to a
           task takes the choice away with it. */}
       {state.type === "oneoff" && !state.dueDate && (
-        <Field label="Section">
-          <Tabs
-            items={SECTIONS}
-            value={state.pinnedToday ? "today" : "general"}
-            onChange={(value) => dispatch({ kind: "pinToday", value: value === "today" })}
-            tone="lime"
-            label="Section"
-          />
+        // A dropdown rather than tabs: three home sections no longer fit
+        // side by side on a phone. General stays the default — capture is the
+        // common case.
+        <Field label="Section" htmlFor="task-section">
+          <select
+            id="task-section"
+            value={state.section}
+            onChange={(e) => dispatch({ kind: "section", value: e.target.value as TaskSection })}
+            className="w-full rounded-lg border border-border bg-panel px-3 py-2 font-body text-sm text-ink"
+          >
+            {TASK_SECTIONS.map((section) => (
+              <option key={section} value={section}>
+                {TASK_SECTION_LABEL[section]}
+              </option>
+            ))}
+          </select>
         </Field>
       )}
     </>

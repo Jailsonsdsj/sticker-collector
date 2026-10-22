@@ -431,21 +431,18 @@ describe("the description field", () => {
 });
 
 describe("which section a new one-off lands in", () => {
-  const sections = () => screen.getByRole("tablist", { name: "Section" });
+  const section = () => screen.getByRole("combobox", { name: "Section" });
 
-  it("offers the two lists by name, General first and selected", async () => {
-    // Capture is the common case, and the first tab being the selected one is
-    // what makes a two-option switch readable at a glance.
+  it("offers every section a task can be put in, General first and selected", () => {
+    // Capture is the common case, so a new task lands in General unless told
+    // otherwise.
     setup();
 
-    const labels = within(sections())
-      .getAllByRole("tab")
-      .map((tab) => tab.textContent);
-    expect(labels).toEqual(["General", "For today"]);
-    expect(within(sections()).getByRole("tab", { name: "General" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
+    const labels = within(section())
+      .getAllByRole("option")
+      .map((option) => option.textContent);
+    expect(labels).toEqual(["General", "For today", "In progress"]);
+    expect(section()).toHaveValue("general");
   });
 
   it("pins to today when For today is chosen", async () => {
@@ -453,22 +450,37 @@ describe("which section a new one-off lands in", () => {
     const { onSubmit, save } = setup();
 
     await u.type(screen.getByLabelText(/title/i), "Water the plants");
-    await u.click(within(sections()).getByRole("tab", { name: "For today" }));
+    await u.selectOptions(section(), "For today");
     await u.click(save());
 
     expect(onSubmit).toHaveBeenCalledWith(
-      expect.objectContaining({ pinnedOn: expect.any(String) }),
+      expect.objectContaining({ pinnedOn: expect.any(String), startedAt: null }),
     );
   });
 
-  it("sends no pin for General", async () => {
+  it("starts the task when In progress is chosen", async () => {
+    const u = userEvent.setup();
+    const { onSubmit, save } = setup();
+
+    await u.type(screen.getByLabelText(/title/i), "Water the plants");
+    await u.selectOptions(section(), "In progress");
+    await u.click(save());
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({ pinnedOn: null, startedAt: expect.any(String) }),
+    );
+  });
+
+  it("sends neither a pin nor a start for General", async () => {
     const u = userEvent.setup();
     const { onSubmit, save } = setup();
 
     await u.type(screen.getByLabelText(/title/i), "Water the plants");
     await u.click(save());
 
-    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ pinnedOn: null }));
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({ pinnedOn: null, startedAt: null }),
+    );
   });
 
   it("goes away once the one-off has a date", async () => {
@@ -480,7 +492,7 @@ describe("which section a new one-off lands in", () => {
     // Not a UI preference: the API validates a fresh completion against the
     // schedule, and an undated one-off is its single exception. A dated task in
     // today's list is a row the server refuses to tick.
-    expect(screen.queryByRole("tablist", { name: "Section" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Section" })).not.toBeInTheDocument();
   });
 
   it("is not offered for a routine, which follows its own days", async () => {
@@ -489,7 +501,7 @@ describe("which section a new one-off lands in", () => {
 
     await u.click(screen.getByRole("tab", { name: "↻ Routine" }));
 
-    expect(screen.queryByRole("tablist", { name: "Section" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Section" })).not.toBeInTheDocument();
   });
 });
 

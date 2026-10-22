@@ -57,8 +57,11 @@ export interface TaskFormState {
   /** Set the moment the user edits effort; from then on a slot's length stops
    *  filling it in. */
   effortLocked: boolean;
-  /** "Do this today" — lifts an undated capture into the For today section. */
-  pinnedToday: boolean;
+  /**
+   * Which home section an undated one-off lands in. "today" pins it to today;
+   * "inProgress" starts it. See `TaskSection`.
+   */
+  section: TaskSection;
   /**
    * The steps, as typed.
    *
@@ -80,6 +83,29 @@ export interface TaskFormState {
   epicId: string | null;
 }
 
+/**
+ * The home sections a task can be put in by hand, named as Home names them.
+ *
+ * Each is a pair of stored fields, not a column of its own: General is neither
+ * pinned nor started, For today is pinned to today, In progress is started.
+ * Missed, the routine backlog and Completed are not choices — the calendar and
+ * the ticks decide those.
+ */
+export const TASK_SECTIONS = ["general", "today", "inProgress"] as const;
+export type TaskSection = (typeof TASK_SECTIONS)[number];
+
+export const TASK_SECTION_LABEL: Record<TaskSection, string> = {
+  general: "General",
+  today: "For today",
+  inProgress: "In progress",
+};
+
+/** Which section an existing task sits in. Started wins over pinned, as on Home. */
+export function sectionOf(task: Pick<Task, "pinnedOn" | "startedAt">): TaskSection {
+  if (task.startedAt) return "inProgress";
+  return task.pinnedOn === today() ? "today" : "general";
+}
+
 export type TaskFormAction =
   | { kind: "title" | "description" | "url"; value: string }
   | { kind: "type"; value: TaskType }
@@ -87,7 +113,7 @@ export type TaskFormAction =
   | { kind: "dueDate" | "dueTime"; value: string }
   | { kind: "effort"; value: string }
   | { kind: "reward"; value: string }
-  | { kind: "pinToday"; value: boolean }
+  | { kind: "section"; value: TaskSection }
   | { kind: "slot"; weekday: Weekday; field: "start" | "end"; value: string }
   | { kind: "priority"; value: Priority }
   | {
@@ -143,7 +169,7 @@ export function initialState(
     // slot may still overwrite it.
     effortLocked: false,
     rewardLocked: false,
-    pinnedToday: false,
+    section: "general",
     subtasks: [],
     blockUntilSteps: false,
     // The epic's default when opened from one (`defaultPriorityFor`), else
@@ -204,8 +230,8 @@ export function reduce(state: TaskFormState, action: TaskFormAction): TaskFormSt
         ? { ...state, type: "routine", dueDate: "", dueTime: "" }
         : { ...state, type: "oneoff", weekdays: WEEKDAYS_MASK_NONE };
 
-    case "pinToday":
-      return { ...state, pinnedToday: action.value };
+    case "section":
+      return { ...state, section: action.value };
 
     case "weekday": {
       const weekdays = maskToggleDay(state.weekdays, action.value);
@@ -386,7 +412,11 @@ export function toPayload(state: TaskFormState): CreateTaskInput | null {
         dueAt: toDueAt(state.dueDate, state.dueTime),
         // Only an UNDATED one-off may be pinned: the API validates a fresh
         // completion against the schedule, and that is its single exception.
-        pinnedOn: state.pinnedToday && !state.dueDate ? today() : null,
+        pinnedOn: state.section === "today" && !state.dueDate ? today() : null,
+        // Any one-off may start out started, dated or not — but the choice is
+        // only offered while undated, so it goes with the date like the pin.
+        startedAt:
+          state.section === "inProgress" && !state.dueDate ? new Date().toISOString() : null,
       };
 }
 
@@ -429,7 +459,7 @@ export function stateFromTask(task: Task): TaskFormState {
     rewardLocked: task.rewardCoins !== task.effortMinutes,
     // Pinned yesterday is not pinned today — the date is the whole reason the
     // flag is a date, so a stale pin reads as unpinned rather than as a choice.
-    pinnedToday: task.pinnedOn === today(),
+    section: sectionOf(task),
     slots: Object.fromEntries(
       task.slots.map((slot) => [
         slot.weekday,
@@ -489,9 +519,19 @@ export function toPatch(state: TaskFormState, original: Task): UpdateTask | null
 
   // Pin/unpin, but only where it can mean anything: the completion guard lets
   // an arbitrary "today" through for undated one-offs alone.
-  if (original.type === "oneoff" && !state.dueDate) {
-    const localToday = today();
-    set("pinnedOn", state.pinnedToday ? localToday : null, original.pinnedOn);
+  //
+  // Sent only when the section CHANGED. A task both pinned and started reads as
+  // In progress, and re-sending that as "unpin" on an unrelated edit would
+  // quietly drop the pin it comes back to when stopped.
+  if (original.type === "oneoff" && !state.dueDate && state.section !== sectionOf(original)) {
+    set("pinnedOn", state.section === "today" ? today() : null, original.pinnedOn);
+    set(
+      "startedAt",
+      // Keep the original start if there was one: "since when" is the point of
+      // storing an instant.
+      state.section === "inProgress" ? (original.startedAt ?? new Date().toISOString()) : null,
+      original.startedAt,
+    );
   }
 
   // The task's own type decides which schedule may be sent, not the form's.

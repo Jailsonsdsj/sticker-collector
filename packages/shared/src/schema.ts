@@ -235,6 +235,9 @@ const createOneOffSchema = z.strictObject({
   dueAt: instantSchema.nullish(),
   /** Capture it and do it today, without a second round trip. */
   pinnedOn: localDateSchema.nullish(),
+  /** Capture it already started — straight into In progress. See
+   *  `taskSchema.startedAt`. */
+  startedAt: instantSchema.nullish(),
 });
 
 /**

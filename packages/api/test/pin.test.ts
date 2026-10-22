@@ -184,15 +184,30 @@ describe("starting a task", () => {
     expect((await patch(created.id, { startedAt: "yesterday" })).status).toBe(400);
   });
 
-  it("is not accepted at creation", async () => {
-    // Nothing is in progress the moment it is captured, and `createTaskSchema`
-    // is strict — a field it does not know is a typo, not a feature.
+  it("can be started at creation, for a one-off", async () => {
+    // The task form offers In progress as a section to capture straight into.
+    const response = await create({
+      title: "Buy milk",
+      type: "oneoff",
+      effortMinutes: 15,
+      startedAt: "2026-08-06T09:00:00Z",
+    });
+    expect(response.status).toBe(201);
+    expect(((await response.json()) as { startedAt: string | null }).startedAt).toBe(
+      "2026-08-06T09:00:00Z",
+    );
+  });
+
+  it("is not accepted when creating a routine", async () => {
+    // A routine is a new run every day, so "started" at creation has no day to
+    // belong to. `createTaskSchema` is strict, so the field is a 400.
     expect(
       (
         await create({
-          title: "Buy milk",
-          type: "oneoff",
+          title: "Stretch",
+          type: "routine",
           effortMinutes: 15,
+          weekdays: 31,
           startedAt: "2026-08-06T09:00:00Z",
         })
       ).status,
