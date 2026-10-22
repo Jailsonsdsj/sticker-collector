@@ -21,6 +21,7 @@ import {
   toSlots,
   validate,
 } from "./taskForm";
+import { today } from "./timezone";
 
 const run = (actions: TaskFormAction[], from = initialState()) => actions.reduce(reduce, from);
 
@@ -656,5 +657,53 @@ describe("priority follows the epic's type, as a default only", () => {
 
   it("starts at the given priority when opened from an epic", () => {
     expect(initialState({ epicId: "c", priority: "high" }).priority).toBe("high");
+  });
+});
+
+describe("toPatch — moving a one-off between sections", () => {
+  const oneOff = (over: Partial<Task> = {}) =>
+    existing({ type: "oneoff", weekdays: null, ...over });
+  const move = (task: Task, value: "general" | "today" | "inProgress") =>
+    toPatch(reduce(stateFromTask(task), { kind: "section", value }), task);
+
+  it("reads the section back from the task", () => {
+    expect(stateFromTask(oneOff()).section).toBe("general");
+    expect(stateFromTask(oneOff({ pinnedOn: today() })).section).toBe("today");
+    expect(stateFromTask(oneOff({ startedAt: "2026-10-01T09:00:00Z" })).section).toBe("inProgress");
+    // A pin from another day has expired.
+    expect(stateFromTask(oneOff({ pinnedOn: "2020-01-01" })).section).toBe("general");
+  });
+
+  it("starts a General task moved to In progress", () => {
+    expect(move(oneOff(), "inProgress")).toEqual({ startedAt: expect.any(String) });
+  });
+
+  it("unpins and starts a For today task moved to In progress", () => {
+    expect(move(oneOff({ pinnedOn: today() }), "inProgress")).toEqual({
+      pinnedOn: null,
+      startedAt: expect.any(String),
+    });
+  });
+
+  it("stops and pins an In progress task moved to For today", () => {
+    expect(move(oneOff({ startedAt: "2026-10-01T09:00:00Z" }), "today")).toEqual({
+      pinnedOn: today(),
+      startedAt: null,
+    });
+  });
+
+  it("stops an In progress task moved to General", () => {
+    expect(move(oneOff({ startedAt: "2026-10-01T09:00:00Z" }), "general")).toEqual({
+      startedAt: null,
+    });
+  });
+
+  it("leaves a task that is both pinned and started alone on an unrelated edit", () => {
+    // It reads as In progress; re-sending that as "unpin" would drop the pin it
+    // falls back to once stopped.
+    const task = oneOff({ pinnedOn: today(), startedAt: "2026-10-01T09:00:00Z" });
+    expect(toPatch(reduce(stateFromTask(task), { kind: "title", value: "New" }), task)).toEqual({
+      title: "New",
+    });
   });
 });

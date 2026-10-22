@@ -60,6 +60,8 @@ export function newTaskRow(userId: string, input: CreateTask): TaskInsert {
     dueAt: input.type === "oneoff" ? (input.dueAt ?? null) : null,
     // Only an undated one-off may carry a pin — see `buildTaskPatch`.
     pinnedOn: input.type === "oneoff" && !input.dueAt ? (input.pinnedOn ?? null) : null,
+    // Unlike a pin, any one-off may start out started — see `PATCHABLE`.
+    startedAt: input.type === "oneoff" ? (input.startedAt ?? null) : null,
     blockUntilSteps: input.blockUntilSteps ?? false,
     createdAt: new Date().toISOString(),
     deletedAt: null,
