@@ -32,6 +32,8 @@ export const PATCHABLE = [
   // says nothing about which day it may be completed on, so none of the
   // scheduling rules apply to it.
   "startedAt",
+  // Undated one-offs only — see `buildTaskPatch`.
+  "refining",
   // A discipline the author sets on themselves, so it is editable at any time
   // and on any kind of task — a one-off with a checklist can be gated exactly
   // as a routine can.
@@ -62,6 +64,8 @@ export function newTaskRow(userId: string, input: CreateTask): TaskInsert {
     pinnedOn: input.type === "oneoff" && !input.dueAt ? (input.pinnedOn ?? null) : null,
     // Unlike a pin, any one-off may start out started — see `PATCHABLE`.
     startedAt: input.type === "oneoff" ? (input.startedAt ?? null) : null,
+    // Refine is a hand-picked section like the pin, so the same set may use it.
+    refining: input.type === "oneoff" && !input.dueAt ? (input.refining ?? false) : false,
     blockUntilSteps: input.blockUntilSteps ?? false,
     createdAt: new Date().toISOString(),
     deletedAt: null,
@@ -126,6 +130,15 @@ export function buildTaskPatch(
     }
   }
 
+  // Refine is offered where the pin is, and for the same reason: it is one of
+  // Home's hand-picked sections, and only an undated one-off is placed by hand.
+  if (data.refining === true) {
+    const dated = "dueAt" in data ? data.dueAt != null : current.dueAt != null;
+    if (current.type !== "oneoff" || dated) {
+      return { error: "only an undated one-off can be put in Refine" };
+    }
+  }
+
   const patch: Record<string, unknown> = {};
   for (const field of PATCHABLE) {
     if (field in data && data[field] !== undefined) patch[field] = data[field];
@@ -173,6 +186,7 @@ export function toTask(
     dueAt: row.dueAt,
     pinnedOn: row.pinnedOn,
     startedAt: row.startedAt,
+    refining: row.refining,
     // Ordered by weekday, so the agenda and the form both read Monday-first
     // without either of them sorting.
     slots: [...slots].sort((a, b) => a.weekday - b.weekday),

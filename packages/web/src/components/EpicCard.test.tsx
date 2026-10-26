@@ -35,6 +35,7 @@ const task = (over: Partial<Task> = {}): Task => ({
   dueAt: null,
   pinnedOn: null,
   startedAt: null,
+  refining: false,
   slots: [],
   subtasks: [],
   blockUntilSteps: false,
@@ -272,6 +273,26 @@ describe("the order tasks read in", () => {
     expect(titles()).toEqual(["Ship it", "Write the README", "Daily standup", "Weekly review"]);
   });
 
+  it("puts tasks in Refine last, after the routines", () => {
+    // Refine is not ready to be worked on, so it never sits above work that is.
+    withTasks([
+      task({ id: "f1", title: "Plan it", refining: true, createdAt: "2026-07-05T09:00:00.000Z" }),
+      task({ id: "r1", title: "Daily standup", type: "routine", weekdays: 0b1111111 }),
+      task({ id: "o1", title: "Ship it" }),
+    ]);
+
+    expect(titles()).toEqual(["Ship it", "Daily standup", "Plan it"]);
+  });
+
+  it("puts a Refine task back in line once it is started", () => {
+    withTasks([
+      task({ id: "f1", title: "Plan it", refining: true, startedAt: "2026-07-05T09:00:00Z" }),
+      task({ id: "r1", title: "Daily standup", type: "routine", weekdays: 0b1111111 }),
+    ]);
+
+    expect(titles()).toEqual(["Plan it", "Daily standup"]);
+  });
+
   it("puts the newest one-off at the top", () => {
     // Reported: a task added to an epic landed somewhere arbitrary in the list.
     // `/api/tasks` has no ORDER BY, so the order was the database's. The one
@@ -378,6 +399,7 @@ describe("task status", () => {
         task({ id: "a", title: "Untouched" }),
         task({ id: "b", title: "Started", startedAt: "2026-10-20T09:00:00Z" }),
         task({ id: "c", title: "Late", dueAt: "2026-10-19T09:00:00Z" }),
+        task({ id: "e", title: "Parked", refining: true }),
       ],
     });
 
@@ -387,6 +409,7 @@ describe("task status", () => {
     expect(tagOf("Untouched")).toHaveTextContent("To do");
     expect(tagOf("Started")).toHaveTextContent("In progress");
     expect(tagOf("Late")).toHaveTextContent("Missed");
+    expect(tagOf("Parked")).toHaveTextContent("Refine");
   });
 
   it("tags a finished task as done once its section is open", () => {

@@ -5,12 +5,13 @@ import { taskStatus } from "./taskStatus";
 const TODAY = "2026-10-21";
 const ZONE = "America/Sao_Paulo";
 
-type Fields = Pick<Task, "type" | "startedAt" | "dueAt" | "lastCompletedOn">;
+type Fields = Pick<Task, "type" | "startedAt" | "dueAt" | "lastCompletedOn" | "refining">;
 const task = (over: Partial<Fields> = {}): Fields => ({
   type: "oneoff",
   startedAt: null,
   dueAt: null,
   lastCompletedOn: null,
+  refining: false,
   ...over,
 });
 
@@ -45,6 +46,25 @@ describe("taskStatus", () => {
 
   it("does not call a task due today missed", () => {
     expect(taskStatus(task({ dueAt: "2026-10-21T15:00:00Z" }), TODAY, ZONE)).toBe("todo");
+  });
+
+  it("reads an undated one-off parked in Refine as refine", () => {
+    expect(taskStatus(task({ refining: true }), TODAY, ZONE)).toBe("refine");
+  });
+
+  it("lets started and done outrank refine", () => {
+    expect(
+      taskStatus(task({ refining: true, startedAt: "2026-10-20T12:00:00Z" }), TODAY, ZONE),
+    ).toBe("inProgress");
+    expect(taskStatus(task({ refining: true, lastCompletedOn: "2026-10-20" }), TODAY, ZONE)).toBe(
+      "done",
+    );
+  });
+
+  it("ignores a stale refine flag on a dated one-off", () => {
+    expect(taskStatus(task({ refining: true, dueAt: "2026-10-25T12:00:00Z" }), TODAY, ZONE)).toBe(
+      "todo",
+    );
   });
 
   it("reads the due day in the user's timezone, not UTC", () => {

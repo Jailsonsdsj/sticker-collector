@@ -43,6 +43,7 @@ const task = (over: Partial<Task>): Task => ({
   dueAt: null,
   pinnedOn: null,
   startedAt: null,
+  refining: false,
   slots: [],
   subtasks: [],
   blockUntilSteps: false,

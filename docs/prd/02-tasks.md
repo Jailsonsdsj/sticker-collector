@@ -75,7 +75,7 @@ Every task is either a **routine** or a **one-off**. The choice is made at creat
 
 **The home screen**
 
-Six sections, in this order:
+Seven sections, in this order:
 
 0. **In progress** — anything with a `startedAt`. A routine contributes **only today's occurrence**: `startedAt` belongs to the task and a routine is one row per day, so listing every one of them put the same title on screen five times. Its other days keep their own meaning (tomorrow is still backlog, and a day already gone is the Week tab's), and a started routine that is not scheduled today shows nothing here — there would be no day to tick. A one-off is a single row, so it appears here whatever date it carries. Unlike a pin, this is an **instant and it does not expire**: a pin is a claim about *today* and is worthless tomorrow, while starting something is a claim about the task, and putting a half-finished job back in the general pile every morning is exactly what marking it started is for. It outranks every section but *Completed today*.
 1. **For today** — today's routine occurrences, plus any capture pinned to
@@ -88,12 +88,19 @@ Six sections, in this order:
 3. **General** — every other one-off, dated or not. A due date still in the
    future does not move a one-off out of here; it is a thing you capture once
    and do once.
+3b. **Refine** — undated one-offs parked to be thought through before they are
+   worked on (`task.refining`). Chosen by hand in the form's Section dropdown,
+   right under General. A flag, not a date: needing more thought does not
+   expire overnight. Pinned and started outrank it, and since neither clears
+   the flag, unpinning or stopping returns the task here. Giving it a due date
+   takes it out. On the Epics screen these tasks carry a **Refine** tag and
+   sort **last**, after routines.
 4. **Completed today** — anything finished today, whatever day it was scheduled
    for. A routine missed on Monday and ticked on Thursday belongs here, because
    the section is a record of today's effort rather than of today's schedule.
 5. **Routine backlog** — routine occurrences scheduled ahead.
 
-**In progress, For today, General and Completed today open by default; Missed
+**In progress, For today, General, Refine and Completed today open by default; Missed
 and the routine backlog start folded.** Both are reference rather than work in
 hand — what already slipped, and a fortnight that has not happened — and either
 one open pushes today's actual list off the first screenful. The

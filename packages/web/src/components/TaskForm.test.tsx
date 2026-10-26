@@ -261,6 +261,7 @@ const TASK: Task = {
   dueAt: null,
   pinnedOn: null,
   startedAt: null,
+  refining: false,
   slots: [],
   subtasks: [],
   blockUntilSteps: false,
@@ -441,7 +442,7 @@ describe("which section a new one-off lands in", () => {
     const labels = within(section())
       .getAllByRole("option")
       .map((option) => option.textContent);
-    expect(labels).toEqual(["General", "For today", "In progress"]);
+    expect(labels).toEqual(["General", "Refine", "For today", "In progress"]);
     expect(section()).toHaveValue("general");
   });
 
@@ -455,6 +456,19 @@ describe("which section a new one-off lands in", () => {
 
     expect(onSubmit).toHaveBeenCalledWith(
       expect.objectContaining({ pinnedOn: expect.any(String), startedAt: null }),
+    );
+  });
+
+  it("parks the task in Refine when Refine is chosen", async () => {
+    const u = userEvent.setup();
+    const { onSubmit, save } = setup();
+
+    await u.type(screen.getByLabelText(/title/i), "Plan the trip");
+    await u.selectOptions(section(), "Refine");
+    await u.click(save());
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({ refining: true, pinnedOn: null, startedAt: null }),
     );
   });
 
@@ -479,7 +493,7 @@ describe("which section a new one-off lands in", () => {
     await u.click(save());
 
     expect(onSubmit).toHaveBeenCalledWith(
-      expect.objectContaining({ pinnedOn: null, startedAt: null }),
+      expect.objectContaining({ pinnedOn: null, startedAt: null, refining: false }),
     );
   });
 

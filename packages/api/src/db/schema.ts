@@ -140,6 +140,10 @@ export const task = sqliteTable(
     /** ISO instant when work started, or null. Does not expire; see the shared
      *  read model for why it is not a date. */
     startedAt: text("started_at"),
+    /** Parked in the Refine section: written down, not yet ready to work on.
+     *  A flag, not a date — unlike a pin, "needs thinking through" does not
+     *  expire overnight. Only an undated one-off carries it. */
+    refining: integer("refining", { mode: "boolean" }).notNull().default(false),
     /**
      * Refuse to close this task until every step is ticked.
      *

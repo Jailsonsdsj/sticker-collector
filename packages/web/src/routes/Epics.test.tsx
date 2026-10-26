@@ -62,6 +62,7 @@ const TASKS: Task[] = [
     dueAt: null,
     pinnedOn: null,
     startedAt: null,
+    refining: false,
     slots: [],
     subtasks: [],
     blockUntilSteps: false,

@@ -7,6 +7,7 @@ import { localDateIn } from "@sticker-collector/shared";
  *   0. In progress      — anything started, whatever day it belongs to
  *   1. Missed          — one-offs whose due date has gone
  *   2. General         — every one-off, dated or not
+ *   2b. Refine         — undated one-offs parked to think through first
  *   3. For today       — today's routine occurrences, plus pinned captures
  *   4. Routine backlog — routine occurrences scheduled ahead
  *   5. Completed today — anything finished today, whatever it was scheduled for
@@ -32,6 +33,7 @@ export interface HomeSections {
   inProgress: HomeItem[];
   missed: HomeItem[];
   general: HomeItem[];
+  refine: HomeItem[];
   forToday: HomeItem[];
   routineBacklog: HomeItem[];
   completedToday: HomeItem[];
@@ -104,6 +106,7 @@ export function buildHome(
   const inProgress: HomeItem[] = [];
   const missed: HomeItem[] = [];
   const general: HomeItem[] = [];
+  const refine: HomeItem[] = [];
   const forToday: HomeItem[] = [];
   const routineBacklog: HomeItem[] = [];
   const completedToday: HomeItem[] = [];
@@ -178,6 +181,9 @@ export function buildHome(
       // this a one-off ticked and untangled last week would reappear as
       // "missed" — a deadline it never had.
       if (task.dueAt && occurrence.scheduledOn < today) missed.push(item);
+      // An unticked undated capture leaves a pending row behind; it keeps the
+      // section it was parked in.
+      else if (task.refining && !task.dueAt) refine.push(item);
       else general.push(item);
       seen.add(task.id);
       continue;
@@ -212,6 +218,7 @@ export function buildHome(
     const item = { key: task.id, task, occurrence: null, scheduledOn: null, done: false };
     if (task.startedAt) inProgress.push(item);
     else if (task.pinnedOn === today) forToday.push(item);
+    else if (task.refining) refine.push(item);
     else general.push(item);
   }
 
@@ -221,6 +228,7 @@ export function buildHome(
     // to have been forgotten.
     missed: missed.sort(byDateAsc),
     general: general.sort(byPriority),
+    refine: refine.sort(byPriority),
     forToday: forToday.sort(byPriority),
     routineBacklog: routineBacklog.sort(byDateAsc),
     // Done work is a record, not a queue: nothing here needs doing, so the
@@ -283,6 +291,7 @@ export function filterHome(sections: HomeSections, query: string): HomeSections 
     missed: keep(sections.missed),
     forToday: keep(sections.forToday),
     general: keep(sections.general),
+    refine: keep(sections.refine),
     completedToday: keep(sections.completedToday),
     routineBacklog: keep(sections.routineBacklog),
   };

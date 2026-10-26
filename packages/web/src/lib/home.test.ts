@@ -22,6 +22,7 @@ function task(over: Partial<Task> = {}): Task {
     dueAt: null,
     pinnedOn: null,
     startedAt: null,
+    refining: false,
     slots: [],
     subtasks: [],
     blockUntilSteps: false,
@@ -256,6 +257,50 @@ describe("pinning to today", () => {
 
     expect(home.completedToday).toHaveLength(1);
     expect(home.forToday).toEqual([]);
+  });
+});
+
+describe("refine", () => {
+  it("parks an undated capture in Refine instead of General", () => {
+    const parked = oneoff({ id: "q1", title: "Plan the trip", refining: true });
+    const loose = oneoff({ id: "q2", title: "Buy milk" });
+
+    const home = buildHome([], [parked, loose], TODAY, UTC);
+
+    expect(titles(home.refine)).toEqual(["Plan the trip"]);
+    expect(titles(home.general)).toEqual(["Buy milk"]);
+  });
+
+  it("gives way to a pin and to a start, and takes the task back after", () => {
+    // Pinning or starting a Refine task does not clear the flag, so unpinning
+    // or stopping it returns it to where it was parked.
+    const pinned = oneoff({ id: "q1", title: "Pinned", refining: true, pinnedOn: TODAY });
+    const started = oneoff({
+      id: "q2",
+      title: "Started",
+      refining: true,
+      startedAt: `${TODAY}T09:00:00Z`,
+    });
+
+    const home = buildHome([], [pinned, started], TODAY, UTC);
+
+    expect(titles(home.forToday)).toEqual(["Pinned"]);
+    expect(titles(home.inProgress)).toEqual(["Started"]);
+    expect(home.refine).toEqual([]);
+  });
+
+  it("keeps an unticked capture in Refine when it left a pending row behind", () => {
+    const parked = oneoff({ id: "q1", refining: true });
+    const home = buildHome([occ("q1", addDays(TODAY, -2), "pending")], [parked], TODAY, UTC);
+
+    expect(home.refine).toHaveLength(1);
+    expect(home.general).toEqual([]);
+  });
+
+  it("is found by a search like any other section", () => {
+    const home = buildHome([], [oneoff({ title: "Plan the trip", refining: true })], TODAY, UTC);
+    expect(titles(filterHome(home, "trip").refine)).toEqual(["Plan the trip"]);
+    expect(filterHome(home, "milk").refine).toEqual([]);
   });
 });
 
@@ -590,6 +635,7 @@ describe("empty", () => {
       inProgress: [],
       missed: [],
       general: [],
+      refine: [],
       forToday: [],
       routineBacklog: [],
       completedToday: [],
