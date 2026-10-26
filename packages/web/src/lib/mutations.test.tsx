@@ -108,6 +108,7 @@ describe("useUpdateTask — optimistic, with rollback", () => {
     dueAt: null,
     pinnedOn: null,
     startedAt: null,
+    refining: false,
     slots: [],
     subtasks: [],
     blockUntilSteps: false,

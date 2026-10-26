@@ -5,6 +5,7 @@ const LABEL: Record<TaskStatus, string> = {
   todo: "To do",
   inProgress: "In progress",
   missed: "Missed",
+  refine: "Refine",
   done: "Done",
 };
 
@@ -12,6 +13,8 @@ const TONE: Record<TaskStatus, BadgeTone> = {
   todo: "neutral",
   inProgress: "cyan",
   missed: "magenta",
+  // Matches the Refine section heading on Home.
+  refine: "violet",
   done: "lime",
 };
 

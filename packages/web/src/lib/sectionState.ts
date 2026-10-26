@@ -31,6 +31,9 @@ export const SECTION_DEFAULTS: Record<string, boolean> = {
   // so they do not lead.
   missed: false,
   general: true,
+  // Open like General: it is a short list, and folding it away by default is
+  // how a parked task gets forgotten.
+  refine: true,
   completed: true,
   backlog: false,
   // Epics: what is running and what is next are work in hand; finished epics

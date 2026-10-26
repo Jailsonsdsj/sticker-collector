@@ -214,3 +214,60 @@ describe("starting a task", () => {
     ).toBe(400);
   });
 });
+
+describe("refine", () => {
+  it("can park an undated one-off at creation, and take it out again", async () => {
+    const response = await create({
+      title: "Plan the trip",
+      type: "oneoff",
+      effortMinutes: 15,
+      refining: true,
+    });
+    expect(response.status).toBe(201);
+    const created = (await response.json()) as { id: string; refining: boolean };
+    expect(created.refining).toBe(true);
+
+    const out = await patch(created.id, { refining: false });
+    expect(out.status).toBe(200);
+    expect(((await out.json()) as { refining: boolean }).refining).toBe(false);
+  });
+
+  it("defaults to off", async () => {
+    const response = await create({ title: "Buy milk", type: "oneoff", effortMinutes: 15 });
+    expect(((await response.json()) as { refining: boolean }).refining).toBe(false);
+  });
+
+  it("refuses to put a routine in Refine", async () => {
+    const response = await create({
+      title: "Stretch",
+      type: "routine",
+      effortMinutes: 15,
+      weekdays: 31,
+    });
+    const created = (await response.json()) as { id: string };
+    expect((await patch(created.id, { refining: true })).status).toBe(400);
+  });
+
+  it("refuses to put a dated one-off in Refine", async () => {
+    const response = await create({
+      title: "Dentist",
+      type: "oneoff",
+      effortMinutes: 15,
+      dueAt: "2026-08-09T12:00:00Z",
+    });
+    const created = (await response.json()) as { id: string };
+    expect((await patch(created.id, { refining: true })).status).toBe(400);
+  });
+
+  it("drops the flag sent when creating a dated one-off", async () => {
+    const response = await create({
+      title: "Dentist",
+      type: "oneoff",
+      effortMinutes: 15,
+      dueAt: "2026-08-09T12:00:00Z",
+      refining: true,
+    });
+    expect(response.status).toBe(201);
+    expect(((await response.json()) as { refining: boolean }).refining).toBe(false);
+  });
+});

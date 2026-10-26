@@ -616,6 +616,16 @@ export function Tasks() {
             open={searching || folds.isOpen("general")}
             onToggle={() => folds.toggle("general")}
           />
+          {/* Right under General: also not today's work, but parked on
+              purpose until it has been thought through. */}
+          <Section
+            tone="refine"
+            title="Refine"
+            items={visible.refine}
+            render={renderRow}
+            open={searching || folds.isOpen("refine")}
+            onToggle={() => folds.toggle("refine")}
+          />
           <Section
             tone="completed"
             title="Completed today"

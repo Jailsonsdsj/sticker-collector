@@ -1,0 +1,1 @@
+ALTER TABLE `task` ADD `refining` integer DEFAULT false NOT NULL;

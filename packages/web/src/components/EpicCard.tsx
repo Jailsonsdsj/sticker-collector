@@ -85,6 +85,7 @@ export function EpicCard({
   today = appToday(),
   timeZone = appTimeZone(),
 }: EpicCardProps) {
+  const inRefine = (task: Task) => taskStatus(task, today, timeZone) === "refine";
   const percent = epic.oneOffTotal === 0 ? 0 : (epic.oneOffDone / epic.oneOffTotal) * 100;
 
   /**
@@ -111,6 +112,10 @@ export function EpicCard({
    * millisecond ones `toISOString` writes whenever they fall in the same second.
    */
   const ordered = [...tasks].sort((a, b) => {
+    // Refine goes last, after routines too: it is not ready to be worked on,
+    // so it should never sit above work that is.
+    const byRefine = Number(inRefine(a)) - Number(inRefine(b));
+    if (byRefine !== 0) return byRefine;
     const byType = TYPE_RANK[a.type] - TYPE_RANK[b.type];
     if (byType !== 0) return byType;
     if (a.type === "routine") return 0;

@@ -58,8 +58,8 @@ export interface TaskFormState {
    *  filling it in. */
   effortLocked: boolean;
   /**
-   * Which home section an undated one-off lands in. "today" pins it to today;
-   * "inProgress" starts it. See `TaskSection`.
+   * Which home section an undated one-off lands in. "refine" parks it in
+   * Refine; "today" pins it to today; "inProgress" starts it. See `TaskSection`.
    */
   section: TaskSection;
   /**
@@ -86,24 +86,29 @@ export interface TaskFormState {
 /**
  * The home sections a task can be put in by hand, named as Home names them.
  *
- * Each is a pair of stored fields, not a column of its own: General is neither
- * pinned nor started, For today is pinned to today, In progress is started.
- * Missed, the routine backlog and Completed are not choices — the calendar and
- * the ticks decide those.
+ * Each is one stored field: General is none of them, Refine is `refining`, For
+ * today is pinned to today, In progress is started. Missed, the routine backlog
+ * and Completed are not choices — the calendar and the ticks decide those.
+ *
+ * Refine sits right under General: both are "not today", and General stays the
+ * default because capture is the common case.
  */
-export const TASK_SECTIONS = ["general", "today", "inProgress"] as const;
+export const TASK_SECTIONS = ["general", "refine", "today", "inProgress"] as const;
 export type TaskSection = (typeof TASK_SECTIONS)[number];
 
 export const TASK_SECTION_LABEL: Record<TaskSection, string> = {
   general: "General",
+  refine: "Refine",
   today: "For today",
   inProgress: "In progress",
 };
 
-/** Which section an existing task sits in. Started wins over pinned, as on Home. */
-export function sectionOf(task: Pick<Task, "pinnedOn" | "startedAt">): TaskSection {
+/** Which section an existing task sits in. Started wins over pinned, pinned
+ *  over Refine, as on Home. */
+export function sectionOf(task: Pick<Task, "pinnedOn" | "startedAt" | "refining">): TaskSection {
   if (task.startedAt) return "inProgress";
-  return task.pinnedOn === today() ? "today" : "general";
+  if (task.pinnedOn === today()) return "today";
+  return task.refining ? "refine" : "general";
 }
 
 export type TaskFormAction =
@@ -417,6 +422,7 @@ export function toPayload(state: TaskFormState): CreateTaskInput | null {
         // only offered while undated, so it goes with the date like the pin.
         startedAt:
           state.section === "inProgress" && !state.dueDate ? new Date().toISOString() : null,
+        refining: state.section === "refine" && !state.dueDate,
       };
 }
 
@@ -532,7 +538,12 @@ export function toPatch(state: TaskFormState, original: Task): UpdateTask | null
       state.section === "inProgress" ? (original.startedAt ?? new Date().toISOString()) : null,
       original.startedAt,
     );
+    set("refining", state.section === "refine", original.refining);
   }
+
+  // Giving a Refine task a date takes it out of Refine: the section is only for
+  // undated captures, and a stale flag would keep sorting it last in its epic.
+  if (original.refining && state.dueDate) set("refining", false, original.refining);
 
   // The task's own type decides which schedule may be sent, not the form's.
   if (original.type === "routine") {

@@ -4,6 +4,7 @@ import { cx } from "./ui/cx";
 export type SectionTone =
   | "missed"
   | "general"
+  | "refine"
   | "today"
   | "progress"
   | "backlog"
@@ -17,6 +18,9 @@ const TONE: Record<SectionTone, string> = {
   // General is capture, not urgency — it wears the same muted accent as the
   // backlog so the eye still lands on Missed and For today first.
   general: "--color-backlog",
+  // Refine is work still being shaped — violet, the colour of epics and
+  // planning, so it reads apart from General's muted capture pile.
+  refine: "--color-violet",
   today: "--color-today",
   // Work already underway wears cyan — the same accent the swipe shows on its
   // way there.

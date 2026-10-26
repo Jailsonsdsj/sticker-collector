@@ -316,6 +316,7 @@ const existing = (over: Partial<Task> = {}): Task => ({
   dueAt: null,
   pinnedOn: null,
   startedAt: null,
+  refining: false,
   slots: [],
   subtasks: [],
   blockUntilSteps: false,
@@ -663,7 +664,7 @@ describe("priority follows the epic's type, as a default only", () => {
 describe("toPatch — moving a one-off between sections", () => {
   const oneOff = (over: Partial<Task> = {}) =>
     existing({ type: "oneoff", weekdays: null, ...over });
-  const move = (task: Task, value: "general" | "today" | "inProgress") =>
+  const move = (task: Task, value: "general" | "refine" | "today" | "inProgress") =>
     toPatch(reduce(stateFromTask(task), { kind: "section", value }), task);
 
   it("reads the section back from the task", () => {
@@ -672,6 +673,30 @@ describe("toPatch — moving a one-off between sections", () => {
     expect(stateFromTask(oneOff({ startedAt: "2026-10-01T09:00:00Z" })).section).toBe("inProgress");
     // A pin from another day has expired.
     expect(stateFromTask(oneOff({ pinnedOn: "2020-01-01" })).section).toBe("general");
+    expect(stateFromTask(oneOff({ refining: true })).section).toBe("refine");
+    // Pinned and started both outrank Refine, as on Home.
+    expect(stateFromTask(oneOff({ refining: true, pinnedOn: today() })).section).toBe("today");
+  });
+
+  it("parks a General task moved to Refine", () => {
+    expect(move(oneOff(), "refine")).toEqual({ refining: true });
+  });
+
+  it("takes a Refine task out when moved to General", () => {
+    expect(move(oneOff({ refining: true }), "general")).toEqual({ refining: false });
+  });
+
+  it("takes a Refine task out when moved to In progress", () => {
+    expect(move(oneOff({ refining: true }), "inProgress")).toEqual({
+      refining: false,
+      startedAt: expect.any(String),
+    });
+  });
+
+  it("takes a Refine task out once it is given a date", () => {
+    const task = oneOff({ refining: true });
+    const state = reduce(stateFromTask(task), { kind: "dueDate", value: "2026-12-01" });
+    expect(toPatch(state, task)).toEqual(expect.objectContaining({ refining: false }));
   });
 
   it("starts a General task moved to In progress", () => {

@@ -238,6 +238,8 @@ const createOneOffSchema = z.strictObject({
   /** Capture it already started — straight into In progress. See
    *  `taskSchema.startedAt`. */
   startedAt: instantSchema.nullish(),
+  /** Capture it straight into Refine. See `taskSchema.refining`. */
+  refining: z.boolean().optional(),
 });
 
 /**
@@ -280,6 +282,8 @@ export const updateTaskSchema = z
     pinnedOn: localDateSchema.nullish(),
     /** Set to start the task, null to stop. See `taskSchema.startedAt`. */
     startedAt: instantSchema.nullish(),
+    /** True to park it in Refine, false to take it out. Undated one-offs only. */
+    refining: z.boolean(),
     /** Replaces the whole set, so an empty array clears it. Partial editing of
      *  one weekday would need a second endpoint to say which one. */
     slots: routineSlotsSchema,
@@ -339,6 +343,15 @@ export const taskSchema = z.object({
    * clear one.
    */
   startedAt: instantSchema.nullable(),
+  /**
+   * Parked in the Refine section: captured, but not ready to work on yet.
+   *
+   * A boolean, not a date like `pinnedOn` — needing more thought is not a claim
+   * about a day, so it does not expire. Only an **undated one-off** carries it,
+   * the same set the other hand-picked sections apply to. Started and pinned
+   * outrank it on Home; stopping or unpinning sends the task back here.
+   */
+  refining: z.boolean(),
   /** When this routine runs. Empty for a one-off, and for every routine that
    *  predates the agenda. */
   slots: z.array(routineSlotSchema),

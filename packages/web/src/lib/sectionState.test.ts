@@ -105,6 +105,7 @@ describe("the defaults table", () => {
       "general",
       "missed",
       "progress",
+      "refine",
       "today",
     ]);
   });
