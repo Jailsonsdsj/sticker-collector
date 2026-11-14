@@ -346,6 +346,8 @@ import → <canvas> aspect-fill crop + drag-to-reposition
 
 **Serving is where the single-Worker decision earns its keep.** `<img src="/api/images/…">` cannot send an `Authorization` header. Because the app and the API are the same origin, the session cookie from §0.2 is sent automatically. `GET /api/images/*` authenticates by cookie; the JSON API authenticates by bearer token. No signed URLs, no public bucket, no token-in-querystring leaking into logs.
 
+**The cookie can be lost while the token survives.** Both are set only at login, and a browser can drop the cookie but keep `localStorage` (cleared cookies, a privacy extension, Safari storage rules). The JSON API then keeps working while every image 401s. So at startup, before the first render, the client calls `POST /api/auth/cookie` with its bearer token, and the Worker re-sets the cookie with the **same** token and only the lifetime it has left. It re-syncs the two copies of one session and never extends it. The endpoint accepts the bearer header only, never the cookie.
+
 Grayscale is never stored (per spec) — `filter: grayscale(1)` in CSS, and the reveal animation is a transition on that filter.
 
 ---

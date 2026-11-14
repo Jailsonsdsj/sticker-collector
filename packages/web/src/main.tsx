@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { applyAppIcon, loadAppIcon } from "./lib/appIcon";
+import { restoreImageCookie } from "./lib/session";
 import { armSounds } from "./lib/sounds";
 import "./styles/app.css";
 
@@ -18,8 +19,13 @@ armSounds();
 const root = document.getElementById("root");
 if (!root) throw new Error("#root element not found");
 
-createRoot(root).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-);
+// The image cookie first: images authenticate by cookie alone, and one that
+// failed before the cookie was back would stay broken (lib/session.ts).
+// Bounded by a short timeout, and never rejects.
+void restoreImageCookie().then(() => {
+  createRoot(root).render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  );
+});

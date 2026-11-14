@@ -205,3 +205,52 @@ describe("PATCH /api/me — the timezone every local day is counted in", () => {
     expect(res.status).toBe(401);
   });
 });
+
+describe("POST /api/auth/cookie — restoring a lost session cookie", () => {
+  // Images authenticate by cookie alone. A browser that dropped the cookie but
+  // kept the bearer token used to 401 on every image until the next login.
+  async function tokenExpiringIn(seconds: number): Promise<string> {
+    const { sign } = await import("hono/jwt");
+    const iat = Math.floor(Date.now() / 1000);
+    return sign({ sub: "u1", iat, exp: iat + seconds }, env.TOKEN_SIGNING_KEY, "HS256");
+  }
+
+  const restore = (headers: Record<string, string>) =>
+    app.fetch(post("/api/auth/cookie", {}, headers), env);
+
+  it("re-sets the cookie from a valid bearer token, and the cookie then authenticates", async () => {
+    const token = await tokenExpiringIn(3600);
+    const res = await restore({ Authorization: `Bearer ${token}` });
+    expect(res.status).toBe(204);
+
+    const setCookie = res.headers.get("set-cookie") ?? "";
+    expect(setCookie).toContain(`sc_session=${token}`);
+    expect(setCookie).toMatch(/HttpOnly/i);
+    expect(setCookie).toMatch(/Secure/i);
+    expect(setCookie).toMatch(/SameSite=Strict/i);
+
+    const cookie = setCookie.split(";")[0] ?? "";
+    const me = await app.fetch(get("/api/me", { Cookie: cookie }), env);
+    expect(me.status).toBe(200);
+  });
+
+  it("never extends the session: the cookie lives only as long as the token has left", async () => {
+    const res = await restore({ Authorization: `Bearer ${await tokenExpiringIn(120)}` });
+    const maxAge = Number(/Max-Age=(\d+)/i.exec(res.headers.get("set-cookie") ?? "")?.[1]);
+    expect(maxAge).toBeGreaterThan(0);
+    expect(maxAge).toBeLessThanOrEqual(120);
+  });
+
+  it("refuses an expired or garbage token, and sets no cookie", async () => {
+    for (const token of [await tokenExpiringIn(-60), "not.a.jwt"]) {
+      const res = await restore({ Authorization: `Bearer ${token}` });
+      expect(res.status).toBe(401);
+      expect(res.headers.get("set-cookie")).toBeNull();
+    }
+  });
+
+  it("refuses the cookie alone — only the bearer header can restore it", async () => {
+    const res = await restore({ Cookie: `sc_session=${await tokenExpiringIn(3600)}` });
+    expect(res.status).toBe(401);
+  });
+});
