@@ -129,6 +129,29 @@ body {
   animation: image-shimmer 1.4s linear infinite;
 }
 
+/* The next motivational phrase slides in from the right. Defined here, not in
+   tokens.css, for the same reason as the shimmer above. */
+@keyframes phrase-in {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-phrase-in {
+  animation: phrase-in 0.45s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-phrase-in {
+    animation: none;
+  }
+}
+
 /* A sweep that never stops is exactly what this setting is for. */
 @media (prefers-reduced-motion: reduce) {
   .animate-image-shimmer {

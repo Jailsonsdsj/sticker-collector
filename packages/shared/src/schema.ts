@@ -496,6 +496,23 @@ export function isKnownTimeZone(zone: string): boolean {
   }
 }
 
+// ── Motivational phrase ──────────────────────────────────────────────────────
+
+/** Longest phrase accepted: one or two lines on a phone, not a paragraph. */
+export const PHRASE_MAX_LENGTH = 140;
+
+export const createPhraseSchema = z.strictObject({
+  text: z.string().trim().min(1).max(PHRASE_MAX_LENGTH),
+});
+export type CreatePhrase = z.infer<typeof createPhraseSchema>;
+
+export const phraseSchema = z.object({
+  id: idSchema,
+  text: z.string(),
+  createdAt: instantSchema,
+});
+export type Phrase = z.infer<typeof phraseSchema>;
+
 // ── Album ────────────────────────────────────────────────────────────────────
 
 export const tierSchema = z.enum(TIERS);
@@ -902,6 +919,9 @@ export const backupManifestSchema = z.object({
   dayScores: z.array(z.record(z.string(), z.unknown())).default([]),
   /** Each week's frozen report, for the same reason. */
   weekReports: z.array(z.record(z.string(), z.unknown())).default([]),
+  /** The home screen's rotating phrases. Optional, like every table added
+   *  after version 1, so older files keep restoring. */
+  motivationalPhrases: z.array(z.record(z.string(), z.unknown())).default([]),
   /** Every image the data references — the irreplaceable half of a backup. */
   imageKeys: z.array(z.string()),
 });
@@ -920,6 +940,7 @@ export const restoreResultSchema = z.object({
     puzzlePieces: z.int().default(0),
     routineSlots: z.int().default(0),
     subtasks: z.int().default(0),
+    motivationalPhrases: z.int().default(0),
   }),
 });
 export type RestoreResult = z.infer<typeof restoreResultSchema>;

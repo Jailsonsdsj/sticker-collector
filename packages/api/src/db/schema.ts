@@ -450,6 +450,26 @@ export const holding = sqliteTable(
   ],
 );
 
+/**
+ * The lines of encouragement that rotate on the home screen.
+ *
+ * In D1, not localStorage, so the same list shows on every device. Plain
+ * mutable rows: a phrase is a preference, not history, so removing one is a
+ * hard delete.
+ */
+export const motivationalPhrase = sqliteTable(
+  "motivational_phrase",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id),
+    text: text("text").notNull(),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [index("motivational_phrase_user_idx").on(table.userId, table.createdAt)],
+);
+
 // idempotency middleware storage (architecture.md §4.4).
 export const mutation = sqliteTable("mutation", {
   key: text("key").primaryKey(),

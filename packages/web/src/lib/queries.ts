@@ -26,6 +26,7 @@ import { api } from "./api";
 export const keys = {
   tasks: ["tasks"] as const,
   epics: ["epics"] as const,
+  phrases: ["phrases"] as const,
   wallet: ["wallet"] as const,
   occurrencesAll: ["occurrences"] as const,
   occurrences: (from: LocalDate, to: LocalDate) => ["occurrences", from, to] as const,
