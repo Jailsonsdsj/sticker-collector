@@ -31,6 +31,7 @@ function manifest(over: Partial<BackupManifest> = {}): BackupManifest {
     subtasks: [],
     dayScores: [],
     weekReports: [],
+    motivationalPhrases: [],
     imageKeys: [key(1), key(999)],
     ...over,
   };

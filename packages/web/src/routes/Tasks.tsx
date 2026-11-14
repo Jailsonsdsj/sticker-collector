@@ -2,6 +2,7 @@ import { addDays, blockedBySteps, type Epic, type Task, todayIn } from "@sticker
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate } from "react-router";
 import { DailyReviewDialog } from "../components/DailyReviewDialog";
+import { MotivationalPhrases } from "../components/MotivationalPhrases";
 import { SearchField } from "../components/SearchField";
 import { SectionHeading, type SectionTone } from "../components/SectionHeading";
 import { SelectionBar } from "../components/SelectionBar";
@@ -324,6 +325,8 @@ export function Tasks() {
           </Link>
         }
       />
+
+      <MotivationalPhrases />
 
       {selecting ? (
         <SelectionBar

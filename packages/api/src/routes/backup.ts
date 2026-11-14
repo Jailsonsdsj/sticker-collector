@@ -13,6 +13,7 @@ import {
   epic,
   holding,
   ledger,
+  motivationalPhrase,
   occurrence,
   puzzle,
   puzzlePiece,
@@ -105,6 +106,10 @@ backupRoutes.get("/manifest", async (c) => {
   const entries = await database.select().from(ledger).where(eq(ledger.userId, userId));
   const dayScores = await database.select().from(dayScore).where(eq(dayScore.userId, userId));
   const weekReports = await database.select().from(weekReport).where(eq(weekReport.userId, userId));
+  const motivationalPhrases = await database
+    .select()
+    .from(motivationalPhrase)
+    .where(eq(motivationalPhrase.userId, userId));
 
   // Covers and stickers alike. Deduplicated: a derived edition shares keys with
   // its source, and the client fetches one copy of each.
@@ -138,6 +143,7 @@ backupRoutes.get("/manifest", async (c) => {
     subtasks,
     dayScores,
     weekReports,
+    motivationalPhrases,
     imageKeys,
   };
   return c.json(body);
@@ -266,6 +272,11 @@ backupRoutes.post("/restore", idempotency, async (c) => {
   // Keyed by (user, date) with no id of its own: only the owner is rewritten.
   const dayScores = manifest.dayScores.map((row) => ({ ...row, userId }));
   const weekReports = manifest.weekReports.map((row) => ({ ...row, userId }));
+  const motivationalPhrases = manifest.motivationalPhrases.map((row) => ({
+    ...row,
+    id: idFor(row.id),
+    userId,
+  }));
   const entries = manifest.ledger.map((row) => ({
     ...row,
     id: idFor(row.id),
@@ -295,6 +306,9 @@ backupRoutes.post("/restore", idempotency, async (c) => {
     ...chunkFor(entries).map((rows) => database.insert(ledger).values(rows as never)),
     ...chunkFor(dayScores).map((rows) => database.insert(dayScore).values(rows as never)),
     ...chunkFor(weekReports).map((rows) => database.insert(weekReport).values(rows as never)),
+    ...chunkFor(motivationalPhrases).map((rows) =>
+      database.insert(motivationalPhrase).values(rows as never),
+    ),
   ];
 
   if (statements.length > 0) {
@@ -315,6 +329,7 @@ backupRoutes.post("/restore", idempotency, async (c) => {
       holdings: manifest.holdings.length,
       routineSlots: manifest.routineSlots.length,
       subtasks: manifest.subtasks.length,
+      motivationalPhrases: manifest.motivationalPhrases.length,
       puzzles: manifest.puzzles.length,
       puzzlePieces: manifest.puzzlePieces.length,
     },
