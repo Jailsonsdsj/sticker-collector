@@ -2,7 +2,7 @@ import { loginRequestSchema, type SaltResponse } from "@sticker-collector/shared
 import { Hono } from "hono";
 import { base64ToBytes, constantTimeEqual, sha256Base64 } from "../lib/crypto";
 import { recordAuthAttempt } from "../lib/rate-limit";
-import { issueSession } from "../lib/session";
+import { issueSession, restoreSessionCookie } from "../lib/session";
 
 export const authRoutes = new Hono<{ Bindings: Env }>();
 
@@ -49,4 +49,21 @@ authRoutes.post("/login", async (c) => {
 
   const token = await issueSession(c, user.id);
   return c.json({ token });
+});
+
+// POST /api/auth/cookie — re-set the session cookie from the bearer token, for
+// the images (lib/session.ts, restoreSessionCookie). The client calls it once
+// at startup.
+//
+// The bearer header specifically, never the cookie: the cookie is the thing
+// being restored, and a header is something a cross-site form cannot send.
+// Not behind the idempotency middleware: it writes nothing server-side, and a
+// replayed stored response would come back without its Set-Cookie header.
+authRoutes.post("/cookie", async (c) => {
+  const header = c.req.header("Authorization");
+  const token = header?.startsWith("Bearer ") ? header.slice(7) : undefined;
+  if (!token || !(await restoreSessionCookie(c, token))) {
+    return c.json({ error: "unauthorized" }, 401);
+  }
+  return c.body(null, 204);
 });

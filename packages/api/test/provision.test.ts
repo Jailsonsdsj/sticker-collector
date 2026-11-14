@@ -121,17 +121,20 @@ describe("provisioning", () => {
     }
   });
 
-  it("leaves exactly two ways to talk to auth", () => {
+  it("leaves exactly three ways to talk to auth", () => {
     // /salt is public by necessity (the browser needs the KDF params before it
-    // can prove anything) and /login is the only write. Anything else appearing
-    // under /api/auth deserves a second look.
+    // can prove anything) and /login is the only way to *gain* a session.
+    // /cookie was the second look this test asks for: it needs a valid signed
+    // bearer token already, writes nothing, and only re-sends the cookie for a
+    // session that exists — never extending it (lib/session.ts). Anything else
+    // appearing under /api/auth deserves a second look.
     const auth = app.routes
       .filter((route) => route.path.startsWith("/api/auth"))
       .map((route) => `${route.method} ${route.path}`)
       .filter((entry) => !entry.startsWith("ALL "));
 
     expect([...new Set(auth)].sort()).toEqual(
-      ["GET /api/auth/salt", "POST /api/auth/login"].sort(),
+      ["GET /api/auth/salt", "POST /api/auth/login", "POST /api/auth/cookie"].sort(),
     );
   });
 });
