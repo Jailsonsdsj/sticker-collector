@@ -498,8 +498,8 @@ export function isKnownTimeZone(zone: string): boolean {
 
 // ── Motivational phrase ──────────────────────────────────────────────────────
 
-/** Longest phrase accepted: one or two lines on a phone, not a paragraph. */
-export const PHRASE_MAX_LENGTH = 140;
+/** Longest phrase accepted: a few lines on a phone, not a paragraph. */
+export const PHRASE_MAX_LENGTH = 280;
 
 export const createPhraseSchema = z.strictObject({
   text: z.string().trim().min(1).max(PHRASE_MAX_LENGTH),
