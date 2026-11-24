@@ -19,11 +19,14 @@ export const PHRASE_INTERVAL_MS = 5 * 60_000;
  *
  * Derived from the wall clock rather than counted by a timer, so every render
  * — and a tab reopened twenty minutes later — agrees on the same phrase, and
- * the change lands on the five-minute mark.
+ * the change lands on the five-minute mark. `offset` is how many phrases the
+ * user has swiped past (negative for back); the clock keeps ticking under it.
  */
-export function phraseIndexAt(now: Date, count: number): number {
+export function phraseIndexAt(now: Date, count: number, offset = 0): number {
   if (count <= 0) return -1;
-  return Math.floor(now.getTime() / PHRASE_INTERVAL_MS) % count;
+  const index = Math.floor(now.getTime() / PHRASE_INTERVAL_MS) + offset;
+  // `%` keeps the sign of the dividend; a swipe back past 0 must wrap to the end.
+  return ((index % count) + count) % count;
 }
 
 export function usePhrases() {

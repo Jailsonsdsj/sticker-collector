@@ -1,4 +1,5 @@
 import { env } from "cloudflare:test";
+import { PHRASE_MAX_LENGTH } from "@sticker-collector/shared";
 import { beforeEach, describe, expect, it } from "vitest";
 import app from "../src/index";
 
@@ -47,7 +48,12 @@ describe("motivational phrases", () => {
 
   it("rejects an empty or overlong phrase", async () => {
     expect((await call("POST", "/api/phrases", { text: "   " })).status).toBe(400);
-    expect((await call("POST", "/api/phrases", { text: "x".repeat(141) })).status).toBe(400);
+    expect(
+      (await call("POST", "/api/phrases", { text: "x".repeat(PHRASE_MAX_LENGTH + 1) })).status,
+    ).toBe(400);
+    expect(
+      (await call("POST", "/api/phrases", { text: "x".repeat(PHRASE_MAX_LENGTH) })).status,
+    ).toBe(201);
   });
 
   it("removes a phrase", async () => {

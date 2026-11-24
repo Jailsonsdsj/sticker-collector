@@ -142,12 +142,29 @@ body {
   }
 }
 
+/* Swiping back to the previous phrase brings it in from the left. */
+@keyframes phrase-in-back {
+  from {
+    opacity: 0;
+    transform: translateX(-24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
 .animate-phrase-in {
   animation: phrase-in 0.45s ease-out both;
 }
 
+.animate-phrase-in-back {
+  animation: phrase-in-back 0.45s ease-out both;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .animate-phrase-in {
+  .animate-phrase-in,
+  .animate-phrase-in-back {
     animation: none;
   }
 }
